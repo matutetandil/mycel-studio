@@ -213,13 +213,19 @@ export default function MenuBar() {
 
       {/* Show provider info when no project */}
       {!projectName && !isLoading && (
-        <div className="flex items-center gap-2 px-3 text-xs text-neutral-500">
+        <div className="flex items-center gap-2 px-3 text-xs text-neutral-500" title={
+          capabilities.providerName === 'browser'
+            ? 'Full folder access available (Chrome/Edge)'
+            : 'Limited access - use ZIP import/export (Safari/Firefox)'
+        }>
           <Package className="w-3 h-3" />
           <span>
-            {capabilities.providerName === 'electron' && 'Desktop App'}
-            {capabilities.providerName === 'browser' && 'Browser (folder access)'}
-            {capabilities.providerName === 'fallback' && 'Browser (ZIP import/export)'}
+            {capabilities.providerName === 'browser' && 'Full Access'}
+            {capabilities.providerName === 'fallback' && 'ZIP Mode'}
           </span>
+          {capabilities.providerName === 'fallback' && (
+            <span className="text-amber-500">*</span>
+          )}
         </div>
       )}
 

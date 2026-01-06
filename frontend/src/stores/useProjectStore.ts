@@ -195,7 +195,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
 
       const provider = getFileSystemProvider()
 
-      // Save all files (provider handles dirty check for Electron)
+      // Save all files
       const success = await provider.saveProject({
         name: projectName,
         files: files.map((f) => ({
@@ -289,28 +289,11 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   },
 
   refreshGitStatus: async () => {
-    const { files, capabilities } = get()
+    const { capabilities } = get()
 
-    // Only Electron provider supports git status
-    if (capabilities.providerName !== 'electron') return
+    // Git status not supported in browser mode
+    if (!capabilities.canGetGitStatus) return
 
-    try {
-      const provider = getFileSystemProvider()
-      if ('getGitStatus' in provider) {
-        const gitStatus = await (provider as { getGitStatus: () => Promise<{ branch: string; files: Record<string, string> } | null> }).getGitStatus()
-
-        if (gitStatus) {
-          set({
-            gitBranch: gitStatus.branch || null,
-            files: files.map((f) => ({
-              ...f,
-              gitStatus: (gitStatus.files[f.relativePath] || 'clean') as ProjectFile['gitStatus'],
-            })),
-          })
-        }
-      }
-    } catch {
-      // Git status failed, ignore
-    }
+    // Git status would require backend support - not implemented yet
   },
 }))

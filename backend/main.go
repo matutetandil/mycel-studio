@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 
+	"github.com/mycel-studio/backend/handlers"
 	"github.com/rs/cors"
 )
 
@@ -31,6 +32,8 @@ func main() {
 	// API routes
 	mux.HandleFunc("/api/health", handleHealth)
 	mux.HandleFunc("/api/validate", handleValidate)
+	mux.HandleFunc("/api/parse", handlers.HandleParse)
+	mux.HandleFunc("/api/generate", handlers.HandleGenerate)
 	mux.HandleFunc("/api/templates", handleTemplates)
 
 	// Serve static files in production

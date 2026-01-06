@@ -94,13 +94,19 @@ export default function FileTree() {
         >
           {getOpenLabel()}
         </button>
-        <div className="mt-3 flex items-center justify-center gap-1 text-xs text-neutral-600">
-          <Package className="w-3 h-3" />
-          <span>
-            {capabilities.providerName === 'electron' && 'Desktop'}
-            {capabilities.providerName === 'browser' && 'Browser'}
-            {capabilities.providerName === 'fallback' && 'ZIP mode'}
-          </span>
+        <div className="mt-3 flex flex-col items-center gap-1 text-xs text-neutral-600">
+          <div className="flex items-center gap-1">
+            <Package className="w-3 h-3" />
+            <span>
+              {capabilities.providerName === 'browser' && 'Chrome/Edge'}
+              {capabilities.providerName === 'fallback' && 'Safari/Firefox'}
+            </span>
+          </div>
+          {capabilities.providerName === 'fallback' && (
+            <span className="text-amber-600 text-center">
+              Use Chrome or Edge for folder access
+            </span>
+          )}
         </div>
       </div>
     )

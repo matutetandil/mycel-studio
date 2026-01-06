@@ -2,40 +2,59 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased] - Phase 2: Project Management & Electron
+## [0.3.0] - Phase 2: Project Management & HCL Sync
 
 ### Added
 
-- **Electron integration:**
-  - Main process with IPC handlers for project operations
-  - Preload script with secure context bridge
-  - Native folder picker dialog for opening projects
-  - File system operations (read/write/create/delete)
-  - Git status integration (branch name, file statuses)
-  - electron-builder configuration for packaging
+- **Standalone HCL Parser (backend):**
+  - `backend/parser/parser.go` - Complete HCL parser using hashicorp/hcl/v2
+  - Parses all Mycel blocks: connectors, flows, types, transforms, validators, aspects, named_cache
+  - Does NOT depend on Mycel codebase - fully standalone
+  - `POST /api/parse` endpoint for parsing HCL content or project directories
+
+- **HCL Generation (backend):**
+  - `backend/handlers/generate.go` - Complete HCL generator
+  - Generates all block types from JSON representation
+  - Supports single file or multi-file output
+  - `POST /api/generate` endpoint for converting canvas state to HCL
+
+- **Browser File System Abstraction (frontend):**
+  - `src/lib/fileSystem/types.ts` - Provider interfaces
+  - `src/lib/fileSystem/browserFS.ts` - File System Access API (Chrome/Edge)
+  - `src/lib/fileSystem/fallbackFS.ts` - ZIP import/export fallback (Safari/Firefox)
+  - `src/lib/fileSystem/index.ts` - Factory pattern for provider selection
+  - Automatic browser capability detection
+
+- **Bi-directional Sync:**
+  - `src/hooks/useSync.ts` - Hook for canvas ↔ HCL synchronization
+  - HCL → Canvas: Parse HCL and create React Flow nodes
+  - Canvas → HCL: Convert nodes to HCL and update file
+  - Debounced sync (500ms) to avoid excessive updates
+  - Sync lock to prevent infinite loops
+  - Visual sync indicator in Editor tabs
+
 - **Project management:**
-  - `openProject()` - Opens folder dialog and loads project
-  - `saveProject()` - Saves dirty files to disk
-  - `createFile()` - Creates new files in project
-  - `deleteFile()` - Deletes files from project
-  - Auto-save configuration (disabled by default)
-- **Updated stores:**
-  - `useProjectStore` with async Electron operations
-  - Error handling and loading states
-  - Git branch tracking
-- **UI improvements:**
-  - MenuBar with functional File menu (Open, Save, Close)
-  - Keyboard shortcuts (Ctrl+O, Ctrl+S)
-  - Git branch display in header
-  - Loading indicator
-  - FileTree with directory grouping
-  - Git status indicators (M, U, A, D)
+  - `openProject()` - Opens folder (Chrome/Edge) or ZIP file (Safari/Firefox)
+  - `saveProject()` - Saves dirty files to disk or downloads ZIP
+  - `createFile()` / `deleteFile()` - File operations
+  - Browser capability indicators in UI
 
 ### Changed
 
-- **package.json:** Added Electron dependencies and scripts
-- **vite.config.ts:** Updated for Electron compatibility
-- **FileTree:** Groups files by directory, uses relativePath
+- **Architecture:** Abandoned Electron in favor of web-only + Docker
+  - Reason: Go backend doesn't make sense with Electron
+  - Solution: File System Access API for modern browsers, ZIP fallback for others
+- **Editor.tsx:** Now triggers HCL → Canvas sync on content change
+- **Canvas.tsx:** Now triggers Canvas → HCL sync when nodes change
+- **package.json:** Removed Electron dependencies, simplified scripts
+
+### Removed
+
+- **Electron integration:** Removed entirely
+  - `electron/main.ts`, `electron/preload.ts`, `electron/tsconfig.json`
+  - `src/lib/fileSystem/electronFS.ts`
+  - `src/utils/electron.ts`, `src/types/electron.d.ts`
+  - Electron dependencies from package.json
 
 ---
 

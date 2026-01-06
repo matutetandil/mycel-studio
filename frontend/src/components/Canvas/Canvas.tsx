@@ -1,4 +1,4 @@
-import { useCallback } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
 import {
   ReactFlow,
   Background,
@@ -10,7 +10,9 @@ import {
 import '@xyflow/react/dist/style.css'
 
 import { useStudioStore } from '../../stores/useStudioStore'
+import { useProjectStore } from '../../stores/useProjectStore'
 import { nodeTypes } from '../Nodes'
+import { useSync } from '../../hooks/useSync'
 import type { ConnectorNodeData, FlowNodeData } from '../../types'
 
 type StudioNode = Node<ConnectorNodeData | FlowNodeData>
@@ -25,6 +27,30 @@ export default function Canvas() {
     selectNode,
     addNode,
   } = useStudioStore()
+
+  const { activeFile } = useProjectStore()
+  const { syncToHCL } = useSync()
+  const prevNodesRef = useRef<string>('')
+
+  // Sync to HCL when nodes change significantly (not just position during drag)
+  useEffect(() => {
+    // Skip if no active file
+    if (!activeFile) return
+
+    // Create a stable string representation of node data (without positions)
+    const nodesData = JSON.stringify(
+      nodes.map(n => ({ id: n.id, type: n.type, data: n.data }))
+    )
+
+    // Only sync if data actually changed
+    if (nodesData !== prevNodesRef.current) {
+      prevNodesRef.current = nodesData
+      // Skip initial render
+      if (nodes.length > 0) {
+        syncToHCL(activeFile)
+      }
+    }
+  }, [nodes, activeFile, syncToHCL])
 
   const onSelectionChange: OnSelectionChangeFunc = useCallback(
     ({ nodes: selectedNodes }) => {

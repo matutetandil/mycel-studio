@@ -1,8 +1,9 @@
 import { useMemo } from 'react'
 import MonacoEditor from '@monaco-editor/react'
-import { X, Circle, FileCode } from 'lucide-react'
+import { X, Circle, FileCode, RefreshCw } from 'lucide-react'
 import { useProjectStore } from '../../stores/useProjectStore'
 import { useThemeStore } from '../../stores/useThemeStore'
+import { useSync } from '../../hooks/useSync'
 
 interface TabProps {
   file: {
@@ -45,6 +46,7 @@ function Tab({ file, isActive, onClick, onClose }: TabProps) {
 export default function Editor() {
   const { files, activeFile, setActiveFile, updateFile } = useProjectStore()
   const { theme } = useThemeStore()
+  const { syncFromHCL, isSyncing } = useSync()
 
   const openFiles = useMemo(
     () => files.filter((f) => f.name.endsWith('.hcl')),
@@ -90,6 +92,13 @@ export default function Editor() {
             onClose={() => handleClose(file.path)}
           />
         ))}
+        {/* Sync indicator */}
+        {isSyncing && (
+          <div className="ml-auto px-3 flex items-center gap-1.5 text-xs text-amber-500">
+            <RefreshCw className="w-3 h-3 animate-spin" />
+            <span>Syncing...</span>
+          </div>
+        )}
       </div>
 
       {/* Editor */}
@@ -103,6 +112,8 @@ export default function Editor() {
             onChange={(value) => {
               if (value !== undefined) {
                 updateFile(currentFile.path, value)
+                // Sync HCL changes to canvas (debounced)
+                syncFromHCL(value)
               }
             }}
             options={{

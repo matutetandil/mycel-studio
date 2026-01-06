@@ -16,7 +16,7 @@ export interface FSCapabilities {
   canWatchChanges: boolean
   canGetGitStatus: boolean
   persistsAcrossSessions: boolean
-  providerName: 'electron' | 'browser' | 'fallback'
+  providerName: 'browser' | 'fallback'
 }
 
 export interface FileSystemProvider {
