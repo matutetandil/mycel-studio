@@ -1,9 +1,15 @@
 import { useState, useCallback } from 'react'
 import { GripVertical } from 'lucide-react'
 import { useStudioStore } from '../../stores/useStudioStore'
-import type { ConnectorNodeData, FlowNodeData, ConnectorType, RestOperation, GraphQLOperation, ConnectorOperation } from '../../types'
+import type { ConnectorNodeData, FlowNodeData, ConnectorType, ConnectorDirection, RestOperation, GraphQLOperation, ConnectorOperation } from '../../types'
 import OperationsEditor from './OperationsEditor'
 import GraphQLOperationsEditor from './GraphQLOperationsEditor'
+
+const directionOptions: { value: ConnectorDirection; label: string; description: string }[] = [
+  { value: 'input', label: 'Source', description: 'Triggers flows (e.g., API server, queue consumer)' },
+  { value: 'output', label: 'Target', description: 'Receives data (e.g., database, queue publisher)' },
+  { value: 'bidirectional', label: 'Both', description: 'Can be source or target' },
+]
 
 const driverOptions: Partial<Record<ConnectorType, string[]>> = {
   database: ['sqlite', 'postgres', 'mysql', 'mongodb'],
@@ -34,6 +40,25 @@ function ConnectorProperties({
           onChange={(e) => onChange({ label: e.target.value })}
           className="w-full px-3 py-2 text-sm bg-neutral-800 border border-neutral-700 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-white"
         />
+      </div>
+
+      {/* Direction (input/output/bidirectional) */}
+      <div>
+        <label className="block text-xs font-medium text-neutral-400 mb-1">Direction</label>
+        <select
+          value={data.direction || 'bidirectional'}
+          onChange={(e) => onChange({ direction: e.target.value as ConnectorDirection })}
+          className="w-full px-3 py-2 text-sm bg-neutral-800 border border-neutral-700 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-white"
+        >
+          {directionOptions.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+        <p className="text-xs text-neutral-500 mt-1">
+          {directionOptions.find((o) => o.value === (data.direction || 'bidirectional'))?.description}
+        </p>
       </div>
 
       {/* Port for server connectors */}

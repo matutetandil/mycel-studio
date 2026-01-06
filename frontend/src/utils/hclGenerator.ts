@@ -19,15 +19,46 @@ export function toIdentifier(label: string): string {
   return label.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '')
 }
 
+// Map direction to mode for connectors that support server/client
+function getConnectorMode(connectorType: string, direction: string | undefined): string | null {
+  const dir = direction || 'bidirectional'
+
+  switch (connectorType) {
+    case 'rest':
+    case 'graphql':
+    case 'grpc':
+    case 'tcp':
+      // These support server/client mode
+      if (dir === 'input') return 'server'
+      if (dir === 'output') return 'client'
+      return null // bidirectional doesn't specify mode
+    case 'queue':
+      // Queue uses consumer/producer
+      if (dir === 'input') return 'consumer'
+      if (dir === 'output') return 'producer'
+      return null
+    default:
+      return null
+  }
+}
+
 function generateConnectorHCL(node: StudioNode): string {
   const data = node.data as ConnectorNodeData
   const name = toIdentifier(data.label)
   const lines: string[] = []
   const config = data.config || {}
 
+  // Determine mode based on direction
+  const mode = getConnectorMode(data.connectorType, data.direction)
+
   lines.push(`# ${data.label} connector`)
   lines.push(`connector "${name}" {`)
   lines.push(`  type = "${data.connectorType}"`)
+
+  // Add mode if applicable
+  if (mode) {
+    lines.push(`  mode = "${mode}"`)
+  }
 
   // Type-specific configuration
   switch (data.connectorType) {
@@ -62,14 +93,12 @@ function generateConnectorHCL(node: StudioNode): string {
       break
 
     case 'graphql':
-      if (config.driver) lines.push(`  mode = "${config.driver}"`)
       if (config.port) lines.push(`  port = ${config.port}`)
       if (config.endpoint) lines.push(`  path = "${config.endpoint}"`)
       if (config.playground) lines.push(`  playground = true`)
       break
 
     case 'grpc':
-      if (config.driver) lines.push(`  mode = "${config.driver}"`)
       if (config.port) lines.push(`  port = ${config.port}`)
       break
 

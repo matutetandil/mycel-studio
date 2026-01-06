@@ -4,303 +4,376 @@ Complete list of features needed to fully support Mycel HCL configuration visual
 
 ---
 
-## Mycel Core Concepts
+## Core Integration Patterns (MUST SUPPORT)
 
-Based on [CONCEPTS.md](/Users/matute/Documents/Personal/MYCEL/docs/CONCEPTS.md):
+Based on `integration-patterns.md` and real-world examples, these are the patterns Mycel Studio MUST visualize and generate:
 
-| Concept | Description | Visual Element |
-|---------|-------------|----------------|
-| **Service** | Main service config (name, version) | Settings panel |
-| **Connector** | Adapter to external systems (REST, DB, MQ, etc.) | Node with icon |
-| **Flow** | Unit of work: from → transform → to | Rectangle with handles |
-| **Transform** | CEL expressions to map data | Badge inside flow |
-| **Type** | Schema validation (fields, types, formats) | Schema node |
-| **Validator** | Custom validation rules (regex, CEL, WASM) | Inside type definition |
-| **Aspect** | AOP cross-cutting concerns (before/after/around) | Special node or global config |
-| **Auth** | Complete authentication system | Settings panel |
-| **Sync** | Lock, Semaphore, Coordinate primitives | Icon on flow |
-| **Functions** | WASM functions for CEL expressions | Library panel |
-| **Plugin** | Extensions for new connector types | Plugin manager |
+### Pattern 1: REST API → Database (CRUD)
+```
+[REST Server] → [Flow: GET /users] → [Database]
+[REST Server] → [Flow: POST /users] → [Database]
+[REST Server] → [Flow: PUT /users/:id] → [Database]
+[REST Server] → [Flow: DELETE /users/:id] → [Database]
+```
+
+### Pattern 2: GraphQL API → Database
+```
+[GraphQL Server] → [Flow: Query.users] → [Database]
+[GraphQL Server] → [Flow: Mutation.createUser] → [Database]
+```
+
+### Pattern 3: REST → Message Queue (Event Publishing)
+```
+[REST Server] → [Flow: POST /orders] → [RabbitMQ Publisher]
+```
+- Fire-and-forget pattern
+- Returns 202 Accepted immediately
+- Message queued for async processing
+
+### Pattern 4: Message Queue → REST (Event Processing)
+```
+[RabbitMQ Consumer] → [Flow: process_order] → [External REST API]
+```
+- Consume from queue
+- Call external API
+- With retry, DLQ, circuit breaker
+
+### Pattern 5: Message Queue → Database
+```
+[RabbitMQ Consumer] → [Flow: store_event] → [Database]
+```
+
+### Pattern 6: Message Queue → GraphQL
+```
+[RabbitMQ Consumer] → [Flow: update_inventory] → [GraphQL Client]
+```
+
+### Pattern 7: Message Queue → Exec (Scripts)
+```
+[RabbitMQ Consumer] → [Flow: process_image] → [Exec]
+```
+- Run scripts/commands based on queue messages
+- PDF generation, image processing, etc.
+
+### Pattern 8: REST → GraphQL Passthrough
+```
+[REST Server] → [Flow + Enrich] → [GraphQL Client]
+```
+
+### Pattern 9: GraphQL → REST Passthrough
+```
+[GraphQL Server] → [Flow + Enrich] → [REST Client]
+```
+
+### Pattern 10: Scheduled Jobs
+```
+[Cron: "0 3 * * *"] → [Flow: daily_cleanup] → [Database]
+[Interval: "@every 5m"] → [Flow: health_check] → [External API]
+```
+
+### Pattern 11: File Processing
+```
+[File Watcher] → [Flow: import_csv] → [RabbitMQ Publisher]
+[S3] → [Flow: process_upload] → [Database]
+```
 
 ---
 
-## Project Structure
+## Connector Classification
 
-Mycel projects can be organized in two ways:
+### Input Connectors (Sources) - Right handle only
+Trigger flows when events arrive.
 
-### Flat Structure
-```
-my-project/
-├── config.hcl          # service { name, version }
-├── connectors.hcl      # connector "api" { ... }, connector "db" { ... }
-├── flows.hcl           # flow "get_users" { ... }, flow "create_user" { ... }
-├── types.hcl           # type "user" { ... }
-├── transforms.hcl      # transform "normalize_user" { ... }
-├── validators.hcl      # validator "email" { ... }
-├── aspects.hcl         # aspect "audit_log" { ... }
-└── .mycel-studio.json  # Studio metadata (positions, zoom, UI state)
-```
+| Type | Operations |
+|------|------------|
+| REST (server) | `GET /path`, `POST /path`, etc. |
+| GraphQL (server) | `Query.field`, `Mutation.field` |
+| gRPC (server) | `Service.Method` |
+| TCP (server) | Connection events |
+| Queue (consumer) | `queue_name`, `routing.key.*` |
+| File (watcher) | `path/*.csv`, `glob` patterns |
+| Scheduled | `when = "cron"`, `when = "@every"` |
 
-### Nested Structure
-```
-my-project/
-├── config.hcl
-├── connectors/
-│   ├── api.hcl
-│   ├── database.hcl
-│   └── cache.hcl
-├── flows/
-│   ├── users.hcl
-│   └── products.hcl
-├── types/
-│   └── user.hcl
-├── transforms/
-├── validators/
-├── aspects/
-└── .mycel-studio.json
-```
+### Output Connectors (Targets) - Left handle only
+Destinations where flows write data.
 
----
+| Type | Targets |
+|------|---------|
+| Database | `table_name`, `INSERT`, `UPDATE`, `DELETE`, raw SQL |
+| REST (client) | `GET /path`, `POST /path`, etc. |
+| GraphQL (client) | GraphQL query/mutation |
+| gRPC (client) | `Service.Method` |
+| TCP (client) | Send data |
+| Queue (publisher) | `exchange`, `routing_key`, `topic` |
+| File (writer) | `path/file.json` |
+| S3 | `key`, `bucket` |
+| Exec | `command`, `args` |
+| Cache | `set key` |
+| Email/SMS | Notifications |
 
-## Architecture Changes
+### Bidirectional Connectors
+Can be either input or output depending on configuration.
 
-### Project Management
-- [ ] **Open Project**: Select a folder containing HCL files
-- [ ] **Parse HCL → Canvas**: Read existing `.hcl` files and render as nodes
-- [ ] **Project metadata file**: `.mycel-studio.json` storing:
-  - Node positions (x, y)
-  - Canvas zoom/pan state
-  - UI preferences (expanded panels, etc.)
-  - Last opened file
-- [ ] **Save Project**: Write changes back to HCL files + update metadata
-- [ ] **Auto-save**: Optional, configurable interval
-- [ ] **Recent Projects**: Quick access list
-- [ ] **Support both structures**: Flat and nested file organization
-
-### New UI Layout (IDE-style) ✅ DONE
-```
-┌─────────────────────────────────────────────────────────────┐
-│  Menu Bar (File, Edit, View, Help)                     [✅] │
-├──────────────┬──────────────────────────────┬───────────────┤
-│              │                              │               │
-│  File Tree   │      Canvas (React Flow)    │  Properties   │
-│  [✅]        │      [✅]                    │  Panel [✅]   │
-│              │                              │               │
-│ ──────────── │                              │               │
-│              │                              │               │
-│  Components  │                              │               │
-│  (Palette)   │                              │               │
-│  [✅]        │                              │               │
-│              ├──────────────────────────────┤               │
-│              │   HCL Editor (Monaco) [✅]   │               │
-│              │   - Tabs per file            │               │
-│              │   - Syntax highlighting      │               │
-└──────────────┴──────────────────────────────┴───────────────┘
-```
-
-### HCL Editor (Full)
-- [x] Monaco editor with tabs
-- [x] Line numbers
-- [ ] **Bi-directional sync**: Edit in canvas → updates HCL, edit HCL → updates canvas
-- [ ] Error highlighting with line markers
-- [ ] Auto-completion for Mycel keywords
-- [ ] Format/beautify button
-- [ ] Find & replace
-- [ ] Go to definition (click connector name → jump to definition)
-
-### Git Integration (Basic)
-- [ ] **File status indicators** in file tree:
-  - 🟢 Unmodified (clean)
-  - 🟡 Modified (M)
-  - 🟢+ New/Untracked (U)
-  - 🔴 Deleted (D)
-  - ⚫ Ignored
-- [ ] **Inline diff in editor**: Gutter markers
-- [ ] **Git Blame / Annotate**
-- [ ] **Status bar**: Current branch name
+| Type | As Input | As Output |
+|------|----------|-----------|
+| Database | SELECT queries | INSERT/UPDATE/DELETE |
+| Cache | Read-through | Write-through |
 
 ---
 
-## Service Configuration
+## Flow Block Configuration
 
+### Required Blocks
 ```hcl
-service {
-  name    = "my-service"
-  version = "1.0.0"
+flow "name" {
+  from { connector.input = "operation" }  # REQUIRED
+  to { connector.output = "target" }      # REQUIRED (usually)
 }
 ```
 
-- [ ] Service block: `name`, `version`
-- [ ] Rate limiting configuration (when applicable)
+### Optional Blocks
+
+#### Transform (CEL expressions)
+```hcl
+transform {
+  output.id = "uuid()"
+  output.email = "lower(input.email)"
+  output.created_at = "now()"
+}
+```
+Visual: Badge inside flow node showing field count
+
+#### Enrich (External data)
+```hcl
+enrich "pricing" {
+  connector = "pricing_service"
+  operation = "getPrice"
+  params {
+    product_id = "input.id"
+  }
+}
+```
+Visual: Dashed line to external connector
+
+#### Cache
+```hcl
+cache {
+  storage = "connector.cache"
+  key = "'user:' + input.id"
+  ttl = "5m"
+}
+```
+Visual: Cache icon on flow node
+
+#### Validate
+```hcl
+input_type = type.user
+output_type = type.user
+```
+Visual: Validation badge
+
+#### Lock (Mutex)
+```hcl
+lock {
+  key = "'order:' + input.order_id"
+  storage = "connector.redis"
+  timeout = "30s"
+  on_fail = "wait"
+}
+```
+Visual: Lock icon
+
+#### Semaphore (Concurrency limit)
+```hcl
+semaphore {
+  key = "external_api"
+  permits = 5
+  storage = "connector.redis"
+}
+```
+Visual: Semaphore icon
+
+#### Response (HTTP response)
+```hcl
+response {
+  status = 202
+  body = {
+    message = "Order received"
+    order_id = "${output.order_id}"
+  }
+}
+```
+Visual: Response configuration in properties
+
+#### After (Post-processing)
+```hcl
+after {
+  invalidate {
+    storage = "memory_cache"
+    patterns = ["products:*"]
+  }
+}
+```
+Visual: Post-action indicator
+
+#### Foreach (Batch processing)
+```hcl
+foreach "event" in "input.events" {
+  transform { ... }
+  to { ... }
+}
+```
+Visual: Loop indicator on flow
+
+#### Error Handling
+```hcl
+error_handling {
+  retry {
+    attempts = 3
+    backoff = "exponential"
+  }
+  dlq {
+    queue = "failed_orders"
+  }
+}
+```
+Visual: Error config indicator
 
 ---
 
-## Connectors (Complete Support)
+## Visual Elements Mapping
 
-### REST Connector
+| HCL Concept | Visual Element | Handle |
+|-------------|----------------|--------|
+| REST Server | Node (API icon) | Right only |
+| REST Client | Node (API arrow icon) | Left only |
+| GraphQL Server | Node (GraphQL icon) | Right only |
+| GraphQL Client | Node (GraphQL arrow icon) | Left only |
+| Database | Node (Cylinder) | Both |
+| Queue Consumer | Node (Queue + Arrow in) | Right only |
+| Queue Publisher | Node (Queue + Arrow out) | Left only |
+| Cache | Node (Lightning) | Both |
+| File Input | Node (Folder in) | Right only |
+| File Output | Node (Folder out) | Left only |
+| S3 | Node (Cloud) | Both |
+| Exec | Node (Terminal) | Left only |
+| gRPC Server | Node (gRPC icon) | Right only |
+| gRPC Client | Node (gRPC arrow icon) | Left only |
+| TCP Server | Node (Socket icon) | Right only |
+| TCP Client | Node (Socket arrow icon) | Left only |
+| Flow | Rectangle | Input left, Output right |
+| Scheduled Trigger | Clock icon on Flow | N/A |
+| Transform | Badge inside Flow | N/A |
+| Cache | Cache icon on Flow | N/A |
+| Lock/Semaphore | Lock icon on Flow | N/A |
+| Enrich | Dashed line to connector | N/A |
+
+---
+
+## Connector Configuration
+
+### REST Server
 ```hcl
-# Server mode (exposes endpoints)
 connector "api" {
   type = "rest"
+  mode = "server"
   port = 8080
-  cors { origins = ["*"], methods = ["GET", "POST"] }
-  rate_limit { requests = 100, window = "1m" }
-}
 
-# Client mode (calls external APIs)
+  cors { origins = ["*"] }
+  rate_limit { requests = 100, window = "1m" }
+  auth { type = "jwt", ... }
+}
+```
+Properties panel: port, cors, rate_limit, auth, tls
+
+### REST Client
+```hcl
 connector "external" {
   type = "rest"
-  base_url = "https://api.example.com"
-  timeout = "30s"
-  auth { type = "bearer", token = env("API_TOKEN") }
+  mode = "client"
+  base_url = env("API_URL")
+
+  auth { type = "bearer", token = env("TOKEN") }
   retry { attempts = 3, backoff = "exponential" }
   circuit_breaker { threshold = 5, timeout = "30s" }
 }
 ```
+Properties panel: base_url, auth, retry, circuit_breaker, headers
 
-Properties panel for REST:
-- [ ] Mode toggle: Server/Client
-- **Server**: port, host, cors block, tls block, rate_limit block, auth block
-- **Client**: base_url, timeout, auth block, headers block, retry block, circuit_breaker block
-
-### Database Connectors
+### Database
 ```hcl
 connector "db" {
-  type     = "database"
-  driver   = "postgres"  # postgres, mysql, sqlite, mongodb
-  host     = env("DB_HOST")
-  port     = 5432
+  type = "database"
+  driver = "postgres"  # postgres, mysql, sqlite, mongodb
+
+  host = env("DB_HOST")
+  port = 5432
   database = env("DB_NAME")
   username = env("DB_USER")
   password = env("DB_PASS")
-  pool { max_open = 25, max_idle = 5 }
+
+  pool { max_open = 25 }
   ssl { mode = "require" }
 }
 ```
 
-Driver-specific fields:
-- [ ] **SQLite**: `database` (path only)
-- [ ] **PostgreSQL**: host, port, database, username, password, schema, pool, ssl
-- [ ] **MySQL**: host, port, database, username, password, charset, pool
-- [ ] **MongoDB**: uri OR (host, port, database, username, password), auth_source, replica_set, pool, tls
-
-### Message Queue Connectors
+### Queue (RabbitMQ)
 ```hcl
-# RabbitMQ
 connector "rabbit" {
   type = "queue"
   driver = "rabbitmq"
+
   host = env("RABBIT_HOST")
   port = 5672
   username = env("RABBIT_USER")
   password = env("RABBIT_PASS")
-  vhost = "/"
-  exchange { name = "myapp", type = "topic", durable = true }
-  prefetch = 10
-}
 
-# Kafka
-connector "kafka" {
-  type = "queue"
-  driver = "kafka"
-  brokers = [env("KAFKA_BROKER")]
-  auth { mechanism = "SASL_PLAIN", username = "...", password = "..." }
+  exchange { name = "events", type = "topic", durable = true }
 }
 ```
 
-- [ ] **RabbitMQ**: host, port, username, password, vhost, exchange block, prefetch, reconnect block
-- [ ] **Kafka**: brokers array, auth block (SASL), tls block, schema_registry block
-
-### Cache Connectors
+### Queue (Kafka)
 ```hcl
-# Memory
-connector "cache" {
-  type = "cache"
-  driver = "memory"
-  max_size = "100MB"
-  ttl = "10m"
-}
+connector "kafka" {
+  type = "queue"
+  driver = "kafka"
 
-# Redis
+  brokers = [env("KAFKA_BROKER")]
+  auth { mechanism = "SASL_PLAIN", ... }
+}
+```
+
+### Cache
+```hcl
 connector "cache" {
   type = "cache"
-  driver = "redis"
+  driver = "redis"  # or "memory"
+
   host = env("REDIS_HOST")
   port = 6379
-  password = env("REDIS_PASS")
-  db = 0
   prefix = "mycel:"
 }
 ```
 
-- [ ] **Memory**: max_size, max_items, ttl, eviction
-- [ ] **Redis**: host, port, password, db, prefix, cluster block, sentinel block
-
-### gRPC Connector
-```hcl
-connector "grpc" {
-  type = "grpc"
-  mode = "server"  # or "client"
-  port = 50051
-  proto { path = "./protos", files = ["service.proto"] }
-  tls { cert = "...", key = "..." }
-  reflection = true
-}
-```
-
-- [ ] **Server**: port, proto block, tls block, reflection, health_check
-- [ ] **Client**: address, proto block, tls block, timeout, retry block, load_balancing
-
-### TCP Connector
-```hcl
-connector "tcp" {
-  type = "tcp"
-  mode = "server"
-  port = 9000
-  protocol = "json"  # json, msgpack, line, length_prefixed
-}
-```
-
-- [ ] **Server**: port, host, protocol, tls block, max_connections
-- [ ] **Client**: host, port, protocol, tls block, pool block
-
-### File Connectors
-```hcl
-# Local files
-connector "files" {
-  type = "file"
-  base_path = "/data"
-}
-
-# S3
-connector "s3" {
-  type = "s3"
-  bucket = env("S3_BUCKET")
-  region = "us-east-1"
-  access_key = env("AWS_ACCESS_KEY")
-  secret_key = env("AWS_SECRET_KEY")
-}
-```
-
-- [ ] **Local**: base_path, file_mode, dir_mode
-- [ ] **S3**: bucket, region, access_key, secret_key, endpoint, force_path_style, prefix
-
-### GraphQL Connector
+### GraphQL
 ```hcl
 connector "graphql" {
   type = "graphql"
-  mode = "server"
-  port = 8080
-  path = "/graphql"
-  schema = "..."  # or schema_file
+  mode = "server"  # or "client"
+
+  # Server
+  port = 4000
+  endpoint = "/graphql"
   playground = true
+  schema { path = "./schema.graphql" }
+
+  # Client
+  endpoint = env("GRAPHQL_URL")
+  auth { type = "bearer", ... }
 }
 ```
 
-- [ ] **Server**: port, path, schema/schema_file, playground, introspection, auth block
-- [ ] **Client**: endpoint, auth block, headers block, timeout
-
-### Exec Connector
+### Exec
 ```hcl
 connector "exec" {
   type = "exec"
@@ -310,394 +383,122 @@ connector "exec" {
 }
 ```
 
-- [ ] command, args, timeout, working_dir, env block
-- [ ] SSH mode: ssh block (host, port, user, key_file)
-
 ---
 
-## Flows
+## Project Structure (Nested)
 
-Flow is the core unit of work in Mycel:
-
-```hcl
-flow "create_user" {
-  # Trigger
-  from {
-    connector = "api"
-    operation = "POST /users"
-  }
-
-  # Optional: Validate input
-  validate {
-    input = "type.user"
-  }
-
-  # Optional: Enrich with external data
-  enrich "pricing" {
-    connector = "pricing_service"
-    operation = "getPrice"
-    params { product_id = "input.id" }
-  }
-
-  # Optional: Transform data
-  transform {
-    id = "uuid()"
-    email = "lower(input.email)"
-    price = "enriched.pricing.price"
-    created_at = "now()"
-  }
-
-  # Optional: Cache
-  cache {
-    storage = "connector.cache"
-    key = "'user:' + input.id"
-    ttl = "5m"
-  }
-
-  # Optional: Synchronization
-  lock {
-    storage = "connector.redis"
-    key = "'user:' + input.id"
-    timeout = "30s"
-  }
-
-  # Optional: Authorization
-  require {
-    roles = ["admin"]
-  }
-
-  # Destination
-  to {
-    connector = "db"
-    target = "users"
-  }
-
-  # Optional: Error handling
-  error_handling {
-    retry { attempts = 3, delay = "1s", backoff = "exponential" }
-  }
-}
-
-# Scheduled flow
-flow "daily_cleanup" {
-  when = "0 3 * * *"  # Cron expression
-
-  from { connector = "db", query = "SELECT * FROM old_data" }
-  to { connector = "db", query = "DELETE FROM old_data WHERE ..." }
-}
+```
+my-project/
+├── config.hcl              # service { name, version }
+├── connectors/
+│   ├── api.hcl             # REST server
+│   ├── database.hcl        # Database
+│   ├── rabbit.hcl          # Message queue
+│   └── cache.hcl           # Cache
+├── flows/
+│   ├── users.hcl           # User flows
+│   ├── orders.hcl          # Order flows
+│   └── events.hcl          # Event processing flows
+├── types/
+│   └── schemas.hcl         # Type definitions
+├── transforms/
+│   └── common.hcl          # Reusable transforms
+├── caches/
+│   └── named.hcl           # Named cache configs
+└── .mycel-studio.json      # Studio metadata
 ```
 
-### Flow Visual Elements
-- [ ] **From block**: Input handle, operation picker
-- [ ] **To block**: Output handle, target picker
-- [ ] **Transform badge**: Shows field count, click to edit
-- [ ] **Enrich indicator**: Dashed line to external connector
-- [ ] **Cache icon**: When cache block present
-- [ ] **Lock/Semaphore icon**: When sync primitives present
-- [ ] **Clock icon**: When `when` trigger is set
-- [ ] **Shield icon**: When `require` block present
+---
 
-### Flow Blocks
-- [ ] `from { connector, operation }`
-- [ ] `to { connector, target }` OR `to { connector, query }`
-- [ ] `validate { input = "type.name" }`
-- [ ] `transform { field = "CEL expression" }`
-- [ ] `enrich "name" { connector, operation, params }`
-- [ ] `cache { storage, key, ttl }`
-- [ ] `lock { storage, key, timeout, wait, retry }`
-- [ ] `semaphore { storage, key, max_permits, timeout, lease }`
-- [ ] `coordinate { storage, wait {...}, signal {...}, preflight {...} }`
-- [ ] `require { roles = [...] }`
-- [ ] `error_handling { retry {...} }`
-- [ ] `when = "cron expression"` or `when = "@every 5m"`
+## Implementation Priority
+
+### Phase 1: Connector Input/Output ✅ (Current Focus)
+1. [x] Add `mode` property to connectors (input/output/bidirectional)
+2. [ ] Update ConnectorNode to show/hide handles based on mode
+3. [ ] Update Palette to set default mode per connector type
+4. [ ] Update Flow Properties to show context-aware options
+
+### Phase 2: Complete Flow Configuration
+5. [ ] Transform editor (CEL expressions)
+6. [ ] Cache configuration UI
+7. [ ] Enrich block UI (connect to external service)
+8. [ ] Lock/Semaphore configuration
+9. [ ] Response block for REST flows
+10. [ ] Error handling configuration
+
+### Phase 3: Advanced Patterns
+11. [ ] Scheduled flows (when = cron/interval)
+12. [ ] Foreach loops for batch processing
+13. [ ] After blocks (cache invalidation)
+14. [ ] DLQ configuration for queues
+
+### Phase 4: Types & Validation
+15. [ ] Type nodes on canvas
+16. [ ] Validator definitions
+17. [ ] input_type/output_type on flows
+
+### Phase 5: Reusability
+18. [ ] Named transforms
+19. [ ] Named cache configurations
+20. [ ] Aspects (AOP)
+
+### Phase 6: Advanced
+21. [ ] WASM functions
+22. [ ] Plugins
+23. [ ] Full auth system configuration
+
+### Phase 7: Polish
+24. [ ] Templates gallery (common patterns)
+25. [ ] Undo/redo
+26. [ ] Copy/paste
+27. [ ] Keyboard shortcuts
+28. [ ] Auto-save
 
 ---
 
-## Types (Validation Schemas)
+## Key Insights from Examples
 
-```hcl
-type "user" {
-  id       = number
-  email    = string { format = "email", required = true }
-  age      = number { min = 0, max = 150 }
-  role     = string { enum = ["admin", "user", "guest"] }
-  metadata = object { optional = true }
-}
-```
+1. **Connector syntax in flows uses dot notation:**
+   ```hcl
+   from { connector.api = "GET /users" }
+   to { connector.db = "users" }
+   ```
 
-- [ ] Type node on canvas
-- [ ] Field definitions:
-  - `string`: required, format, pattern, min_length, max_length, enum, default
-  - `number`: required, min, max, integer
-  - `bool`: required, default
-  - `object`: nested fields
-  - `array`: items, min_items, max_items
-- [ ] Built-in formats: email, uuid, url, date, datetime, phone
-- [ ] Reference validators: `validate = "validator.custom_rule"`
+2. **Complex connector configs use block syntax:**
+   ```hcl
+   from {
+     connector.rabbit = {
+       queue = "orders"
+       durable = true
+       dlq { enabled = true }
+     }
+   }
+   ```
 
----
+3. **Environment-specific configs:**
+   ```hcl
+   environment "development" { variables { ... } }
+   environment "production" { variables { ... } }
+   ```
 
-## Validators
+4. **Transform uses output. prefix:**
+   ```hcl
+   transform {
+     output.id = "uuid()"
+     output.email = "lower(input.email)"
+   }
+   ```
 
-```hcl
-# Regex validator
-validator "email" {
-  type = "regex"
-  pattern = "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$"
-  message = "Invalid email format"
-}
+5. **Enrich data is accessed via enriched. prefix:**
+   ```hcl
+   transform {
+     price = "enriched.pricing.price"
+   }
+   ```
 
-# CEL validator
-validator "adult" {
-  type = "cel"
-  expr = "value >= 18"
-  message = "Must be 18 or older"
-}
-
-# WASM validator (for complex logic)
-validator "custom" {
-  type = "wasm"
-  module = "./validators/custom.wasm"
-  function = "validate"
-}
-```
-
-- [ ] Validator node/panel
-- [ ] Types: regex, cel, wasm
-- [ ] Reference in type definitions
-
----
-
-## Named Transforms
-
-```hcl
-transform "normalize_user" {
-  id = "uuid()"
-  email = "lower(trim(input.email))"
-  created_at = "now()"
-}
-
-# Usage in flow
-flow "create_user" {
-  transform {
-    use = [transform.normalize_user, transform.add_timestamps]
-    source = "'api'"  # Override/add fields
-  }
-}
-```
-
-- [ ] Transform node on canvas
-- [ ] CEL expression editor for each field
-- [ ] Composition with `use` array
-- [ ] Reusable across flows
-
----
-
-## Aspects (AOP)
-
-```hcl
-aspect "audit_writes" {
-  on   = ["**/create_*.hcl", "**/update_*.hcl", "**/delete_*.hcl"]
-  when = "after"  # before, after, around, on_error
-  if   = "result.affected > 0"  # Optional condition
-
-  action {
-    connector = "audit_db"
-    target = "audit_logs"
-    transform {
-      flow = "_flow"
-      operation = "_operation"
-      timestamp = "now()"
-    }
-  }
-}
-
-aspect "cache_products" {
-  on   = ["**/get_product*.hcl"]
-  when = "around"
-
-  cache {
-    storage = "connector.cache"
-    key = "'product:' + input.id"
-    ttl = "10m"
-  }
-}
-```
-
-- [ ] Aspect configuration panel
-- [ ] Pattern matching (`on` globs)
-- [ ] When selector: before, after, around, on_error
-- [ ] Action block with connector/transform
-- [ ] Cache/invalidate blocks
-- [ ] Priority ordering
-
----
-
-## WASM Functions
-
-```hcl
-functions "pricing" {
-  wasm = "./wasm/pricing.wasm"
-  exports = ["calculate_price", "apply_discount"]
-}
-
-# Usage in transform
-transform {
-  price = "calculate_price(input.items)"
-  discount = "apply_discount(price, input.coupon)"
-}
-```
-
-- [ ] Functions panel
-- [ ] WASM file selector
-- [ ] Export list
-- [ ] Available in CEL autocomplete
-
----
-
-## Plugins
-
-```hcl
-plugin "salesforce" {
-  source = "./plugins/salesforce"
-  version = "1.0.0"
-}
-
-connector "sf" {
-  type = "salesforce"  # From plugin
-  instance_url = env("SF_URL")
-  client_id = env("SF_CLIENT_ID")
-}
-```
-
-- [ ] Plugin manager panel
-- [ ] Load from local or registry
-- [ ] Enables custom connector types
-
----
-
-## Authentication System
-
-```hcl
-auth {
-  preset = "standard"  # strict, standard, relaxed, development
-
-  jwt {
-    secret = env("JWT_SECRET")
-    access_ttl = "15m"
-    refresh_ttl = "7d"
-    algorithm = "HS256"
-  }
-
-  password {
-    min_length = 8
-    require_upper = true
-    require_number = true
-  }
-
-  mfa {
-    enabled = true
-    methods = ["totp", "webauthn"]
-  }
-
-  sessions {
-    max_per_user = 5
-    idle_timeout = "30m"
-  }
-
-  storage {
-    users = "connector.db"
-    sessions = "connector.redis"
-  }
-
-  endpoints {
-    login = "POST /auth/login"
-    logout = "POST /auth/logout"
-    register = "POST /auth/register"
-  }
-}
-```
-
-- [ ] Auth configuration panel
-- [ ] Preset selector with explanations
-- [ ] JWT config
-- [ ] Password policy
-- [ ] MFA settings (TOTP, WebAuthn, recovery codes)
-- [ ] Session management
-- [ ] SSO/Social providers (Google, GitHub, Apple)
-- [ ] OIDC providers (Okta, Azure, Auth0)
-- [ ] Audit logging
-
----
-
-## UI/UX Improvements
-
-### Dark Mode ✅ DONE
-- [x] Dark mode as default
-- [x] Theme toggle in header
-- [x] Persist preference
-
-### Canvas
-- [ ] Better connection routing (bezier curves)
-- [ ] Connection labels
-- [ ] Grouping/containers
-- [ ] Snap to grid
-- [ ] Alignment guides
-- [ ] Copy/paste nodes
-- [ ] Undo/redo
-
-### Properties Panel
-- [ ] Dynamic forms based on node type
-- [ ] Nested block editors (collapsible sections)
-- [ ] CEL expression editor with autocomplete
-- [ ] Validation feedback
-- [ ] `env()` helper for environment variables
-
-### Palette
-- [ ] Search/filter
-- [ ] Recently used
-- [ ] Favorites
-
----
-
-## Priority Order
-
-### Phase 1 - New Architecture & UI ✅ DONE
-1. ~~New IDE-style layout~~
-2. ~~Dark mode~~
-
-### Phase 2 - Project Management & Editor
-3. Project open/save with `.mycel-studio.json`
-4. Multi-file HCL parsing and generation
-5. Bi-directional sync (canvas ↔ HCL)
-6. Git status indicators
-
-### Phase 3 - Full Connector Support
-7. All database drivers with correct fields
-8. Message queue connectors (RabbitMQ, Kafka)
-9. Cache connectors (Memory, Redis)
-10. gRPC, GraphQL, TCP, File, S3, Exec connectors
-
-### Phase 4 - Flow Enhancements
-11. Complete flow blocks (validate, enrich, cache)
-12. Synchronization primitives (lock, semaphore, coordinate)
-13. When/triggers with visual cron builder
-14. Error handling configuration
-
-### Phase 5 - Schema & Validation
-15. Types as visual nodes
-16. Validators (regex, CEL, WASM)
-17. Named transforms with composition
-
-### Phase 6 - Advanced Features
-18. Aspects (AOP) configuration
-19. WASM functions
-20. Plugins
-21. Full auth system
-
-### Phase 7 - Polish & UX
-22. Undo/redo, copy/paste
-23. Templates gallery
-24. Auto-save, recent projects
-25. Keyboard shortcuts
-26. Auto-completion in HCL editor
+6. **Context variables available:**
+   - `input` - Request/message data
+   - `output` - Transform output
+   - `enriched` - Enriched data
+   - `context` - Request context (user, request_id, etc.)
+   - `flow` - Flow metadata (name, operation)

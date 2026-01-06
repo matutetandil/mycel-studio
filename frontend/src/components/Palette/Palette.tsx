@@ -16,7 +16,7 @@ import {
   Terminal,
   Network,
 } from 'lucide-react'
-import type { ConnectorType } from '../../types'
+import { type ConnectorType, DEFAULT_CONNECTOR_DIRECTIONS } from '../../types'
 
 interface PaletteCategory {
   name: string
@@ -67,10 +67,11 @@ function PaletteItem({ item }: { item: PaletteItem }) {
 
   const onDragStart = (event: React.DragEvent) => {
     const nodeData =
-      item.type === 'connector'
+      item.type === 'connector' && item.connectorType
         ? {
             label: item.label,
             connectorType: item.connectorType,
+            direction: DEFAULT_CONNECTOR_DIRECTIONS[item.connectorType],
             config: { type: item.connectorType },
           }
         : {

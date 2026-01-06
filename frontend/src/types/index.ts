@@ -21,6 +21,26 @@ export type QueueDriver = 'rabbitmq' | 'kafka'
 export type CacheDriver = 'memory' | 'redis'
 export type ConnectorMode = 'server' | 'client'
 
+// Direction determines which handles are shown on the connector node
+// - input: Only right handle (source of data, triggers flows)
+// - output: Only left handle (destination, receives data from flows)
+// - bidirectional: Both handles (can be source or destination)
+export type ConnectorDirection = 'input' | 'output' | 'bidirectional'
+
+// Default directions for each connector type
+export const DEFAULT_CONNECTOR_DIRECTIONS: Record<ConnectorType, ConnectorDirection> = {
+  rest: 'input',        // REST server is input by default (exposes endpoints)
+  graphql: 'input',     // GraphQL server is input by default
+  grpc: 'input',        // gRPC server is input by default
+  tcp: 'input',         // TCP server is input by default
+  queue: 'input',       // Queue consumer is input by default
+  database: 'output',   // Database is output by default (writes data)
+  cache: 'bidirectional', // Cache can be read or write
+  file: 'output',       // File is output by default (writes files)
+  s3: 'output',         // S3 is output by default (stores objects)
+  exec: 'output',       // Exec is always output (runs commands)
+}
+
 // REST Connector
 export interface RestServerConfig {
   mode: 'server'
@@ -418,6 +438,7 @@ export type ConnectorOperation =
 export interface ConnectorNodeData extends Record<string, unknown> {
   label: string
   connectorType: ConnectorType
+  direction: ConnectorDirection
   config: Record<string, unknown>
   operations?: ConnectorOperation[]
 }

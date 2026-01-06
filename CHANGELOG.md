@@ -2,6 +2,34 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.3] - Connector Direction (Input/Output)
+
+### Added
+
+- **Connector direction system:**
+  - `input` (Source) - Only right handle, triggers flows (API server, queue consumer)
+  - `output` (Target) - Only left handle, receives data (database, queue publisher)
+  - `bidirectional` - Both handles (cache, some databases)
+  - Direction selector in Properties panel
+  - Visual indicator on connector nodes showing direction
+
+- **Default directions per connector type:**
+  - REST, GraphQL, gRPC, TCP, Queue → input (server/consumer)
+  - Database, File, S3, Exec → output (target)
+  - Cache → bidirectional
+
+- **HCL generation with mode:**
+  - Automatically adds `mode = "server/client"` based on direction
+  - Queue connectors use `mode = "consumer/producer"`
+
+### Changed
+
+- ConnectorNode now shows/hides handles based on direction
+- Colored handles: green (input), blue (output)
+- Direction shown as label on connector node
+
+---
+
 ## [0.3.2] - Multi-File Generation & Explorer Integration
 
 ### Added

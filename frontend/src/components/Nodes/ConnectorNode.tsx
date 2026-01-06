@@ -11,8 +11,11 @@ import {
   Cloud,
   Terminal,
   Network,
+  ArrowRight,
+  ArrowLeft,
+  ArrowLeftRight,
 } from 'lucide-react'
-import type { ConnectorNodeData, ConnectorType } from '../../types'
+import type { ConnectorNodeData, ConnectorType, ConnectorDirection } from '../../types'
 
 const iconMap: Record<ConnectorType, React.ElementType> = {
   rest: Globe,
@@ -40,6 +43,18 @@ const colorMap: Record<ConnectorType, string> = {
   tcp: 'bg-cyan-600',
 }
 
+const directionIcons: Record<ConnectorDirection, React.ElementType> = {
+  input: ArrowRight,
+  output: ArrowLeft,
+  bidirectional: ArrowLeftRight,
+}
+
+const directionLabels: Record<ConnectorDirection, string> = {
+  input: 'Source',
+  output: 'Target',
+  bidirectional: 'Both',
+}
+
 interface ConnectorNodeProps {
   data: ConnectorNodeData
   selected?: boolean
@@ -48,6 +63,12 @@ interface ConnectorNodeProps {
 function ConnectorNode({ data, selected }: ConnectorNodeProps) {
   const Icon = iconMap[data.connectorType] || Globe
   const colorClass = colorMap[data.connectorType] || 'bg-neutral-500'
+  const direction = data.direction || 'bidirectional'
+  const DirectionIcon = directionIcons[direction]
+
+  // Determine which handles to show based on direction
+  const showLeftHandle = direction === 'output' || direction === 'bidirectional'
+  const showRightHandle = direction === 'input' || direction === 'bidirectional'
 
   return (
     <div
@@ -56,19 +77,38 @@ function ConnectorNode({ data, selected }: ConnectorNodeProps) {
         ${selected ? 'border-indigo-500 shadow-lg shadow-indigo-500/20' : 'border-neutral-700'}
       `}
     >
-      <Handle type="target" position={Position.Left} className="w-3 h-3 !bg-neutral-400" />
+      {/* Left handle - for receiving connections (output/bidirectional) */}
+      {showLeftHandle && (
+        <Handle
+          type="target"
+          position={Position.Left}
+          className="w-3 h-3 !bg-green-500"
+        />
+      )}
 
       <div className="flex items-center gap-3">
         <div className={`p-2 rounded-lg ${colorClass}`}>
           <Icon className="w-5 h-5 text-white" />
         </div>
-        <div>
+        <div className="flex-1">
           <div className="font-semibold text-neutral-100">{data.label}</div>
-          <div className="text-xs text-neutral-400 uppercase">{data.connectorType}</div>
+          <div className="flex items-center gap-1 text-xs text-neutral-400">
+            <span className="uppercase">{data.connectorType}</span>
+            <span className="text-neutral-600">|</span>
+            <DirectionIcon className="w-3 h-3" />
+            <span>{directionLabels[direction]}</span>
+          </div>
         </div>
       </div>
 
-      <Handle type="source" position={Position.Right} className="w-3 h-3 !bg-neutral-400" />
+      {/* Right handle - for sending connections (input/bidirectional) */}
+      {showRightHandle && (
+        <Handle
+          type="source"
+          position={Position.Right}
+          className="w-3 h-3 !bg-blue-500"
+        />
+      )}
     </div>
   )
 }

@@ -3,10 +3,11 @@ import { useCallback, useRef, useState } from 'react'
 import { useStudioStore } from '../stores/useStudioStore'
 import { useProjectStore } from '../stores/useProjectStore'
 import type { Node } from '@xyflow/react'
-import type {
-  ConnectorNodeData,
-  FlowNodeData,
-  StudioNode,
+import {
+  type ConnectorNodeData,
+  type FlowNodeData,
+  type StudioNode,
+  DEFAULT_CONNECTOR_DIRECTIONS,
 } from '../types'
 
 const API_BASE = '/api'
@@ -256,9 +257,11 @@ function convertProjectToNodes(project: ParsedProject): {
     const position = { x: CONNECTOR_START_X, y: CONNECTOR_START_Y + index * CONNECTOR_SPACING_Y }
     connectorPositions[conn.name] = position
 
+    const connectorType = conn.type as ConnectorNodeData['connectorType']
     const nodeData: ConnectorNodeData = {
       label: conn.name,
-      connectorType: conn.type as ConnectorNodeData['connectorType'],
+      connectorType,
+      direction: DEFAULT_CONNECTOR_DIRECTIONS[connectorType] || 'bidirectional',
       config: {
         driver: conn.driver,
         ...conn.properties,
