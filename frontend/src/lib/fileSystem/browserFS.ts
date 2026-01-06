@@ -1,6 +1,7 @@
 // Browser File System Provider - Uses File System Access API (Chrome/Edge)
 
 import type { FileSystemProvider, FSProject, FSProjectFile, FSCapabilities } from './types'
+import { initGitService, clearGitService, getGitService, type GitStatus } from '../git'
 
 // File System Access API types (not in default TypeScript lib)
 interface FileSystemHandleBase {
@@ -42,10 +43,14 @@ export class BrowserFileSystem implements FileSystemProvider {
     return {
       canOpenFolder: true,
       canWatchChanges: false, // Could implement with polling, but not native
-      canGetGitStatus: false,
+      canGetGitStatus: true, // Uses isomorphic-git
       persistsAcrossSessions: false, // Handle is lost on page refresh
       providerName: 'browser',
     }
+  }
+
+  getDirectoryHandle(): FileSystemDirectoryHandle | null {
+    return this.directoryHandle as unknown as FileSystemDirectoryHandle
   }
 
   async openProject(): Promise<FSProject | null> {
@@ -54,6 +59,9 @@ export class BrowserFileSystem implements FileSystemProvider {
     try {
       this.directoryHandle = await window.showDirectoryPicker()
       this.projectName = this.directoryHandle.name
+
+      // Initialize git service
+      initGitService(this.directoryHandle as unknown as FileSystemDirectoryHandle)
 
       const files = await this.readAllFiles(this.directoryHandle, '')
 
@@ -66,6 +74,18 @@ export class BrowserFileSystem implements FileSystemProvider {
       if ((error as Error).name !== 'AbortError') {
         console.error('Failed to open project:', error)
       }
+      return null
+    }
+  }
+
+  async getGitStatus(): Promise<GitStatus | null> {
+    const gitService = getGitService()
+    if (!gitService) return null
+
+    try {
+      return await gitService.getStatus()
+    } catch (error) {
+      console.error('Failed to get git status:', error)
       return null
     }
   }
@@ -204,6 +224,7 @@ export class BrowserFileSystem implements FileSystemProvider {
   closeProject(): void {
     this.directoryHandle = null
     this.projectName = null
+    clearGitService()
   }
 }
 

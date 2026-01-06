@@ -289,11 +289,54 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   },
 
   refreshGitStatus: async () => {
-    const { capabilities } = get()
+    const { capabilities, files } = get()
 
-    // Git status not supported in browser mode
     if (!capabilities.canGetGitStatus) return
 
-    // Git status would require backend support - not implemented yet
+    try {
+      const provider = getFileSystemProvider()
+      if (!provider.getGitStatus) return
+
+      const gitStatus = await provider.getGitStatus()
+      if (!gitStatus || !gitStatus.isRepo) return
+
+      // Update git branch
+      set({ gitBranch: gitStatus.branch })
+
+      // Update file git statuses
+      const updatedFiles = files.map((file) => {
+        const status = gitStatus.files[file.relativePath]
+        let gitFileStatus: ProjectFile['gitStatus'] = 'clean'
+
+        if (status) {
+          switch (status) {
+            case 'modified':
+              gitFileStatus = 'modified'
+              break
+            case 'added':
+              gitFileStatus = 'added'
+              break
+            case 'deleted':
+              gitFileStatus = 'deleted'
+              break
+            case 'untracked':
+              gitFileStatus = 'untracked'
+              break
+            case 'ignored':
+              gitFileStatus = 'ignored'
+              break
+            case 'unmodified':
+            default:
+              gitFileStatus = 'clean'
+          }
+        }
+
+        return { ...file, gitStatus: gitFileStatus }
+      })
+
+      set({ files: updatedFiles })
+    } catch (error) {
+      console.error('Failed to refresh git status:', error)
+    }
   },
 }))

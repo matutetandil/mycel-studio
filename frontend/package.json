@@ -1,7 +1,7 @@
 {
   "name": "mycel-studio",
   "private": true,
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Visual editor for Mycel microservice configurations",
   "author": "Mycel",
   "license": "MIT",
@@ -15,6 +15,7 @@
   "dependencies": {
     "@monaco-editor/react": "^4.7.0",
     "@xyflow/react": "^12.10.0",
+    "isomorphic-git": "^1.36.1",
     "jszip": "^3.10.1",
     "lucide-react": "^0.562.0",
     "react": "^19.2.0",

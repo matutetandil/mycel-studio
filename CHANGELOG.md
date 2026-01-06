@@ -2,6 +2,26 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.1] - Git Integration
+
+### Added
+
+- **Git support using isomorphic-git:**
+  - Pure JavaScript git implementation - runs entirely in browser
+  - Works with File System Access API (Chrome/Edge)
+  - `src/lib/git/index.ts` - Git service with FSA adapter
+  - File status detection: modified, added, deleted, untracked
+  - Current branch display in header
+  - Git status indicators in FileTree (M, U, A, D)
+
+### Changed
+
+- **browserFS.ts:** Initializes git service when opening projects
+- **useProjectStore.ts:** `refreshGitStatus()` now uses isomorphic-git
+- **types.ts:** Added GitStatus and GitFileStatus exports
+
+---
+
 ## [0.3.0] - Phase 2: Project Management & HCL Sync
 
 ### Added

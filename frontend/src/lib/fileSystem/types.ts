@@ -1,5 +1,9 @@
 // File System abstraction types
 
+import type { GitStatus } from '../git'
+
+export type { GitStatus, GitFileStatus } from '../git'
+
 export interface FSProjectFile {
   name: string
   relativePath: string
@@ -49,4 +53,7 @@ export interface FileSystemProvider {
 
   // Close the current project
   closeProject(): void
+
+  // Get git status (optional - only for providers that support it)
+  getGitStatus?(): Promise<GitStatus | null>
 }
