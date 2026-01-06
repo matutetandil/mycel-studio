@@ -363,6 +363,55 @@ export interface FlowValidate {
 }
 
 // =============================================================================
+// Connector Operations
+// =============================================================================
+
+export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH' | 'HEAD' | 'OPTIONS'
+
+export interface RestOperation {
+  id: string
+  method: HttpMethod
+  path: string
+  description?: string
+}
+
+export interface GraphQLOperation {
+  id: string
+  type: 'query' | 'mutation' | 'subscription'
+  name: string
+  description?: string
+}
+
+export interface DatabaseOperation {
+  id: string
+  type: 'query' | 'insert' | 'update' | 'delete'
+  target: string
+  description?: string
+}
+
+export interface GrpcOperation {
+  id: string
+  service: string
+  method: string
+  description?: string
+}
+
+export interface QueueOperation {
+  id: string
+  type: 'publish' | 'subscribe'
+  queue?: string
+  topic?: string
+  description?: string
+}
+
+export type ConnectorOperation =
+  | RestOperation
+  | GraphQLOperation
+  | DatabaseOperation
+  | GrpcOperation
+  | QueueOperation
+
+// =============================================================================
 // Node Data Types
 // =============================================================================
 
@@ -370,6 +419,7 @@ export interface ConnectorNodeData extends Record<string, unknown> {
   label: string
   connectorType: ConnectorType
   config: Record<string, unknown>
+  operations?: ConnectorOperation[]
 }
 
 export interface FlowNodeData extends Record<string, unknown> {

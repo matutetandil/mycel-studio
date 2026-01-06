@@ -1,5 +1,6 @@
 services:
-  studio:
+  app:
+    container_name: mycel-studio
     build: .
     ports:
       - "8080:8080"

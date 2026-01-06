@@ -3,48 +3,120 @@ import type { ConnectorNodeData, FlowNodeData } from '../types'
 
 type StudioNode = Node<ConnectorNodeData | FlowNodeData>
 
-function generateConnector(node: StudioNode): string {
-  const data = node.data as ConnectorNodeData
-  const name = data.label.toLowerCase().replace(/\s+/g, '_')
-  const lines: string[] = []
+export interface GeneratedFile {
+  path: string
+  name: string
+  content: string
+}
 
+export interface GeneratedProject {
+  files: GeneratedFile[]
+  errors: string[]
+}
+
+// Convert label to valid HCL identifier
+export function toIdentifier(label: string): string {
+  return label.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '')
+}
+
+function generateConnectorHCL(node: StudioNode): string {
+  const data = node.data as ConnectorNodeData
+  const name = toIdentifier(data.label)
+  const lines: string[] = []
+  const config = data.config || {}
+
+  lines.push(`# ${data.label} connector`)
   lines.push(`connector "${name}" {`)
   lines.push(`  type = "${data.connectorType}"`)
 
-  if (data.config.port) {
-    lines.push(`  port = ${data.config.port}`)
-  }
+  // Type-specific configuration
+  switch (data.connectorType) {
+    case 'rest':
+      if (config.port) lines.push(`  port = ${config.port}`)
+      if (config.cors) {
+        lines.push('')
+        lines.push('  cors {')
+        lines.push('    origins = ["*"]')
+        lines.push('    methods = ["GET", "POST", "PUT", "DELETE", "OPTIONS"]')
+        lines.push('  }')
+      }
+      break
 
-  if (data.config.driver) {
-    lines.push(`  driver = "${data.config.driver}"`)
-  }
+    case 'database':
+      if (config.driver) lines.push(`  driver = "${config.driver}"`)
+      if (config.driver === 'sqlite') {
+        if (config.database) lines.push(`  database = "${config.database}"`)
+      } else if (config.driver === 'mongodb') {
+        if (config.uri) lines.push(`  uri = "${config.uri}"`)
+        if (config.database) lines.push(`  database = "${config.database}"`)
+      } else {
+        // PostgreSQL, MySQL
+        if (config.host) lines.push(`  host = "${config.host}"`)
+        if (config.port) lines.push(`  port = ${config.port}`)
+        if (config.database) lines.push(`  database = "${config.database}"`)
+        if (config.user) lines.push(`  user = "${config.user}"`)
+        if (config.password) lines.push(`  password = "${config.password}"`)
+        if (config.ssl_mode) lines.push(`  ssl_mode = "${config.ssl_mode}"`)
+        if (config.charset) lines.push(`  charset = "${config.charset}"`)
+      }
+      break
 
-  if (data.config.database) {
-    lines.push(`  database = "${data.config.database}"`)
-  }
+    case 'graphql':
+      if (config.driver) lines.push(`  mode = "${config.driver}"`)
+      if (config.port) lines.push(`  port = ${config.port}`)
+      if (config.endpoint) lines.push(`  path = "${config.endpoint}"`)
+      if (config.playground) lines.push(`  playground = true`)
+      break
 
-  if (data.config.connection) {
-    lines.push(`  connection = "${data.config.connection}"`)
-  }
+    case 'grpc':
+      if (config.driver) lines.push(`  mode = "${config.driver}"`)
+      if (config.port) lines.push(`  port = ${config.port}`)
+      break
 
-  if (data.config.queue) {
-    lines.push(`  queue = "${data.config.queue}"`)
-  }
+    case 'tcp':
+      if (config.port) lines.push(`  port = ${config.port}`)
+      break
 
-  if (data.config.topic) {
-    lines.push(`  topic = "${data.config.topic}"`)
-  }
+    case 'queue':
+      if (config.driver) lines.push(`  driver = "${config.driver}"`)
+      if (config.driver === 'rabbitmq' && config.url) {
+        lines.push(`  url = "${config.url}"`)
+      } else if (config.driver === 'kafka' && config.brokers) {
+        lines.push(`  brokers = ["${config.brokers}"]`)
+      }
+      break
 
-  if (data.config.proto_path) {
-    lines.push(`  proto_path = "${data.config.proto_path}"`)
-  }
+    case 'cache':
+      if (config.driver) lines.push(`  driver = "${config.driver}"`)
+      if (config.driver === 'memory') {
+        if (config.max_items) lines.push(`  max_items = ${config.max_items}`)
+        if (config.default_ttl) lines.push(`  default_ttl = "${config.default_ttl}"`)
+      } else if (config.driver === 'redis') {
+        if (config.address) lines.push(`  address = "${config.address}"`)
+        if (config.password) lines.push(`  password = "${config.password}"`)
+        if (config.db !== undefined) lines.push(`  db = ${config.db}`)
+        if (config.key_prefix) lines.push(`  key_prefix = "${config.key_prefix}"`)
+      }
+      break
 
-  if (data.config.schema) {
-    lines.push(`  schema = "${data.config.schema}"`)
-  }
+    case 's3':
+      if (config.bucket) lines.push(`  bucket = "${config.bucket}"`)
+      if (config.region) lines.push(`  region = "${config.region}"`)
+      if (config.access_key) lines.push(`  access_key = "${config.access_key}"`)
+      if (config.secret_key) lines.push(`  secret_key = "${config.secret_key}"`)
+      if (config.endpoint) lines.push(`  endpoint = "${config.endpoint}"`)
+      break
 
-  if (data.config.cors) {
-    lines.push(`  cors = true`)
+    case 'file':
+      if (config.driver) lines.push(`  driver = "${config.driver}"`)
+      if (config.base_path) lines.push(`  base_path = "${config.base_path}"`)
+      break
+
+    case 'exec':
+      if (config.command) lines.push(`  command = "${config.command}"`)
+      if (config.working_dir) lines.push(`  working_dir = "${config.working_dir}"`)
+      if (config.timeout) lines.push(`  timeout = "${config.timeout}"`)
+      break
   }
 
   lines.push('}')
@@ -52,13 +124,13 @@ function generateConnector(node: StudioNode): string {
   return lines.join('\n')
 }
 
-function generateFlow(
+function generateFlowHCL(
   node: StudioNode,
   edges: Edge[],
   nodesMap: Map<string, StudioNode>
 ): string {
   const data = node.data as FlowNodeData
-  const name = data.label.toLowerCase().replace(/\s+/g, '_')
+  const name = toIdentifier(data.label)
   const lines: string[] = []
 
   // Find connected nodes
@@ -68,6 +140,7 @@ function generateFlow(
   const fromNode = incomingEdge ? nodesMap.get(incomingEdge.source) : null
   const toNode = outgoingEdge ? nodesMap.get(outgoingEdge.target) : null
 
+  lines.push(`# ${data.label}`)
   lines.push(`flow "${name}" {`)
 
   // Schedule (when)
@@ -79,22 +152,23 @@ function generateFlow(
   // From block
   if (fromNode && fromNode.type === 'connector') {
     const fromData = fromNode.data as ConnectorNodeData
-    const connectorName = fromData.label.toLowerCase().replace(/\s+/g, '_')
-    const fromLines = [`  from {`, `    connector = "${connectorName}"`]
-
-    if (data.fromOperation) {
-      fromLines.push(`    operation = "${data.fromOperation}"`)
+    const connectorName = toIdentifier(fromData.label)
+    lines.push('  from {')
+    lines.push(`    connector = "${connectorName}"`)
+    if (data.from?.operation) {
+      lines.push(`    operation = "${data.from.operation}"`)
     }
-
-    fromLines.push('  }')
-    lines.push(fromLines.join('\n'))
+    lines.push('  }')
   }
 
   // Transform block
-  if (data.transform && Object.keys(data.transform).length > 0) {
+  if (data.transform?.fields && Object.keys(data.transform.fields).length > 0) {
     lines.push('')
     lines.push('  transform {')
-    for (const [key, value] of Object.entries(data.transform)) {
+    if (data.transform.use && data.transform.use.length > 0) {
+      lines.push(`    use = [${data.transform.use.map(u => `"${u}"`).join(', ')}]`)
+    }
+    for (const [key, value] of Object.entries(data.transform.fields)) {
       lines.push(`    ${key} = "${value}"`)
     }
     lines.push('  }')
@@ -103,16 +177,14 @@ function generateFlow(
   // To block
   if (toNode && toNode.type === 'connector') {
     const toData = toNode.data as ConnectorNodeData
-    const connectorName = toData.label.toLowerCase().replace(/\s+/g, '_')
+    const connectorName = toIdentifier(toData.label)
     lines.push('')
-    const toLines = [`  to {`, `    connector = "${connectorName}"`]
-
-    if (data.toTarget) {
-      toLines.push(`    target = "${data.toTarget}"`)
+    lines.push('  to {')
+    lines.push(`    connector = "${connectorName}"`)
+    if (data.to?.target) {
+      lines.push(`    target = "${data.to.target}"`)
     }
-
-    toLines.push('  }')
-    lines.push(toLines.join('\n'))
+    lines.push('  }')
   }
 
   lines.push('}')
@@ -120,21 +192,120 @@ function generateFlow(
   return lines.join('\n')
 }
 
-export function generateHCL(nodes: StudioNode[], edges: Edge[]): string {
-  const nodesMap = new Map(nodes.map((n) => [n.id, n]))
-  const parts: string[] = []
+// Validate project - returns array of error messages
+export function validateProject(nodes: StudioNode[]): string[] {
+  const errors: string[] = []
 
-  // Generate connectors first
   const connectorNodes = nodes.filter((n) => n.type === 'connector')
-  for (const node of connectorNodes) {
-    parts.push(generateConnector(node))
-  }
-
-  // Then generate flows
   const flowNodes = nodes.filter((n) => n.type === 'flow')
-  for (const node of flowNodes) {
-    parts.push(generateFlow(node, edges, nodesMap))
+
+  // Validate unique ports
+  const portUsage = new Map<number, string[]>()
+  for (const node of connectorNodes) {
+    const data = node.data as ConnectorNodeData
+    const port = data.config?.port as number | undefined
+
+    if (port) {
+      const existing = portUsage.get(port) || []
+      existing.push(data.label)
+      portUsage.set(port, existing)
+    }
   }
 
-  return parts.join('\n\n')
+  for (const [port, connectors] of portUsage) {
+    if (connectors.length > 1) {
+      errors.push(`Port ${port} is used by multiple connectors: ${connectors.join(', ')}`)
+    }
+  }
+
+  // Validate unique connector names
+  const connectorNames = new Map<string, string[]>()
+  for (const node of connectorNodes) {
+    const data = node.data as ConnectorNodeData
+    const name = toIdentifier(data.label)
+    const existing = connectorNames.get(name) || []
+    existing.push(data.label)
+    connectorNames.set(name, existing)
+  }
+
+  for (const [name, labels] of connectorNames) {
+    if (labels.length > 1) {
+      errors.push(`Duplicate connector name "${name}": ${labels.join(', ')}`)
+    }
+  }
+
+  // Validate unique flow names
+  const flowNames = new Map<string, string[]>()
+  for (const node of flowNodes) {
+    const data = node.data as FlowNodeData
+    const name = toIdentifier(data.label)
+    const existing = flowNames.get(name) || []
+    existing.push(data.label)
+    flowNames.set(name, existing)
+  }
+
+  for (const [name, labels] of flowNames) {
+    if (labels.length > 1) {
+      errors.push(`Duplicate flow name "${name}": ${labels.join(', ')}`)
+    }
+  }
+
+  return errors
+}
+
+// Generate project with multiple files
+export function generateProject(nodes: StudioNode[], edges: Edge[]): GeneratedProject {
+  const nodesMap = new Map(nodes.map((n) => [n.id, n]))
+  const files: GeneratedFile[] = []
+  const errors = validateProject(nodes)
+
+  const connectorNodes = nodes.filter((n) => n.type === 'connector')
+  const flowNodes = nodes.filter((n) => n.type === 'flow')
+
+  // Generate config.hcl
+  files.push({
+    path: 'config.hcl',
+    name: 'config.hcl',
+    content: `# Service configuration
+service {
+  name    = "my-service"
+  version = "1.0.0"
+}
+`
+  })
+
+  // Generate connector files (one per connector)
+  for (const node of connectorNodes) {
+    const data = node.data as ConnectorNodeData
+    const fileName = `${toIdentifier(data.label)}.hcl`
+    files.push({
+      path: `connectors/${fileName}`,
+      name: fileName,
+      content: generateConnectorHCL(node) + '\n'
+    })
+  }
+
+  // Generate flows file (all flows together, grouped by source connector)
+  if (flowNodes.length > 0) {
+    const flowsContent: string[] = ['# Flow definitions', '']
+
+    for (const node of flowNodes) {
+      flowsContent.push(generateFlowHCL(node, edges, nodesMap))
+      flowsContent.push('')
+    }
+
+    files.push({
+      path: 'flows/flows.hcl',
+      name: 'flows.hcl',
+      content: flowsContent.join('\n')
+    })
+  }
+
+  return { files, errors }
+}
+
+// Legacy function for backward compatibility - generates single HCL string
+export function generateHCL(nodes: StudioNode[], edges: Edge[]): string {
+  const project = generateProject(nodes, edges)
+  return project.files.map(f => `# === ${f.path} ===\n${f.content}`).join('\n')
 }

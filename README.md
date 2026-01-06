@@ -16,6 +16,27 @@ docker compose up --build
 
 Open http://localhost:8080 in your browser.
 
+## Browser Compatibility
+
+Mycel Studio uses the [File System Access API](https://developer.mozilla.org/en-US/docs/Web/API/File_System_Access_API) for native folder access.
+
+| Browser | Support | Notes |
+|---------|---------|-------|
+| Chrome | Full | Works out of the box |
+| Edge | Full | Works out of the box |
+| Brave | Full* | Requires enabling flag (see below) |
+| Firefox | ZIP mode | Uses import/export ZIP fallback |
+| Safari | ZIP mode | Uses import/export ZIP fallback |
+
+### Enabling File System Access in Brave
+
+1. Open `brave://flags`
+2. Search for "File System Access API"
+3. Set to **Enabled**
+4. Restart Brave
+
+Without this flag, Mycel Studio will work in ZIP mode (import/export projects as ZIP files).
+
 ## Development Setup
 
 ### Prerequisites

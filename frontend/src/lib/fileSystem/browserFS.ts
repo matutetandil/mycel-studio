@@ -230,5 +230,20 @@ export class BrowserFileSystem implements FileSystemProvider {
 
 // Check if File System Access API is available
 export function isBrowserFSAvailable(): boolean {
-  return typeof window !== 'undefined' && 'showDirectoryPicker' in window
+  const available = typeof window !== 'undefined' &&
+    'showDirectoryPicker' in window &&
+    typeof window.showDirectoryPicker === 'function'
+
+  // Log for debugging
+  if (typeof window !== 'undefined') {
+    console.log('[FileSystem] Browser detection:', {
+      hasWindow: true,
+      hasShowDirectoryPicker: 'showDirectoryPicker' in window,
+      isFunction: typeof window.showDirectoryPicker === 'function',
+      isSecureContext: window.isSecureContext,
+      result: available ? 'Browser FS (Full Access)' : 'Fallback (ZIP Mode)'
+    })
+  }
+
+  return available
 }

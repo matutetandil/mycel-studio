@@ -109,6 +109,17 @@ export default function Canvas() {
         nodeTypes={nodeTypes}
         fitView
         deleteKeyCode={['Backspace', 'Delete']}
+        edgesReconnectable
+        elementsSelectable
+        selectNodesOnDrag={false}
+        defaultEdgeOptions={{
+          type: 'smoothstep',
+          animated: true,
+          style: { stroke: '#6366f1', strokeWidth: 2 },
+          selectable: true,
+          deletable: true,
+          interactionWidth: 20,
+        }}
         className="bg-neutral-950"
       >
         <Background gap={20} size={1} color="#333" />

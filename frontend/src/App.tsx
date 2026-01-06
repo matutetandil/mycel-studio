@@ -5,7 +5,7 @@ import MenuBar from './components/MenuBar/MenuBar'
 import Sidebar from './components/Sidebar/Sidebar'
 import Canvas from './components/Canvas/Canvas'
 import Properties from './components/Properties/Properties'
-import Editor from './components/Editor/Editor'
+import Preview from './components/Preview/Preview'
 
 function App() {
   const { theme } = useThemeStore()
@@ -34,10 +34,8 @@ function App() {
               <Canvas />
             </div>
 
-            {/* Editor area - resizable in future */}
-            <div className="h-64 border-t border-neutral-800">
-              <Editor />
-            </div>
+            {/* Preview area - shows generated HCL */}
+            <Preview />
           </div>
 
           {/* Right sidebar - Properties */}

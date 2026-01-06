@@ -2,6 +2,47 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.2] - Multi-File Generation & Explorer Integration
+
+### Added
+
+- **Multi-file HCL generation:**
+  - `config.hcl` - Service configuration
+  - `connectors/{name}.hcl` - One file per connector
+  - `flows/flows.hcl` - All flows in one file
+  - Follows standard Mycel project structure
+
+- **Validation system:**
+  - Validate unique port numbers across connectors
+  - Validate unique connector names (identifiers)
+  - Validate unique flow names
+  - Warnings displayed in Explorer and Preview panels
+
+- **Virtual project in Explorer:**
+  - Shows "Unsaved Project" when no real project is open
+  - Displays generated files in proper directory structure
+  - Files auto-select when component is selected on canvas
+  - Directory expand/collapse functionality
+
+### Changed
+
+- **FileTree.tsx:** Complete rewrite to show virtual project files
+  - Module-level state pattern for cross-component sync
+  - `getVirtualActiveFile()` and `setVirtualActiveFile()` exports
+  - Auto-selects corresponding file when canvas node is selected
+
+- **Preview.tsx:** Simplified to sync with Explorer
+  - Removed duplicate file tree sidebar
+  - Now shows selected file from Explorer
+  - Full-width Monaco editor
+
+- **hclGenerator.ts:** Complete rewrite
+  - `generateProject()` returns `GeneratedProject` with files array
+  - `validateProject()` for port and name validation
+  - `toIdentifier()` helper exported for consistent naming
+
+---
+
 ## [0.3.1] - Git Integration
 
 ### Added
