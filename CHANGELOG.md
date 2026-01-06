@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased] - Phase 1: New UI Architecture
+## [Unreleased] - Phase 1: New UI Architecture & Mycel Model
 
 ### Added
 
@@ -25,6 +25,20 @@ All notable changes to this project will be documented in this file.
   - All components updated to dark neutral color scheme
   - Custom node styles (ConnectorNode, FlowNode) for dark mode
   - Monaco Editor integration with theme support
+- **Comprehensive Mycel type system:**
+  - All connector types: REST, Database, Queue (RabbitMQ/Kafka), Cache (Memory/Redis), gRPC, GraphQL, TCP, File, S3, Exec
+  - Complete flow model with: from, to, transform, validate, enrich, cache, lock, semaphore, coordinate, require, error_handling
+  - Type definitions for schemas with field validation
+  - Validator support (regex, CEL, WASM)
+  - Aspect (AOP) definitions
+  - Project structure types
+
+### Changed
+
+- **Palette:** Added new connector types (TCP, S3, Exec)
+- **FlowNode:** Shows icons for schedule, lock, cache, and auth requirements
+- **Properties:** Updated to handle all connector types with proper fields
+- **TODO.md:** Completely rewritten based on Mycel CONCEPTS.md documentation
 
 ## [0.1.0] - 2025-01-05
 

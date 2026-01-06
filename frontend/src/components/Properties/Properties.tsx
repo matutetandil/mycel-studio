@@ -1,11 +1,11 @@
 import { useStudioStore } from '../../stores/useStudioStore'
-import type { ConnectorNodeData, FlowNodeData } from '../../types'
+import type { ConnectorNodeData, FlowNodeData, ConnectorType } from '../../types'
 
-const driverOptions: Record<string, string[]> = {
+const driverOptions: Partial<Record<ConnectorType, string[]>> = {
   database: ['sqlite', 'postgres', 'mysql', 'mongodb'],
-  mq: ['rabbitmq', 'kafka'],
+  queue: ['rabbitmq', 'kafka'],
   cache: ['memory', 'redis'],
-  file: ['local', 's3'],
+  file: ['local'],
 }
 
 function ConnectorProperties({
@@ -16,6 +16,7 @@ function ConnectorProperties({
   onChange: (data: Partial<ConnectorNodeData>) => void
 }) {
   const drivers = driverOptions[data.connectorType] || []
+  const config = data.config || {}
 
   return (
     <div className="space-y-4">
@@ -29,14 +30,14 @@ function ConnectorProperties({
         />
       </div>
 
-      {(data.connectorType === 'rest' || data.connectorType === 'grpc' || data.connectorType === 'graphql') && (
+      {(data.connectorType === 'rest' || data.connectorType === 'grpc' || data.connectorType === 'graphql' || data.connectorType === 'tcp') && (
         <div>
           <label className="block text-xs font-medium text-neutral-400 mb-1">Port</label>
           <input
             type="number"
-            value={data.config.port || ''}
+            value={(config.port as number) || ''}
             onChange={(e) =>
-              onChange({ config: { ...data.config, port: parseInt(e.target.value) || undefined } })
+              onChange({ config: { ...config, port: parseInt(e.target.value) || undefined } })
             }
             className="w-full px-3 py-2 text-sm bg-neutral-800 border border-neutral-700 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-white"
           />
@@ -47,8 +48,8 @@ function ConnectorProperties({
         <div>
           <label className="block text-xs font-medium text-neutral-400 mb-1">Driver</label>
           <select
-            value={data.config.driver || ''}
-            onChange={(e) => onChange({ config: { ...data.config, driver: e.target.value } })}
+            value={(config.driver as string) || ''}
+            onChange={(e) => onChange({ config: { ...config, driver: e.target.value } })}
             className="w-full px-3 py-2 text-sm bg-neutral-800 border border-neutral-700 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-white"
           >
             <option value="">Select driver...</option>
@@ -64,42 +65,38 @@ function ConnectorProperties({
       {data.connectorType === 'database' && (
         <div>
           <label className="block text-xs font-medium text-neutral-400 mb-1">
-            {data.config.driver === 'sqlite' ? 'Database Path' : 'Connection String'}
+            {config.driver === 'sqlite' ? 'Database Path' : 'Host'}
           </label>
           <input
             type="text"
-            value={data.config.database || data.config.connection || ''}
+            value={(config.driver === 'sqlite' ? config.database : config.host) as string || ''}
             onChange={(e) =>
               onChange({
                 config: {
-                  ...data.config,
-                  [data.config.driver === 'sqlite' ? 'database' : 'connection']: e.target.value,
+                  ...config,
+                  [config.driver === 'sqlite' ? 'database' : 'host']: e.target.value,
                 },
               })
             }
-            placeholder={data.config.driver === 'sqlite' ? './data/app.db' : 'postgres://...'}
+            placeholder={config.driver === 'sqlite' ? './data/app.db' : 'localhost'}
             className="w-full px-3 py-2 text-sm bg-neutral-800 border border-neutral-700 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-white placeholder-neutral-500"
           />
         </div>
       )}
 
-      {data.connectorType === 'mq' && (
+      {data.connectorType === 'queue' && (
         <div>
-          <label className="block text-xs font-medium text-neutral-400 mb-1">
-            {data.config.driver === 'kafka' ? 'Topic' : 'Queue'}
-          </label>
+          <label className="block text-xs font-medium text-neutral-400 mb-1">Host</label>
           <input
             type="text"
-            value={data.config.topic || data.config.queue || ''}
+            value={(config.host as string) || ''}
             onChange={(e) =>
               onChange({
-                config: {
-                  ...data.config,
-                  [data.config.driver === 'kafka' ? 'topic' : 'queue']: e.target.value,
-                },
+                config: { ...config, host: e.target.value },
               })
             }
-            className="w-full px-3 py-2 text-sm bg-neutral-800 border border-neutral-700 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-white"
+            placeholder="localhost"
+            className="w-full px-3 py-2 text-sm bg-neutral-800 border border-neutral-700 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-white placeholder-neutral-500"
           />
         </div>
       )}
@@ -109,13 +106,64 @@ function ConnectorProperties({
           <input
             type="checkbox"
             id="cors"
-            checked={data.config.cors || false}
-            onChange={(e) => onChange({ config: { ...data.config, cors: e.target.checked } })}
+            checked={Boolean(config.cors)}
+            onChange={(e) => onChange({ config: { ...config, cors: e.target.checked ? { origins: ['*'], methods: ['GET', 'POST'] } : undefined } })}
             className="w-4 h-4 text-indigo-600 bg-neutral-800 border-neutral-600 rounded focus:ring-indigo-500"
           />
           <label htmlFor="cors" className="text-sm text-neutral-300">
             Enable CORS
           </label>
+        </div>
+      )}
+
+      {data.connectorType === 's3' && (
+        <>
+          <div>
+            <label className="block text-xs font-medium text-neutral-400 mb-1">Bucket</label>
+            <input
+              type="text"
+              value={(config.bucket as string) || ''}
+              onChange={(e) => onChange({ config: { ...config, bucket: e.target.value } })}
+              placeholder="my-bucket"
+              className="w-full px-3 py-2 text-sm bg-neutral-800 border border-neutral-700 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-white placeholder-neutral-500"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-neutral-400 mb-1">Region</label>
+            <input
+              type="text"
+              value={(config.region as string) || ''}
+              onChange={(e) => onChange({ config: { ...config, region: e.target.value } })}
+              placeholder="us-east-1"
+              className="w-full px-3 py-2 text-sm bg-neutral-800 border border-neutral-700 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-white placeholder-neutral-500"
+            />
+          </div>
+        </>
+      )}
+
+      {data.connectorType === 'exec' && (
+        <div>
+          <label className="block text-xs font-medium text-neutral-400 mb-1">Working Directory</label>
+          <input
+            type="text"
+            value={(config.workingDir as string) || ''}
+            onChange={(e) => onChange({ config: { ...config, workingDir: e.target.value } })}
+            placeholder="/app/scripts"
+            className="w-full px-3 py-2 text-sm bg-neutral-800 border border-neutral-700 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-white placeholder-neutral-500"
+          />
+        </div>
+      )}
+
+      {data.connectorType === 'file' && (
+        <div>
+          <label className="block text-xs font-medium text-neutral-400 mb-1">Base Path</label>
+          <input
+            type="text"
+            value={(config.basePath as string) || ''}
+            onChange={(e) => onChange({ config: { ...config, basePath: e.target.value } })}
+            placeholder="/data"
+            className="w-full px-3 py-2 text-sm bg-neutral-800 border border-neutral-700 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-white placeholder-neutral-500"
+          />
         </div>
       )}
     </div>
@@ -129,6 +177,10 @@ function FlowProperties({
   data: FlowNodeData
   onChange: (data: Partial<FlowNodeData>) => void
 }) {
+  // Support both old and new format
+  const fromOperation = data.from?.operation || (data as Record<string, unknown>).fromOperation as string || ''
+  const toTarget = data.to?.target || (data as Record<string, unknown>).toTarget as string || ''
+
   return (
     <div className="space-y-4">
       <div>
@@ -145,8 +197,8 @@ function FlowProperties({
         <label className="block text-xs font-medium text-neutral-400 mb-1">Operation (from)</label>
         <input
           type="text"
-          value={data.fromOperation || ''}
-          onChange={(e) => onChange({ fromOperation: e.target.value })}
+          value={fromOperation}
+          onChange={(e) => onChange({ from: { connector: data.from?.connector || '', operation: e.target.value } })}
           placeholder="GET /users"
           className="w-full px-3 py-2 text-sm bg-neutral-800 border border-neutral-700 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-white placeholder-neutral-500"
         />
@@ -156,8 +208,8 @@ function FlowProperties({
         <label className="block text-xs font-medium text-neutral-400 mb-1">Target (to)</label>
         <input
           type="text"
-          value={data.toTarget || ''}
-          onChange={(e) => onChange({ toTarget: e.target.value })}
+          value={toTarget}
+          onChange={(e) => onChange({ to: { connector: data.to?.connector || '', target: e.target.value } })}
           placeholder="users"
           className="w-full px-3 py-2 text-sm bg-neutral-800 border border-neutral-700 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-white placeholder-neutral-500"
         />
@@ -168,8 +220,8 @@ function FlowProperties({
         <input
           type="text"
           value={data.when || ''}
-          onChange={(e) => onChange({ when: e.target.value })}
-          placeholder="0 * * * *"
+          onChange={(e) => onChange({ when: e.target.value || undefined })}
+          placeholder="0 * * * * or @every 5m"
           className="w-full px-3 py-2 text-sm bg-neutral-800 border border-neutral-700 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-white placeholder-neutral-500"
         />
       </div>

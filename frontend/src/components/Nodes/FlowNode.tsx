@@ -1,6 +1,6 @@
 import { memo } from 'react'
 import { Handle, Position } from '@xyflow/react'
-import { ArrowRight, Clock } from 'lucide-react'
+import { ArrowRight, Clock, Lock, Shield, Database as CacheIcon } from 'lucide-react'
 import type { FlowNodeData } from '../../types'
 
 interface FlowNodeProps {
@@ -9,8 +9,15 @@ interface FlowNodeProps {
 }
 
 function FlowNode({ data, selected }: FlowNodeProps) {
-  const hasTransform = data.transform && Object.keys(data.transform).length > 0
+  const hasTransform = data.transform && data.transform.fields && Object.keys(data.transform.fields).length > 0
   const hasSchedule = !!data.when
+  const hasLock = !!data.lock || !!data.semaphore
+  const hasCache = !!data.cache
+  const hasRequire = !!data.require
+
+  // Support both old format (fromOperation/toTarget) and new format (from/to objects)
+  const fromOperation = data.from?.operation || (data as Record<string, unknown>).fromOperation as string | undefined
+  const toTarget = data.to?.target || (data as Record<string, unknown>).toTarget as string | undefined
 
   return (
     <div
@@ -24,20 +31,23 @@ function FlowNode({ data, selected }: FlowNodeProps) {
       <div className="flex items-center gap-2 mb-2">
         <ArrowRight className="w-4 h-4 text-indigo-400" />
         <span className="font-semibold text-neutral-100">{data.label}</span>
-        {hasSchedule && (
-          <Clock className="w-4 h-4 text-orange-400" />
-        )}
+        <div className="flex items-center gap-1 ml-auto">
+          {hasSchedule && <span title="Scheduled"><Clock className="w-3.5 h-3.5 text-orange-400" /></span>}
+          {hasLock && <span title="Has lock/semaphore"><Lock className="w-3.5 h-3.5 text-yellow-400" /></span>}
+          {hasCache && <span title="Cached"><CacheIcon className="w-3.5 h-3.5 text-cyan-400" /></span>}
+          {hasRequire && <span title="Requires auth"><Shield className="w-3.5 h-3.5 text-red-400" /></span>}
+        </div>
       </div>
 
-      {data.fromOperation && (
+      {fromOperation && (
         <div className="text-xs text-neutral-400 mb-1">
-          <span className="font-medium text-neutral-300">From:</span> {data.fromOperation}
+          <span className="font-medium text-neutral-300">From:</span> {fromOperation}
         </div>
       )}
 
-      {data.toTarget && (
+      {toTarget && (
         <div className="text-xs text-neutral-400 mb-1">
-          <span className="font-medium text-neutral-300">To:</span> {data.toTarget}
+          <span className="font-medium text-neutral-300">To:</span> {toTarget}
         </div>
       )}
 
@@ -45,7 +55,7 @@ function FlowNode({ data, selected }: FlowNodeProps) {
         <div className="mt-2 px-2 py-1 bg-amber-900/30 border border-amber-700/50 rounded text-xs">
           <span className="font-medium text-amber-400">Transform</span>
           <span className="text-amber-500 ml-1">
-            ({Object.keys(data.transform!).length} fields)
+            ({Object.keys(data.transform!.fields).length} fields)
           </span>
         </div>
       )}

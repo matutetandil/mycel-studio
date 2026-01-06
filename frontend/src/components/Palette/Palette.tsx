@@ -12,6 +12,9 @@ import {
   ChevronDown,
   FileCode,
   RefreshCw,
+  Cloud,
+  Terminal,
+  Network,
 } from 'lucide-react'
 import type { ConnectorType } from '../../types'
 
@@ -34,11 +37,14 @@ const categories: PaletteCategory[] = [
     items: [
       { type: 'connector', connectorType: 'rest', label: 'REST API', icon: Globe, color: 'bg-blue-500' },
       { type: 'connector', connectorType: 'database', label: 'Database', icon: Database, color: 'bg-green-500' },
-      { type: 'connector', connectorType: 'mq', label: 'Message Queue', icon: MessageSquare, color: 'bg-orange-500' },
+      { type: 'connector', connectorType: 'queue', label: 'Message Queue', icon: MessageSquare, color: 'bg-orange-500' },
       { type: 'connector', connectorType: 'cache', label: 'Cache', icon: Zap, color: 'bg-yellow-500' },
       { type: 'connector', connectorType: 'grpc', label: 'gRPC', icon: Server, color: 'bg-purple-500' },
       { type: 'connector', connectorType: 'graphql', label: 'GraphQL', icon: Hexagon, color: 'bg-pink-500' },
+      { type: 'connector', connectorType: 'tcp', label: 'TCP', icon: Network, color: 'bg-cyan-600' },
       { type: 'connector', connectorType: 'file', label: 'File Storage', icon: Folder, color: 'bg-neutral-500' },
+      { type: 'connector', connectorType: 's3', label: 'S3 Storage', icon: Cloud, color: 'bg-amber-600' },
+      { type: 'connector', connectorType: 'exec', label: 'Exec/Script', icon: Terminal, color: 'bg-slate-600' },
     ],
   },
   {

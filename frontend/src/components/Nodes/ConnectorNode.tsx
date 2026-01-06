@@ -8,27 +8,36 @@ import {
   Server,
   Hexagon,
   Folder,
+  Cloud,
+  Terminal,
+  Network,
 } from 'lucide-react'
 import type { ConnectorNodeData, ConnectorType } from '../../types'
 
 const iconMap: Record<ConnectorType, React.ElementType> = {
   rest: Globe,
   database: Database,
-  mq: MessageSquare,
+  queue: MessageSquare,
   cache: Zap,
   grpc: Server,
   graphql: Hexagon,
   file: Folder,
+  s3: Cloud,
+  exec: Terminal,
+  tcp: Network,
 }
 
 const colorMap: Record<ConnectorType, string> = {
   rest: 'bg-blue-500',
   database: 'bg-green-500',
-  mq: 'bg-orange-500',
+  queue: 'bg-orange-500',
   cache: 'bg-yellow-500',
   grpc: 'bg-purple-500',
   graphql: 'bg-pink-500',
   file: 'bg-neutral-500',
+  s3: 'bg-amber-600',
+  exec: 'bg-slate-600',
+  tcp: 'bg-cyan-600',
 }
 
 interface ConnectorNodeProps {
