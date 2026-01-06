@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import {
   Globe,
   Database,
@@ -7,26 +8,52 @@ import {
   Hexagon,
   Folder,
   ArrowRight,
+  ChevronRight,
+  ChevronDown,
+  FileCode,
+  RefreshCw,
 } from 'lucide-react'
 import type { ConnectorType } from '../../types'
 
+interface PaletteCategory {
+  name: string
+  items: PaletteItem[]
+}
+
 interface PaletteItem {
-  type: 'connector' | 'flow'
+  type: 'connector' | 'flow' | 'type' | 'transform'
   connectorType?: ConnectorType
   label: string
   icon: React.ElementType
   color: string
 }
 
-const paletteItems: PaletteItem[] = [
-  { type: 'connector', connectorType: 'rest', label: 'REST API', icon: Globe, color: 'bg-blue-500' },
-  { type: 'connector', connectorType: 'database', label: 'Database', icon: Database, color: 'bg-green-500' },
-  { type: 'connector', connectorType: 'mq', label: 'Message Queue', icon: MessageSquare, color: 'bg-orange-500' },
-  { type: 'connector', connectorType: 'cache', label: 'Cache', icon: Zap, color: 'bg-yellow-500' },
-  { type: 'connector', connectorType: 'grpc', label: 'gRPC', icon: Server, color: 'bg-purple-500' },
-  { type: 'connector', connectorType: 'graphql', label: 'GraphQL', icon: Hexagon, color: 'bg-pink-500' },
-  { type: 'connector', connectorType: 'file', label: 'File Storage', icon: Folder, color: 'bg-gray-500' },
-  { type: 'flow', label: 'Flow', icon: ArrowRight, color: 'bg-indigo-500' },
+const categories: PaletteCategory[] = [
+  {
+    name: 'Connectors',
+    items: [
+      { type: 'connector', connectorType: 'rest', label: 'REST API', icon: Globe, color: 'bg-blue-500' },
+      { type: 'connector', connectorType: 'database', label: 'Database', icon: Database, color: 'bg-green-500' },
+      { type: 'connector', connectorType: 'mq', label: 'Message Queue', icon: MessageSquare, color: 'bg-orange-500' },
+      { type: 'connector', connectorType: 'cache', label: 'Cache', icon: Zap, color: 'bg-yellow-500' },
+      { type: 'connector', connectorType: 'grpc', label: 'gRPC', icon: Server, color: 'bg-purple-500' },
+      { type: 'connector', connectorType: 'graphql', label: 'GraphQL', icon: Hexagon, color: 'bg-pink-500' },
+      { type: 'connector', connectorType: 'file', label: 'File Storage', icon: Folder, color: 'bg-neutral-500' },
+    ],
+  },
+  {
+    name: 'Logic',
+    items: [
+      { type: 'flow', label: 'Flow', icon: ArrowRight, color: 'bg-indigo-500' },
+    ],
+  },
+  {
+    name: 'Schema',
+    items: [
+      { type: 'type', label: 'Type', icon: FileCode, color: 'bg-cyan-500' },
+      { type: 'transform', label: 'Transform', icon: RefreshCw, color: 'bg-amber-500' },
+    ],
+  },
 ]
 
 function PaletteItem({ item }: { item: PaletteItem }) {
@@ -41,7 +68,7 @@ function PaletteItem({ item }: { item: PaletteItem }) {
             config: { type: item.connectorType },
           }
         : {
-            label: 'New Flow',
+            label: `New ${item.label}`,
           }
 
     event.dataTransfer.setData('application/mycel-node-type', item.type)
@@ -53,46 +80,49 @@ function PaletteItem({ item }: { item: PaletteItem }) {
     <div
       draggable
       onDragStart={onDragStart}
-      className="flex items-center gap-3 p-3 bg-white rounded-lg border border-gray-200 cursor-grab hover:border-gray-300 hover:shadow-sm transition-all active:cursor-grabbing"
+      className="flex items-center gap-2 px-2 py-1.5 rounded cursor-grab hover:bg-neutral-800 active:cursor-grabbing transition-colors"
     >
-      <div className={`p-2 rounded-lg ${item.color}`}>
-        <Icon className="w-4 h-4 text-white" />
+      <div className={`p-1 rounded ${item.color}`}>
+        <Icon className="w-3 h-3 text-white" />
       </div>
-      <span className="text-sm font-medium text-gray-700">{item.label}</span>
+      <span className="text-xs text-neutral-300">{item.label}</span>
+    </div>
+  )
+}
+
+function CategorySection({ category }: { category: PaletteCategory }) {
+  const [isExpanded, setIsExpanded] = useState(true)
+
+  return (
+    <div className="mb-1">
+      <button
+        onClick={() => setIsExpanded(!isExpanded)}
+        className="w-full flex items-center gap-1 px-2 py-1 text-xs font-medium text-neutral-500 hover:text-neutral-300"
+      >
+        {isExpanded ? (
+          <ChevronDown className="w-3 h-3" />
+        ) : (
+          <ChevronRight className="w-3 h-3" />
+        )}
+        {category.name}
+      </button>
+      {isExpanded && (
+        <div className="pl-2">
+          {category.items.map((item, index) => (
+            <PaletteItem key={index} item={item} />
+          ))}
+        </div>
+      )}
     </div>
   )
 }
 
 export default function Palette() {
   return (
-    <div className="w-64 bg-gray-50 border-r border-gray-200 p-4 overflow-y-auto">
-      <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-4">
-        Components
-      </h2>
-
-      <div className="space-y-3">
-        <div>
-          <h3 className="text-xs font-medium text-gray-400 uppercase mb-2">Connectors</h3>
-          <div className="space-y-2">
-            {paletteItems
-              .filter((item) => item.type === 'connector')
-              .map((item) => (
-                <PaletteItem key={item.connectorType} item={item} />
-              ))}
-          </div>
-        </div>
-
-        <div className="pt-4 border-t border-gray-200">
-          <h3 className="text-xs font-medium text-gray-400 uppercase mb-2">Logic</h3>
-          <div className="space-y-2">
-            {paletteItems
-              .filter((item) => item.type === 'flow')
-              .map((item, index) => (
-                <PaletteItem key={index} item={item} />
-              ))}
-          </div>
-        </div>
-      </div>
+    <div className="px-2">
+      {categories.map((category) => (
+        <CategorySection key={category.name} category={category} />
+      ))}
     </div>
   )
 }

@@ -70,7 +70,7 @@ export default function Canvas() {
   )
 
   return (
-    <div className="flex-1 h-full">
+    <div className="flex-1 h-full bg-neutral-950">
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -83,14 +83,16 @@ export default function Canvas() {
         nodeTypes={nodeTypes}
         fitView
         deleteKeyCode={['Backspace', 'Delete']}
+        className="bg-neutral-950"
       >
-        <Background gap={20} size={1} />
-        <Controls />
+        <Background gap={20} size={1} color="#333" />
+        <Controls className="bg-neutral-800 border-neutral-700" />
         <MiniMap
           nodeStrokeWidth={3}
           zoomable
           pannable
-          className="bg-gray-100"
+          className="bg-neutral-900"
+          maskColor="rgba(0, 0, 0, 0.7)"
         />
       </ReactFlow>
     </div>

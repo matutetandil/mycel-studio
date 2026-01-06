@@ -1,27 +1,43 @@
 import { ReactFlowProvider } from '@xyflow/react'
+import { useEffect } from 'react'
+import { useThemeStore } from './stores/useThemeStore'
+import MenuBar from './components/MenuBar/MenuBar'
+import Sidebar from './components/Sidebar/Sidebar'
 import Canvas from './components/Canvas/Canvas'
-import Palette from './components/Palette/Palette'
 import Properties from './components/Properties/Properties'
-import Preview from './components/Preview/Preview'
+import Editor from './components/Editor/Editor'
 
 function App() {
+  const { theme } = useThemeStore()
+
+  // Apply theme class to document
+  useEffect(() => {
+    document.documentElement.classList.remove('light', 'dark')
+    document.documentElement.classList.add(theme)
+  }, [theme])
+
   return (
     <ReactFlowProvider>
-      <div className="h-screen flex flex-col bg-gray-100">
-        {/* Header */}
-        <header className="h-12 bg-white border-b border-gray-200 flex items-center px-4 shrink-0">
-          <h1 className="text-lg font-semibold text-gray-800">Mycel Studio</h1>
-        </header>
+      <div className={`h-screen flex flex-col ${theme === 'dark' ? 'bg-neutral-950 text-white' : 'bg-white text-gray-900'}`}>
+        {/* Menu Bar */}
+        <MenuBar />
 
         {/* Main content */}
         <div className="flex-1 flex overflow-hidden">
-          {/* Left sidebar - Palette */}
-          <Palette />
+          {/* Left sidebar - File Tree + Palette */}
+          <Sidebar />
 
-          {/* Center - Canvas and Preview */}
-          <div className="flex-1 flex flex-col">
-            <Canvas />
-            <Preview />
+          {/* Center - Canvas and Editor */}
+          <div className="flex-1 flex flex-col overflow-hidden">
+            {/* Canvas area */}
+            <div className="flex-1 min-h-0">
+              <Canvas />
+            </div>
+
+            {/* Editor area - resizable in future */}
+            <div className="h-64 border-t border-neutral-800">
+              <Editor />
+            </div>
           </div>
 
           {/* Right sidebar - Properties */}
