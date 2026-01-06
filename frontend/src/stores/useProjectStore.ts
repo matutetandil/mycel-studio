@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { isElectron } from '../utils/electron'
+import { getFileSystemProvider, getCapabilities, type FSCapabilities } from '../lib/fileSystem'
 
 export interface ProjectFile {
   name: string
@@ -44,6 +44,7 @@ interface ProjectState {
   isLoading: boolean
   error: string | null
   gitBranch: string | null
+  capabilities: FSCapabilities
 
   // Basic setters
   setProjectPath: (path: string | null) => void
@@ -58,9 +59,8 @@ interface ProjectState {
   setError: (error: string | null) => void
   closeProject: () => void
 
-  // Async operations (Electron)
+  // Async operations (works with all providers)
   openProject: () => Promise<boolean>
-  openProjectFromPath: (path: string) => Promise<boolean>
   saveProject: () => Promise<boolean>
   createFile: (relativePath: string, content?: string) => Promise<boolean>
   deleteFile: (relativePath: string) => Promise<boolean>
@@ -94,6 +94,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   isLoading: false,
   error: null,
   gitBranch: null,
+  capabilities: getCapabilities(),
 
   // Basic setters
   setProjectPath: (path) => set({ projectPath: path }),
@@ -125,7 +126,9 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   setLoading: (isLoading) => set({ isLoading }),
   setError: (error) => set({ error }),
 
-  closeProject: () =>
+  closeProject: () => {
+    const provider = getFileSystemProvider()
+    provider.closeProject()
     set({
       projectPath: null,
       projectName: null,
@@ -134,114 +137,42 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       metadata: null,
       error: null,
       gitBranch: null,
-    }),
+    })
+  },
 
-  // Async operations (Electron)
+  // Async operations (works with all providers)
   openProject: async () => {
-    if (!isElectron()) {
-      set({ error: 'File operations require Electron' })
-      return false
-    }
-
     try {
       set({ isLoading: true, error: null })
 
-      const path = await window.mycelAPI!.project.openDialog()
-      if (!path) {
+      const provider = getFileSystemProvider()
+      const project = await provider.openProject()
+
+      if (!project) {
         set({ isLoading: false })
         return false
       }
 
-      return get().openProjectFromPath(path)
-    } catch (error) {
-      set({ error: String(error), isLoading: false })
-      return false
-    }
-  },
-
-  openProjectFromPath: async (projectPath: string) => {
-    if (!isElectron()) {
-      set({ error: 'File operations require Electron' })
-      return false
-    }
-
-    try {
-      set({ isLoading: true, error: null })
-
-      const project = await window.mycelAPI!.project.read(projectPath)
-
       // Convert files to our format
       const files: ProjectFile[] = project.files.map((f) => ({
         name: f.name,
-        path: `${projectPath}/${f.relativePath}`,
+        path: f.relativePath,
         relativePath: f.relativePath,
         content: f.content,
         isDirty: false,
       }))
 
-      // Get git status
-      const gitStatus = await window.mycelAPI!.git.status(projectPath)
-
-      // Apply git status to files
-      const filesWithGit = files.map((f) => ({
-        ...f,
-        gitStatus: (gitStatus.files[f.relativePath] || 'clean') as ProjectFile['gitStatus'],
-      }))
-
       set({
-        projectPath: project.path,
+        projectPath: provider.getProjectPath(),
         projectName: project.name,
-        files: filesWithGit,
-        metadata: project.metadata ?? defaultMetadata,
-        activeFile: filesWithGit.find((f) => f.name.endsWith('.hcl'))?.relativePath ?? null,
-        gitBranch: gitStatus.branch || null,
+        files,
+        metadata: defaultMetadata,
+        activeFile: files.find((f) => f.name.endsWith('.hcl'))?.relativePath ?? null,
         isLoading: false,
+        capabilities: provider.getCapabilities(),
       })
 
-      return true
-    } catch (error) {
-      set({ error: String(error), isLoading: false })
-      return false
-    }
-  },
-
-  saveProject: async () => {
-    const { projectPath, files, metadata } = get()
-
-    if (!isElectron()) {
-      set({ error: 'File operations require Electron' })
-      return false
-    }
-
-    if (!projectPath || !metadata) {
-      set({ error: 'No project open' })
-      return false
-    }
-
-    try {
-      set({ isLoading: true, error: null })
-
-      // Only save dirty files
-      const dirtyFiles = files.filter((f) => f.isDirty)
-
-      await window.mycelAPI!.project.save(
-        projectPath,
-        dirtyFiles.map((f) => ({
-          name: f.name,
-          relativePath: f.relativePath,
-          content: f.content,
-          isDirty: f.isDirty,
-        })),
-        metadata
-      )
-
-      // Mark all files as clean
-      set({
-        files: files.map((f) => ({ ...f, isDirty: false })),
-        isLoading: false,
-      })
-
-      // Refresh git status
+      // Refresh git status if available
       get().refreshGitStatus()
 
       return true
@@ -251,40 +182,80 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     }
   },
 
-  createFile: async (relativePath: string, content = '') => {
-    const { projectPath, files } = get()
+  saveProject: async () => {
+    const { projectName, files } = get()
 
-    if (!isElectron()) {
-      set({ error: 'File operations require Electron' })
-      return false
-    }
-
-    if (!projectPath) {
+    if (!projectName) {
       set({ error: 'No project open' })
       return false
     }
 
     try {
-      const fullPath = `${projectPath}/${relativePath}`
-      await window.mycelAPI!.file.create(fullPath, content)
+      set({ isLoading: true, error: null })
 
-      const name = relativePath.split('/').pop() || relativePath
+      const provider = getFileSystemProvider()
 
-      set({
-        files: [
-          ...files,
-          {
-            name,
-            path: fullPath,
-            relativePath,
-            content,
-            isDirty: false,
-            gitStatus: 'untracked',
-          },
-        ],
+      // Save all files (provider handles dirty check for Electron)
+      const success = await provider.saveProject({
+        name: projectName,
+        files: files.map((f) => ({
+          name: f.name,
+          relativePath: f.relativePath,
+          content: f.content,
+        })),
       })
 
-      return true
+      if (success) {
+        // Mark all files as clean
+        set({
+          files: files.map((f) => ({ ...f, isDirty: false })),
+          isLoading: false,
+        })
+
+        // Refresh git status if available
+        get().refreshGitStatus()
+      } else {
+        set({ isLoading: false })
+      }
+
+      return success
+    } catch (error) {
+      set({ error: String(error), isLoading: false })
+      return false
+    }
+  },
+
+  createFile: async (relativePath: string, content = '') => {
+    const { files, projectName } = get()
+
+    if (!projectName) {
+      set({ error: 'No project open' })
+      return false
+    }
+
+    try {
+      const provider = getFileSystemProvider()
+      const success = await provider.createFile(relativePath, content)
+
+      if (success) {
+        const name = relativePath.split('/').pop() || relativePath
+
+        set({
+          files: [
+            ...files,
+            {
+              name,
+              path: relativePath,
+              relativePath,
+              content,
+              isDirty: false,
+              gitStatus: 'untracked',
+            },
+          ],
+        })
+      }
+
+      return success
     } catch (error) {
       set({ error: String(error) })
       return false
@@ -292,28 +263,25 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   },
 
   deleteFile: async (relativePath: string) => {
-    const { projectPath, files, activeFile } = get()
+    const { files, activeFile, projectName } = get()
 
-    if (!isElectron()) {
-      set({ error: 'File operations require Electron' })
-      return false
-    }
-
-    if (!projectPath) {
+    if (!projectName) {
       set({ error: 'No project open' })
       return false
     }
 
     try {
-      const fullPath = `${projectPath}/${relativePath}`
-      await window.mycelAPI!.file.delete(fullPath)
+      const provider = getFileSystemProvider()
+      const success = await provider.deleteFile(relativePath)
 
-      set({
-        files: files.filter((f) => f.relativePath !== relativePath),
-        activeFile: activeFile === relativePath ? null : activeFile,
-      })
+      if (success) {
+        set({
+          files: files.filter((f) => f.relativePath !== relativePath),
+          activeFile: activeFile === relativePath ? null : activeFile,
+        })
+      }
 
-      return true
+      return success
     } catch (error) {
       set({ error: String(error) })
       return false
@@ -321,20 +289,26 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   },
 
   refreshGitStatus: async () => {
-    const { projectPath, files } = get()
+    const { files, capabilities } = get()
 
-    if (!isElectron() || !projectPath) return
+    // Only Electron provider supports git status
+    if (capabilities.providerName !== 'electron') return
 
     try {
-      const gitStatus = await window.mycelAPI!.git.status(projectPath)
+      const provider = getFileSystemProvider()
+      if ('getGitStatus' in provider) {
+        const gitStatus = await (provider as { getGitStatus: () => Promise<{ branch: string; files: Record<string, string> } | null> }).getGitStatus()
 
-      set({
-        gitBranch: gitStatus.branch || null,
-        files: files.map((f) => ({
-          ...f,
-          gitStatus: (gitStatus.files[f.relativePath] || 'clean') as ProjectFile['gitStatus'],
-        })),
-      })
+        if (gitStatus) {
+          set({
+            gitBranch: gitStatus.branch || null,
+            files: files.map((f) => ({
+              ...f,
+              gitStatus: (gitStatus.files[f.relativePath] || 'clean') as ProjectFile['gitStatus'],
+            })),
+          })
+        }
+      }
     } catch {
       // Git status failed, ignore
     }

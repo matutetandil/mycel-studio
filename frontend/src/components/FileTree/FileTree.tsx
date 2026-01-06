@@ -6,10 +6,10 @@ import {
   Folder,
   Circle,
   Plus,
+  Package,
 } from 'lucide-react'
 import { useState } from 'react'
 import { useProjectStore, type ProjectFile } from '../../stores/useProjectStore'
-import { isElectron } from '../../utils/electron'
 
 const gitStatusColors: Record<string, string> = {
   clean: 'text-neutral-500',
@@ -64,15 +64,8 @@ function FileItem({ file, isActive, onClick }: FileItemProps) {
 }
 
 export default function FileTree() {
-  const { projectName, files, activeFile, setActiveFile, openProject, createFile } = useProjectStore()
+  const { projectName, files, activeFile, setActiveFile, openProject, createFile, capabilities } = useProjectStore()
   const [isExpanded, setIsExpanded] = useState(true)
-  const inElectron = isElectron()
-
-  const handleOpenProject = () => {
-    if (inElectron) {
-      openProject()
-    }
-  }
 
   const handleNewFile = () => {
     // TODO: Show dialog to create new file
@@ -82,18 +75,33 @@ export default function FileTree() {
     }
   }
 
+  // Get button label based on provider
+  const getOpenLabel = () => {
+    if (capabilities.canOpenFolder) {
+      return 'Open Folder...'
+    }
+    return 'Import ZIP...'
+  }
+
   if (!projectName) {
     return (
       <div className="p-4 text-center text-neutral-500 text-sm">
         <FolderOpen className="w-8 h-8 mx-auto mb-2 opacity-50" />
         <p>No project open</p>
         <button
-          onClick={handleOpenProject}
-          disabled={!inElectron}
-          className="mt-2 text-indigo-400 hover:text-indigo-300 text-xs disabled:opacity-50 disabled:cursor-not-allowed"
+          onClick={() => openProject()}
+          className="mt-2 text-indigo-400 hover:text-indigo-300 text-xs"
         >
-          {inElectron ? 'Open Project...' : 'Run in Electron to open projects'}
+          {getOpenLabel()}
         </button>
+        <div className="mt-3 flex items-center justify-center gap-1 text-xs text-neutral-600">
+          <Package className="w-3 h-3" />
+          <span>
+            {capabilities.providerName === 'electron' && 'Desktop'}
+            {capabilities.providerName === 'browser' && 'Browser'}
+            {capabilities.providerName === 'fallback' && 'ZIP mode'}
+          </span>
+        </div>
       </div>
     )
   }

@@ -7,10 +7,10 @@ import {
   ChevronDown,
   GitBranch,
   Loader2,
+  Package,
 } from 'lucide-react'
 import { useThemeStore } from '../../stores/useThemeStore'
 import { useProjectStore } from '../../stores/useProjectStore'
-import { isElectron } from '../../utils/electron'
 
 interface MenuItem {
   label?: string
@@ -74,10 +74,9 @@ function MenuDropdown({ label, items }: MenuItemProps) {
 
 export default function MenuBar() {
   const { theme, toggleTheme } = useThemeStore()
-  const { projectName, files, isLoading, gitBranch, openProject, saveProject, closeProject } = useProjectStore()
+  const { projectName, files, isLoading, gitBranch, capabilities, openProject, saveProject, closeProject } = useProjectStore()
 
   const hasUnsavedChanges = files.some((f) => f.isDirty)
-  const inElectron = isElectron()
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -85,33 +84,48 @@ export default function MenuBar() {
       // Ctrl+O - Open Project
       if (e.ctrlKey && e.key === 'o') {
         e.preventDefault()
-        if (inElectron) openProject()
+        openProject()
       }
-      // Ctrl+S or Ctrl+Shift+S - Save
+      // Ctrl+S - Save
       if (e.ctrlKey && e.key === 's') {
         e.preventDefault()
-        if (inElectron && hasUnsavedChanges) saveProject()
+        if (hasUnsavedChanges) saveProject()
       }
     }
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [inElectron, hasUnsavedChanges, openProject, saveProject])
+  }, [hasUnsavedChanges, openProject, saveProject])
+
+  // Get open label based on provider
+  const getOpenLabel = () => {
+    if (capabilities.canOpenFolder) {
+      return 'Open Folder...'
+    }
+    return 'Import ZIP...'
+  }
+
+  // Get save label based on provider
+  const getSaveLabel = () => {
+    if (capabilities.providerName === 'fallback') {
+      return 'Export ZIP'
+    }
+    return 'Save All'
+  }
 
   const fileMenu = {
     label: 'File',
     items: [
       {
-        label: 'Open Project...',
+        label: getOpenLabel(),
         shortcut: 'Ctrl+O',
         onClick: () => openProject(),
-        disabled: !inElectron,
       },
       {
-        label: 'Save All',
+        label: getSaveLabel(),
         shortcut: 'Ctrl+S',
         onClick: () => saveProject(),
-        disabled: !inElectron || !hasUnsavedChanges,
+        disabled: !hasUnsavedChanges && !projectName,
       },
       { separator: true },
       {
@@ -197,10 +211,15 @@ export default function MenuBar() {
         </div>
       )}
 
-      {/* Show hint when not in Electron */}
-      {!projectName && !isLoading && !inElectron && (
-        <div className="flex items-center gap-2 px-3 text-sm text-neutral-500">
-          <span>Run with Electron for file operations</span>
+      {/* Show provider info when no project */}
+      {!projectName && !isLoading && (
+        <div className="flex items-center gap-2 px-3 text-xs text-neutral-500">
+          <Package className="w-3 h-3" />
+          <span>
+            {capabilities.providerName === 'electron' && 'Desktop App'}
+            {capabilities.providerName === 'browser' && 'Browser (folder access)'}
+            {capabilities.providerName === 'fallback' && 'Browser (ZIP import/export)'}
+          </span>
         </div>
       )}
 
