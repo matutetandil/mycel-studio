@@ -1,13 +1,16 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import {
   FolderOpen,
   Moon,
   Sun,
   Settings,
   ChevronDown,
+  GitBranch,
+  Loader2,
 } from 'lucide-react'
 import { useThemeStore } from '../../stores/useThemeStore'
 import { useProjectStore } from '../../stores/useProjectStore'
+import { isElectron } from '../../utils/electron'
 
 interface MenuItem {
   label?: string
@@ -71,17 +74,51 @@ function MenuDropdown({ label, items }: MenuItemProps) {
 
 export default function MenuBar() {
   const { theme, toggleTheme } = useThemeStore()
-  const { projectName, files } = useProjectStore()
+  const { projectName, files, isLoading, gitBranch, openProject, saveProject, closeProject } = useProjectStore()
 
   const hasUnsavedChanges = files.some((f) => f.isDirty)
+  const inElectron = isElectron()
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ctrl+O - Open Project
+      if (e.ctrlKey && e.key === 'o') {
+        e.preventDefault()
+        if (inElectron) openProject()
+      }
+      // Ctrl+S or Ctrl+Shift+S - Save
+      if (e.ctrlKey && e.key === 's') {
+        e.preventDefault()
+        if (inElectron && hasUnsavedChanges) saveProject()
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [inElectron, hasUnsavedChanges, openProject, saveProject])
 
   const fileMenu = {
     label: 'File',
     items: [
-      { label: 'Open Project...', shortcut: 'Ctrl+O', onClick: () => {} },
-      { label: 'Save All', shortcut: 'Ctrl+Shift+S', onClick: () => {}, disabled: !hasUnsavedChanges },
+      {
+        label: 'Open Project...',
+        shortcut: 'Ctrl+O',
+        onClick: () => openProject(),
+        disabled: !inElectron,
+      },
+      {
+        label: 'Save All',
+        shortcut: 'Ctrl+S',
+        onClick: () => saveProject(),
+        disabled: !inElectron || !hasUnsavedChanges,
+      },
       { separator: true },
-      { label: 'Close Project', onClick: () => {} },
+      {
+        label: 'Close Project',
+        onClick: () => closeProject(),
+        disabled: !projectName,
+      },
     ],
   }
 
@@ -135,12 +172,35 @@ export default function MenuBar() {
       {/* Spacer */}
       <div className="flex-1" />
 
-      {/* Project name */}
-      {projectName && (
+      {/* Loading indicator */}
+      {isLoading && (
         <div className="flex items-center gap-2 px-3 text-sm text-neutral-400">
-          <FolderOpen className="w-4 h-4" />
-          <span>{projectName}</span>
-          {hasUnsavedChanges && <span className="text-amber-500">*</span>}
+          <Loader2 className="w-4 h-4 animate-spin" />
+          <span>Loading...</span>
+        </div>
+      )}
+
+      {/* Project name and git branch */}
+      {projectName && !isLoading && (
+        <div className="flex items-center gap-3 px-3 text-sm text-neutral-400">
+          <div className="flex items-center gap-2">
+            <FolderOpen className="w-4 h-4" />
+            <span>{projectName}</span>
+            {hasUnsavedChanges && <span className="text-amber-500">*</span>}
+          </div>
+          {gitBranch && (
+            <div className="flex items-center gap-1 text-xs text-neutral-500">
+              <GitBranch className="w-3 h-3" />
+              <span>{gitBranch}</span>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Show hint when not in Electron */}
+      {!projectName && !isLoading && !inElectron && (
+        <div className="flex items-center gap-2 px-3 text-sm text-neutral-500">
+          <span>Run with Electron for file operations</span>
         </div>
       )}
 

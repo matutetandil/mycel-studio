@@ -2,7 +2,44 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased] - Phase 1: New UI Architecture & Mycel Model
+## [Unreleased] - Phase 2: Project Management & Electron
+
+### Added
+
+- **Electron integration:**
+  - Main process with IPC handlers for project operations
+  - Preload script with secure context bridge
+  - Native folder picker dialog for opening projects
+  - File system operations (read/write/create/delete)
+  - Git status integration (branch name, file statuses)
+  - electron-builder configuration for packaging
+- **Project management:**
+  - `openProject()` - Opens folder dialog and loads project
+  - `saveProject()` - Saves dirty files to disk
+  - `createFile()` - Creates new files in project
+  - `deleteFile()` - Deletes files from project
+  - Auto-save configuration (disabled by default)
+- **Updated stores:**
+  - `useProjectStore` with async Electron operations
+  - Error handling and loading states
+  - Git branch tracking
+- **UI improvements:**
+  - MenuBar with functional File menu (Open, Save, Close)
+  - Keyboard shortcuts (Ctrl+O, Ctrl+S)
+  - Git branch display in header
+  - Loading indicator
+  - FileTree with directory grouping
+  - Git status indicators (M, U, A, D)
+
+### Changed
+
+- **package.json:** Added Electron dependencies and scripts
+- **vite.config.ts:** Updated for Electron compatibility
+- **FileTree:** Groups files by directory, uses relativePath
+
+---
+
+## [0.2.0] - Phase 1: New UI Architecture & Mycel Model
 
 ### Added
 
