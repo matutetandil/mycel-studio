@@ -2,6 +2,57 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.4] - Flow Configuration UI (Transform, Cache)
+
+### Added
+
+- **Flow Context Menu (right-click on flows):**
+  - Right-click on any flow node to access configuration options
+  - Quick access to: Transform, Cache, Enrich, Lock, Semaphore, Response, Error Handling
+  - Shows "configured" indicator for active features
+  - Dark theme consistent with rest of UI
+
+- **Transform Editor modal:**
+  - Add/edit/remove field mappings (CEL expressions)
+  - CEL expression templates for common patterns (uuid(), now(), lower(), etc.)
+  - Support for referencing named transforms via `use`
+  - Clear transform option
+
+- **Cache Editor modal:**
+  - Select cache storage from available cache connectors
+  - Configure cache key (CEL expression) with pattern templates
+  - TTL presets (1m, 5m, 15m, 30m, 1h, 6h, 12h, 1d, 7d)
+  - Remove cache option
+
+- **Enhanced FlowNode visual indicators:**
+  - Transform badge showing field count
+  - Cache badge showing TTL
+  - Enrich badge showing source count
+  - Icons for: Schedule, Lock/Semaphore, Cache, Enrich, Error Handling, Auth
+
+- **HCL generation for flow blocks:**
+  - Transform block with `use` and field mappings
+  - Cache block with storage, key, ttl
+  - Lock block with all properties
+  - Semaphore block with all properties
+  - Enrich blocks with params
+  - Error handling block with retry config
+
+### Changed
+
+- **Canvas.tsx:** Added context menu handling and editor modals
+- **FlowNode.tsx:** Enhanced visual feedback for configured features
+- **hclGenerator.ts:** Complete flow block generation
+
+### New Files
+
+- `src/components/FlowConfig/FlowContextMenu.tsx`
+- `src/components/FlowConfig/TransformEditor.tsx`
+- `src/components/FlowConfig/CacheEditor.tsx`
+- `src/components/FlowConfig/index.ts`
+
+---
+
 ## [0.3.3] - Connector Direction (Input/Output)
 
 ### Added

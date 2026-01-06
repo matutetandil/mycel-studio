@@ -203,6 +203,78 @@ function generateFlowHCL(
     lines.push('  }')
   }
 
+  // Cache block
+  if (data.cache) {
+    lines.push('')
+    lines.push('  cache {')
+    lines.push(`    storage = "${data.cache.storage}"`)
+    lines.push(`    key     = "${data.cache.key}"`)
+    lines.push(`    ttl     = "${data.cache.ttl}"`)
+    lines.push('  }')
+  }
+
+  // Lock block
+  if (data.lock) {
+    lines.push('')
+    lines.push('  lock {')
+    lines.push(`    storage = "${data.lock.storage}"`)
+    lines.push(`    key     = "${data.lock.key}"`)
+    lines.push(`    timeout = "${data.lock.timeout}"`)
+    if (data.lock.wait !== undefined) {
+      lines.push(`    wait    = ${data.lock.wait}`)
+    }
+    if (data.lock.retry) {
+      lines.push(`    retry   = "${data.lock.retry}"`)
+    }
+    lines.push('  }')
+  }
+
+  // Semaphore block
+  if (data.semaphore) {
+    lines.push('')
+    lines.push('  semaphore {')
+    lines.push(`    storage     = "${data.semaphore.storage}"`)
+    lines.push(`    key         = "${data.semaphore.key}"`)
+    lines.push(`    max_permits = ${data.semaphore.maxPermits}`)
+    lines.push(`    timeout     = "${data.semaphore.timeout}"`)
+    if (data.semaphore.lease) {
+      lines.push(`    lease       = "${data.semaphore.lease}"`)
+    }
+    lines.push('  }')
+  }
+
+  // Enrich blocks
+  if (data.enrich && data.enrich.length > 0) {
+    for (const enrich of data.enrich) {
+      lines.push('')
+      lines.push(`  enrich "${enrich.name}" {`)
+      lines.push(`    connector = "${enrich.connector}"`)
+      lines.push(`    operation = "${enrich.operation}"`)
+      if (enrich.params && Object.keys(enrich.params).length > 0) {
+        lines.push('    params {')
+        for (const [key, value] of Object.entries(enrich.params)) {
+          lines.push(`      ${key} = "${value}"`)
+        }
+        lines.push('    }')
+      }
+      lines.push('  }')
+    }
+  }
+
+  // Error handling block
+  if (data.errorHandling?.retry) {
+    lines.push('')
+    lines.push('  error_handling {')
+    lines.push('    retry {')
+    lines.push(`      attempts = ${data.errorHandling.retry.attempts}`)
+    lines.push(`      delay    = "${data.errorHandling.retry.delay}"`)
+    if (data.errorHandling.retry.backoff) {
+      lines.push(`      backoff  = "${data.errorHandling.retry.backoff}"`)
+    }
+    lines.push('    }')
+    lines.push('  }')
+  }
+
   // To block
   if (toNode && toNode.type === 'connector') {
     const toData = toNode.data as ConnectorNodeData

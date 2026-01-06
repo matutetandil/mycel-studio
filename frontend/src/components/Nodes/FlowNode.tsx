@@ -1,6 +1,6 @@
 import { memo } from 'react'
 import { Handle, Position } from '@xyflow/react'
-import { ArrowRight, Clock, Lock, Shield, Database as CacheIcon } from 'lucide-react'
+import { ArrowRight, Clock, Lock, Shield, Database as CacheIcon, Link, AlertTriangle } from 'lucide-react'
 import type { FlowNodeData } from '../../types'
 
 interface FlowNodeProps {
@@ -14,6 +14,8 @@ function FlowNode({ data, selected }: FlowNodeProps) {
   const hasLock = !!data.lock || !!data.semaphore
   const hasCache = !!data.cache
   const hasRequire = !!data.require
+  const hasEnrich = data.enrich && data.enrich.length > 0
+  const hasErrorHandling = !!data.errorHandling?.retry
 
   // Support both old format (fromOperation/toTarget) and new format (from/to objects)
   const fromOperation = data.from?.operation || (data as Record<string, unknown>).fromOperation as string | undefined
@@ -35,7 +37,9 @@ function FlowNode({ data, selected }: FlowNodeProps) {
           {hasSchedule && <span title="Scheduled"><Clock className="w-3.5 h-3.5 text-orange-400" /></span>}
           {hasLock && <span title="Has lock/semaphore"><Lock className="w-3.5 h-3.5 text-yellow-400" /></span>}
           {hasCache && <span title="Cached"><CacheIcon className="w-3.5 h-3.5 text-cyan-400" /></span>}
-          {hasRequire && <span title="Requires auth"><Shield className="w-3.5 h-3.5 text-red-400" /></span>}
+          {hasEnrich && <span title="Has enrichments"><Link className="w-3.5 h-3.5 text-purple-400" /></span>}
+          {hasErrorHandling && <span title="Error handling"><AlertTriangle className="w-3.5 h-3.5 text-red-400" /></span>}
+          {hasRequire && <span title="Requires auth"><Shield className="w-3.5 h-3.5 text-green-400" /></span>}
         </div>
       </div>
 
@@ -56,6 +60,24 @@ function FlowNode({ data, selected }: FlowNodeProps) {
           <span className="font-medium text-amber-400">Transform</span>
           <span className="text-amber-500 ml-1">
             ({Object.keys(data.transform!.fields).length} fields)
+          </span>
+        </div>
+      )}
+
+      {hasCache && (
+        <div className="mt-2 px-2 py-1 bg-cyan-900/30 border border-cyan-700/50 rounded text-xs">
+          <span className="font-medium text-cyan-400">Cache</span>
+          <span className="text-cyan-500 ml-1">
+            ({data.cache!.ttl})
+          </span>
+        </div>
+      )}
+
+      {hasEnrich && (
+        <div className="mt-2 px-2 py-1 bg-purple-900/30 border border-purple-700/50 rounded text-xs">
+          <span className="font-medium text-purple-400">Enrich</span>
+          <span className="text-purple-500 ml-1">
+            ({data.enrich!.length} source{data.enrich!.length > 1 ? 's' : ''})
           </span>
         </div>
       )}
