@@ -8,7 +8,7 @@ import { getVirtualActiveFile } from '../FileTree/FileTree'
 import JSZip from 'jszip'
 
 export default function Preview() {
-  const { nodes, edges } = useStudioStore()
+  const { nodes, edges, serviceConfig } = useStudioStore()
   const { projectName, files: projectFiles, activeFile: projectActiveFile } = useProjectStore()
   const [copied, setCopied] = useState(false)
   const [virtualActiveFile, setVirtualActiveFile] = useState<string | null>(getVirtualActiveFile())
@@ -25,7 +25,7 @@ export default function Preview() {
     return () => clearInterval(interval)
   }, [virtualActiveFile])
 
-  const project = useMemo(() => generateProject(nodes, edges), [nodes, edges])
+  const project = useMemo(() => generateProject(nodes, edges, serviceConfig), [nodes, edges, serviceConfig])
 
   // Determine which file to show
   const activeFilePath = projectName ? projectActiveFile : virtualActiveFile

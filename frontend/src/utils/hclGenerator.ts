@@ -1,5 +1,5 @@
 import type { Node, Edge } from '@xyflow/react'
-import type { ConnectorNodeData, FlowNodeData } from '../types'
+import type { ConnectorNodeData, FlowNodeData, ServiceConfig } from '../types'
 
 type StudioNode = Node<ConnectorNodeData | FlowNodeData>
 
@@ -355,7 +355,7 @@ export function validateProject(nodes: StudioNode[]): string[] {
 }
 
 // Generate project with multiple files
-export function generateProject(nodes: StudioNode[], edges: Edge[]): GeneratedProject {
+export function generateProject(nodes: StudioNode[], edges: Edge[], serviceConfig?: ServiceConfig): GeneratedProject {
   const nodesMap = new Map(nodes.map((n) => [n.id, n]))
   const files: GeneratedFile[] = []
   const errors = validateProject(nodes)
@@ -363,16 +363,14 @@ export function generateProject(nodes: StudioNode[], edges: Edge[]): GeneratedPr
   const connectorNodes = nodes.filter((n) => n.type === 'connector')
   const flowNodes = nodes.filter((n) => n.type === 'flow')
 
+  const name = serviceConfig?.name || 'my-service'
+  const version = serviceConfig?.version || '1.0.0'
+
   // Generate config.hcl
   files.push({
     path: 'config.hcl',
     name: 'config.hcl',
-    content: `# Service configuration
-service {
-  name    = "my-service"
-  version = "1.0.0"
-}
-`
+    content: `# Service configuration\nservice {\n  name    = "${name}"\n  version = "${version}"\n}\n`
   })
 
   // Generate connector files (one per connector)
@@ -406,7 +404,7 @@ service {
 }
 
 // Legacy function for backward compatibility - generates single HCL string
-export function generateHCL(nodes: StudioNode[], edges: Edge[]): string {
-  const project = generateProject(nodes, edges)
+export function generateHCL(nodes: StudioNode[], edges: Edge[], serviceConfig?: ServiceConfig): string {
+  const project = generateProject(nodes, edges, serviceConfig)
   return project.files.map(f => `# === ${f.path} ===\n${f.content}`).join('\n')
 }

@@ -640,6 +640,42 @@ function FlowProperties({
   )
 }
 
+function ServiceProperties() {
+  const { serviceConfig, updateServiceConfig } = useStudioStore()
+
+  return (
+    <div className="space-y-4">
+      <h2 className="text-xs font-semibold text-neutral-400 uppercase tracking-wider">
+        Service
+      </h2>
+      <div>
+        <label className="block text-xs font-medium text-neutral-400 mb-1">Name</label>
+        <input
+          type="text"
+          value={serviceConfig.name}
+          onChange={(e) => updateServiceConfig({ name: e.target.value })}
+          placeholder="my-service"
+          className="w-full px-3 py-2 text-sm bg-neutral-800 border border-neutral-700 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-white placeholder-neutral-500"
+        />
+        <p className="text-xs text-neutral-500 mt-1">Shown in /health, metrics, and logs</p>
+      </div>
+      <div>
+        <label className="block text-xs font-medium text-neutral-400 mb-1">Version</label>
+        <input
+          type="text"
+          value={serviceConfig.version}
+          onChange={(e) => updateServiceConfig({ version: e.target.value })}
+          placeholder="1.0.0"
+          className="w-full px-3 py-2 text-sm bg-neutral-800 border border-neutral-700 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-white placeholder-neutral-500"
+        />
+      </div>
+      <div className="pt-2 border-t border-neutral-800">
+        <p className="text-xs text-neutral-500">Select a node to edit its properties</p>
+      </div>
+    </div>
+  )
+}
+
 export default function Properties() {
   const { nodes, selectedNodeId, updateNode, removeNode } = useStudioStore()
   const selectedNode = nodes.find((n) => n.id === selectedNodeId)
@@ -678,9 +714,7 @@ export default function Properties() {
         >
           <GripVertical className="w-3 h-3 text-neutral-600 -ml-1" />
         </div>
-        <div className="text-center text-neutral-500 mt-8">
-          <p className="text-sm">Select a node to edit its properties</p>
-        </div>
+        <ServiceProperties />
       </div>
     )
   }

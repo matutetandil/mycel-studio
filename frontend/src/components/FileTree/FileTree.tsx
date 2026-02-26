@@ -108,12 +108,12 @@ export function setVirtualActiveFile(path: string | null) {
 
 export default function FileTree() {
   const { projectName, files, activeFile, setActiveFile, openProject, createFile, capabilities } = useProjectStore()
-  const { nodes, edges, selectedNodeId } = useStudioStore()
+  const { nodes, edges, selectedNodeId, serviceConfig } = useStudioStore()
   const virtualState = useVirtualProjectState()
   const [isExpanded, setIsExpanded] = useState(true)
 
   // Generate project from canvas
-  const generatedProject = useMemo(() => generateProject(nodes, edges), [nodes, edges])
+  const generatedProject = useMemo(() => generateProject(nodes, edges, serviceConfig), [nodes, edges, serviceConfig])
 
   // Auto-select file when component is selected
   useEffect(() => {

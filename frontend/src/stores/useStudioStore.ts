@@ -9,7 +9,7 @@ import {
   type EdgeChange,
   type Connection,
 } from '@xyflow/react'
-import type { ConnectorNodeData, FlowNodeData } from '../types'
+import type { ConnectorNodeData, FlowNodeData, ServiceConfig } from '../types'
 
 type StudioNode = Node<ConnectorNodeData | FlowNodeData>
 
@@ -17,12 +17,14 @@ interface StudioState {
   nodes: StudioNode[]
   edges: Edge[]
   selectedNodeId: string | null
+  serviceConfig: ServiceConfig
   setNodes: (nodes: StudioNode[]) => void
   setEdges: (edges: Edge[]) => void
   addNode: (node: StudioNode) => void
   updateNode: (id: string, data: Partial<ConnectorNodeData | FlowNodeData>) => void
   removeNode: (id: string) => void
   selectNode: (id: string | null) => void
+  updateServiceConfig: (config: Partial<ServiceConfig>) => void
   onNodesChange: (changes: NodeChange<StudioNode>[]) => void
   onEdgesChange: (changes: EdgeChange<Edge>[]) => void
   onConnect: (connection: Connection) => void
@@ -32,6 +34,7 @@ export const useStudioStore = create<StudioState>((set) => ({
   nodes: [],
   edges: [],
   selectedNodeId: null,
+  serviceConfig: { name: 'my-service', version: '1.0.0' },
 
   setNodes: (nodes) => set({ nodes }),
   setEdges: (edges) => set({ edges }),
@@ -53,6 +56,11 @@ export const useStudioStore = create<StudioState>((set) => ({
     })),
 
   selectNode: (id) => set({ selectedNodeId: id }),
+
+  updateServiceConfig: (config) =>
+    set((state) => ({
+      serviceConfig: { ...state.serviceConfig, ...config },
+    })),
 
   onNodesChange: (changes) =>
     set((state) => ({
