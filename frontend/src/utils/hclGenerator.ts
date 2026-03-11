@@ -1,5 +1,7 @@
 import type { Node, Edge } from '@xyflow/react'
-import type { ConnectorNodeData, FlowNodeData, ServiceConfig } from '../types'
+import type { ConnectorNodeData, FlowNodeData, FlowTo, ServiceConfig } from '../types'
+import { getConnector, getConnectorMode } from '../connectors'
+import { getSimpleFlowBlocks } from '../flow-blocks'
 
 type StudioNode = Node<ConnectorNodeData | FlowNodeData>
 
@@ -19,138 +21,98 @@ export function toIdentifier(label: string): string {
   return label.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '')
 }
 
-// Map direction to mode for connectors that support server/client
-function getConnectorMode(connectorType: string, direction: string | undefined): string | null {
-  const dir = direction || 'bidirectional'
-
-  switch (connectorType) {
-    case 'rest':
-    case 'graphql':
-    case 'grpc':
-    case 'tcp':
-      // These support server/client mode
-      if (dir === 'input') return 'server'
-      if (dir === 'output') return 'client'
-      return null // bidirectional doesn't specify mode
-    case 'queue':
-      // Queue uses consumer/producer
-      if (dir === 'input') return 'consumer'
-      if (dir === 'output') return 'producer'
-      return null
-    default:
-      return null
-  }
-}
-
 function generateConnectorHCL(node: StudioNode): string {
   const data = node.data as ConnectorNodeData
   const name = toIdentifier(data.label)
   const lines: string[] = []
   const config = data.config || {}
+  const def = getConnector(data.connectorType)
 
-  // Determine mode based on direction
   const mode = getConnectorMode(data.connectorType, data.direction)
 
   lines.push(`# ${data.label} connector`)
   lines.push(`connector "${name}" {`)
   lines.push(`  type = "${data.connectorType}"`)
 
-  // Add mode if applicable
   if (mode) {
     lines.push(`  mode = "${mode}"`)
   }
 
-  // Type-specific configuration
-  switch (data.connectorType) {
-    case 'rest':
-      if (config.port) lines.push(`  port = ${config.port}`)
-      if (config.cors) {
+  // Output driver if present
+  if (config.driver) {
+    lines.push(`  driver = "${config.driver}"`)
+  }
+
+  // Collect all field definitions (common + driver-specific)
+  const allFields = [...(def?.fields || [])]
+  if (def?.drivers && config.driver) {
+    const driverDef = def.drivers.find(d => d.value === config.driver)
+    if (driverDef) {
+      allFields.push(...driverDef.fields)
+    }
+  }
+
+  // Generate HCL for each field that has a value
+  for (const field of allFields) {
+    const value = config[field.key]
+    if (value === undefined || value === null || value === '') continue
+
+    // Special handling for booleans
+    if (field.type === 'boolean') {
+      if (field.key === 'cors') {
+        // CORS is a complex object, not a simple boolean
         lines.push('')
         lines.push('  cors {')
         lines.push('    origins = ["*"]')
         lines.push('    methods = ["GET", "POST", "PUT", "DELETE", "OPTIONS"]')
         lines.push('  }')
+      } else if (value) {
+        lines.push(`  ${field.key} = true`)
       }
-      break
+      continue
+    }
 
-    case 'database':
-      if (config.driver) lines.push(`  driver = "${config.driver}"`)
-      if (config.driver === 'sqlite') {
-        if (config.database) lines.push(`  database = "${config.database}"`)
-      } else if (config.driver === 'mongodb') {
-        if (config.uri) lines.push(`  uri = "${config.uri}"`)
-        if (config.database) lines.push(`  database = "${config.database}"`)
-      } else {
-        // PostgreSQL, MySQL
-        if (config.host) lines.push(`  host = "${config.host}"`)
-        if (config.port) lines.push(`  port = ${config.port}`)
-        if (config.database) lines.push(`  database = "${config.database}"`)
-        if (config.user) lines.push(`  user = "${config.user}"`)
-        if (config.password) lines.push(`  password = "${config.password}"`)
-        if (config.ssl_mode) lines.push(`  ssl_mode = "${config.ssl_mode}"`)
-        if (config.charset) lines.push(`  charset = "${config.charset}"`)
-      }
-      break
+    // Special handling for comma-separated lists that should become HCL arrays
+    if (field.key === 'brokers' || field.key === 'channels' || field.key === 'patterns' || field.key === 'scopes') {
+      const items = String(value).split(',').map(s => `"${s.trim()}"`)
+      lines.push(`  ${field.key} = [${items.join(', ')}]`)
+      continue
+    }
 
-    case 'graphql':
-      if (config.port) lines.push(`  port = ${config.port}`)
-      if (config.endpoint) lines.push(`  path = "${config.endpoint}"`)
-      if (config.playground) lines.push(`  playground = true`)
-      break
+    // Numbers
+    if (field.type === 'number') {
+      lines.push(`  ${field.key} = ${value}`)
+      continue
+    }
 
-    case 'grpc':
-      if (config.port) lines.push(`  port = ${config.port}`)
-      break
-
-    case 'tcp':
-      if (config.port) lines.push(`  port = ${config.port}`)
-      break
-
-    case 'queue':
-      if (config.driver) lines.push(`  driver = "${config.driver}"`)
-      if (config.driver === 'rabbitmq' && config.url) {
-        lines.push(`  url = "${config.url}"`)
-      } else if (config.driver === 'kafka' && config.brokers) {
-        lines.push(`  brokers = ["${config.brokers}"]`)
-      }
-      break
-
-    case 'cache':
-      if (config.driver) lines.push(`  driver = "${config.driver}"`)
-      if (config.driver === 'memory') {
-        if (config.max_items) lines.push(`  max_items = ${config.max_items}`)
-        if (config.default_ttl) lines.push(`  default_ttl = "${config.default_ttl}"`)
-      } else if (config.driver === 'redis') {
-        if (config.address) lines.push(`  address = "${config.address}"`)
-        if (config.password) lines.push(`  password = "${config.password}"`)
-        if (config.db !== undefined) lines.push(`  db = ${config.db}`)
-        if (config.key_prefix) lines.push(`  key_prefix = "${config.key_prefix}"`)
-      }
-      break
-
-    case 's3':
-      if (config.bucket) lines.push(`  bucket = "${config.bucket}"`)
-      if (config.region) lines.push(`  region = "${config.region}"`)
-      if (config.access_key) lines.push(`  access_key = "${config.access_key}"`)
-      if (config.secret_key) lines.push(`  secret_key = "${config.secret_key}"`)
-      if (config.endpoint) lines.push(`  endpoint = "${config.endpoint}"`)
-      break
-
-    case 'file':
-      if (config.driver) lines.push(`  driver = "${config.driver}"`)
-      if (config.base_path) lines.push(`  base_path = "${config.base_path}"`)
-      break
-
-    case 'exec':
-      if (config.command) lines.push(`  command = "${config.command}"`)
-      if (config.working_dir) lines.push(`  working_dir = "${config.working_dir}"`)
-      if (config.timeout) lines.push(`  timeout = "${config.timeout}"`)
-      break
+    // Strings (default)
+    lines.push(`  ${field.key} = "${value}"`)
   }
 
   lines.push('}')
 
   return lines.join('\n')
+}
+
+function generateToBlock(to: FlowTo, indent: string): string[] {
+  const lines: string[] = []
+  lines.push(`${indent}to {`)
+  lines.push(`${indent}  connector = "${to.connector}"`)
+  if (to.target) lines.push(`${indent}  target    = "${to.target}"`)
+  if (to.operation) lines.push(`${indent}  operation = "${to.operation}"`)
+  if (to.exchange) lines.push(`${indent}  exchange  = "${to.exchange}"`)
+  if (to.when) lines.push(`${indent}  when      = "${to.when}"`)
+  if (to.parallel === false) lines.push(`${indent}  parallel  = false`)
+  if (to.transform && Object.keys(to.transform).length > 0) {
+    lines.push('')
+    lines.push(`${indent}  transform {`)
+    for (const [key, value] of Object.entries(to.transform)) {
+      lines.push(`${indent}    ${key} = "${value}"`)
+    }
+    lines.push(`${indent}  }`)
+  }
+  lines.push(`${indent}}`)
+  return lines
 }
 
 function generateFlowHCL(
@@ -164,10 +126,9 @@ function generateFlowHCL(
 
   // Find connected nodes
   const incomingEdge = edges.find((e) => e.target === node.id)
-  const outgoingEdge = edges.find((e) => e.source === node.id)
+  const outgoingEdges = edges.filter((e) => e.source === node.id)
 
   const fromNode = incomingEdge ? nodesMap.get(incomingEdge.source) : null
-  const toNode = outgoingEdge ? nodesMap.get(outgoingEdge.target) : null
 
   lines.push(`# ${data.label}`)
   lines.push(`flow "${name}" {`)
@@ -187,64 +148,76 @@ function generateFlowHCL(
     if (data.from?.operation) {
       lines.push(`    operation = "${data.from.operation}"`)
     }
+    // Filter
+    if (data.from?.filter) {
+      if (typeof data.from.filter === 'string') {
+        lines.push(`    filter    = "${data.from.filter}"`)
+      } else {
+        lines.push('')
+        lines.push('    filter {')
+        lines.push(`      condition = "${data.from.filter.condition}"`)
+        if (data.from.filter.onReject) lines.push(`      on_reject = "${data.from.filter.onReject}"`)
+        if (data.from.filter.idField) lines.push(`      id_field  = "${data.from.filter.idField}"`)
+        if (data.from.filter.maxRequeue) lines.push(`      max_requeue = ${data.from.filter.maxRequeue}`)
+        lines.push('    }')
+      }
+    }
     lines.push('  }')
   }
 
-  // Transform block
-  if (data.transform?.fields && Object.keys(data.transform.fields).length > 0) {
+  // Simple blocks (dedupe, cache, lock, semaphore) — driven by registry
+  for (const blockDef of getSimpleFlowBlocks()) {
+    const blockData = data[blockDef.dataKey] as Record<string, unknown> | undefined
+    if (!blockData || !blockDef.hclFields) continue
+
     lines.push('')
-    lines.push('  transform {')
-    if (data.transform.use && data.transform.use.length > 0) {
-      lines.push(`    use = [${data.transform.use.map(u => `"${u}"`).join(', ')}]`)
-    }
-    for (const [key, value] of Object.entries(data.transform.fields)) {
-      lines.push(`    ${key} = "${value}"`)
+    lines.push(`  ${blockDef.hclBlock} {`)
+    for (const mapping of blockDef.hclFields) {
+      const value = blockData[mapping.key]
+      if (value === undefined || value === null || value === '') continue
+      if (mapping.omitDefault !== undefined && value === mapping.omitDefault) continue
+
+      if (mapping.type === 'boolean') {
+        lines.push(`    ${mapping.hclKey} = ${value}`)
+      } else if (mapping.type === 'number') {
+        lines.push(`    ${mapping.hclKey} = ${value}`)
+      } else {
+        lines.push(`    ${mapping.hclKey} = "${value}"`)
+      }
     }
     lines.push('  }')
   }
 
-  // Cache block
-  if (data.cache) {
-    lines.push('')
-    lines.push('  cache {')
-    lines.push(`    storage = "${data.cache.storage}"`)
-    lines.push(`    key     = "${data.cache.key}"`)
-    lines.push(`    ttl     = "${data.cache.ttl}"`)
-    lines.push('  }')
+  // Step blocks
+  if (data.steps && data.steps.length > 0) {
+    for (const step of data.steps) {
+      lines.push('')
+      lines.push(`  step "${step.name}" {`)
+      lines.push(`    connector = "${step.connector}"`)
+      if (step.operation) lines.push(`    operation = "${step.operation}"`)
+      if (step.query) lines.push(`    query     = "${step.query}"`)
+      if (step.target) lines.push(`    target    = "${step.target}"`)
+      if (step.when) lines.push(`    when      = "${step.when}"`)
+      if (step.timeout) lines.push(`    timeout   = "${step.timeout}"`)
+      if (step.onError && step.onError !== 'fail') {
+        lines.push(`    on_error  = "${step.onError}"`)
+      }
+      if (step.params && Object.keys(step.params).length > 0) {
+        lines.push(`    params    = [${Object.values(step.params).join(', ')}]`)
+      }
+      if (step.onError === 'default' && step.default && Object.keys(step.default).length > 0) {
+        lines.push('    default {')
+        for (const [key, value] of Object.entries(step.default)) {
+          lines.push(`      ${key} = "${value}"`)
+        }
+        lines.push('    }')
+      }
+      lines.push('  }')
+    }
   }
 
-  // Lock block
-  if (data.lock) {
-    lines.push('')
-    lines.push('  lock {')
-    lines.push(`    storage = "${data.lock.storage}"`)
-    lines.push(`    key     = "${data.lock.key}"`)
-    lines.push(`    timeout = "${data.lock.timeout}"`)
-    if (data.lock.wait !== undefined) {
-      lines.push(`    wait    = ${data.lock.wait}`)
-    }
-    if (data.lock.retry) {
-      lines.push(`    retry   = "${data.lock.retry}"`)
-    }
-    lines.push('  }')
-  }
-
-  // Semaphore block
-  if (data.semaphore) {
-    lines.push('')
-    lines.push('  semaphore {')
-    lines.push(`    storage     = "${data.semaphore.storage}"`)
-    lines.push(`    key         = "${data.semaphore.key}"`)
-    lines.push(`    max_permits = ${data.semaphore.maxPermits}`)
-    lines.push(`    timeout     = "${data.semaphore.timeout}"`)
-    if (data.semaphore.lease) {
-      lines.push(`    lease       = "${data.semaphore.lease}"`)
-    }
-    lines.push('  }')
-  }
-
-  // Enrich blocks
-  if (data.enrich && data.enrich.length > 0) {
+  // Enrich blocks (legacy, still supported)
+  if (data.enrich && data.enrich.length > 0 && (!data.steps || data.steps.length === 0)) {
     for (const enrich of data.enrich) {
       lines.push('')
       lines.push(`  enrich "${enrich.name}" {`)
@@ -261,31 +234,144 @@ function generateFlowHCL(
     }
   }
 
-  // Error handling block
-  if (data.errorHandling?.retry) {
+  // Transform block
+  if (data.transform?.fields && Object.keys(data.transform.fields).length > 0) {
     lines.push('')
-    lines.push('  error_handling {')
-    lines.push('    retry {')
-    lines.push(`      attempts = ${data.errorHandling.retry.attempts}`)
-    lines.push(`      delay    = "${data.errorHandling.retry.delay}"`)
-    if (data.errorHandling.retry.backoff) {
-      lines.push(`      backoff  = "${data.errorHandling.retry.backoff}"`)
+    lines.push('  transform {')
+    if (data.transform.use && data.transform.use.length > 0) {
+      lines.push(`    use = [${data.transform.use.map(u => `"${u}"`).join(', ')}]`)
     }
-    lines.push('    }')
+    for (const [key, value] of Object.entries(data.transform.fields)) {
+      lines.push(`    ${key} = "${value}"`)
+    }
     lines.push('  }')
   }
 
-  // To block
-  if (toNode && toNode.type === 'connector') {
-    const toData = toNode.data as ConnectorNodeData
-    const connectorName = toIdentifier(toData.label)
+  // To blocks (multi-to support)
+  const toTargets: FlowTo[] = data.to
+    ? Array.isArray(data.to)
+      ? data.to
+      : [data.to]
+    : []
+
+  if (toTargets.length > 0) {
+    // Use edge-connected nodes for to blocks
+    for (let i = 0; i < toTargets.length; i++) {
+      const to = toTargets[i]
+      const toEdge = outgoingEdges[i]
+      const toNode = toEdge ? nodesMap.get(toEdge.target) : null
+
+      lines.push('')
+      if (toNode && toNode.type === 'connector') {
+        const toData = toNode.data as ConnectorNodeData
+        const connectorName = toIdentifier(toData.label)
+        const mergedTo = { ...to, connector: connectorName }
+        lines.push(...generateToBlock(mergedTo, '  '))
+      } else if (to.connector) {
+        lines.push(...generateToBlock(to, '  '))
+      }
+    }
+  } else {
+    // Fallback: use edges to find connected output nodes
+    for (const edge of outgoingEdges) {
+      const toNode = nodesMap.get(edge.target)
+      if (toNode && toNode.type === 'connector') {
+        const toData = toNode.data as ConnectorNodeData
+        const connectorName = toIdentifier(toData.label)
+        lines.push('')
+        lines.push('  to {')
+        lines.push(`    connector = "${connectorName}"`)
+        lines.push('  }')
+      }
+    }
+  }
+
+  // Response block
+  if (data.response) {
     lines.push('')
-    lines.push('  to {')
-    lines.push(`    connector = "${connectorName}"`)
-    if (data.to?.target) {
-      lines.push(`    target = "${data.to.target}"`)
+    lines.push('  response {')
+    lines.push(`    status = ${data.response.status}`)
+    if (data.response.headers && Object.keys(data.response.headers).length > 0) {
+      lines.push(`    headers = {`)
+      for (const [key, value] of Object.entries(data.response.headers)) {
+        lines.push(`      "${key}" = "${value}"`)
+      }
+      lines.push('    }')
+    }
+    if (data.response.body && Object.keys(data.response.body).length > 0) {
+      lines.push('')
+      lines.push('    body {')
+      for (const [key, value] of Object.entries(data.response.body)) {
+        lines.push(`      ${key} = "${value}"`)
+      }
+      lines.push('    }')
     }
     lines.push('  }')
+  }
+
+  // Error handling block
+  if (data.errorHandling) {
+    const eh = data.errorHandling
+    const hasRetry = !!eh.retry
+    const hasFallback = !!eh.fallback
+    const hasErrorResponse = !!eh.errorResponse
+
+    if (hasRetry || hasFallback || hasErrorResponse) {
+      lines.push('')
+      lines.push('  error_handling {')
+
+      if (hasRetry) {
+        lines.push('    retry {')
+        lines.push(`      attempts  = ${eh.retry!.attempts}`)
+        lines.push(`      delay     = "${eh.retry!.delay}"`)
+        if (eh.retry!.maxDelay) lines.push(`      max_delay = "${eh.retry!.maxDelay}"`)
+        if (eh.retry!.backoff) lines.push(`      backoff   = "${eh.retry!.backoff}"`)
+        lines.push('    }')
+      }
+
+      if (hasFallback) {
+        if (hasRetry) lines.push('')
+        lines.push('    fallback {')
+        lines.push(`      connector     = "${eh.fallback!.connector}"`)
+        lines.push(`      target        = "${eh.fallback!.target}"`)
+        if (eh.fallback!.includeError !== undefined) {
+          lines.push(`      include_error = ${eh.fallback!.includeError}`)
+        }
+        if (eh.fallback!.transform && Object.keys(eh.fallback!.transform).length > 0) {
+          lines.push('')
+          lines.push('      transform {')
+          for (const [key, value] of Object.entries(eh.fallback!.transform)) {
+            lines.push(`        ${key} = "${value}"`)
+          }
+          lines.push('      }')
+        }
+        lines.push('    }')
+      }
+
+      if (hasErrorResponse) {
+        if (hasRetry || hasFallback) lines.push('')
+        lines.push('    error_response {')
+        lines.push(`      status = ${eh.errorResponse!.status}`)
+        if (eh.errorResponse!.headers && Object.keys(eh.errorResponse!.headers).length > 0) {
+          lines.push(`      headers = {`)
+          for (const [key, value] of Object.entries(eh.errorResponse!.headers)) {
+            lines.push(`        "${key}" = "${value}"`)
+          }
+          lines.push('      }')
+        }
+        if (eh.errorResponse!.body && Object.keys(eh.errorResponse!.body).length > 0) {
+          lines.push('')
+          lines.push('      body {')
+          for (const [key, value] of Object.entries(eh.errorResponse!.body)) {
+            lines.push(`        ${key} = "${value}"`)
+          }
+          lines.push('      }')
+        }
+        lines.push('    }')
+      }
+
+      lines.push('  }')
+    }
   }
 
   lines.push('}')
@@ -384,7 +470,7 @@ export function generateProject(nodes: StudioNode[], edges: Edge[], serviceConfi
     })
   }
 
-  // Generate flows file (all flows together, grouped by source connector)
+  // Generate flows file (all flows together)
   if (flowNodes.length > 0) {
     const flowsContent: string[] = ['# Flow definitions', '']
 

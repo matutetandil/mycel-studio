@@ -2,6 +2,176 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.6.0] - Flow Block Registry (SOLID)
+
+### Added
+
+- **Data-driven flow block registry (`src/flow-blocks/`):**
+  - `types.ts` — Core interfaces: `FlowBlockDefinition`, `FlowBlockField`, `HclFieldMapping`
+  - `registry.ts` — Central Map with helpers: `getFlowBlock()`, `getAllFlowBlocks()`, `getFlowBlocksByGroup()`, `getSimpleFlowBlocks()`, `getCustomFlowBlocks()`
+  - `GenericBlockEditor.tsx` — Generic modal editor that renders any simple block from its definition (supports field types: storage_select, cel_expression, duration, number, select, boolean, string)
+  - `index.ts` — Public API barrel export
+
+- **One definition file per flow block (`src/flow-blocks/definitions/`):**
+  - Simple blocks (fully data-driven): `cache`, `lock`, `semaphore`, `dedupe`
+  - Complex blocks (definition + custom editor): `transform`, `step`, `response`, `errorHandling`
+
+### Changed
+
+- **`FlowContextMenu.tsx`:** Replaced 8 hardcoded menu items with registry-driven menu via `getFlowBlocksByGroup()`. Props simplified from 8 individual `onAdd*` callbacks to single `onSelectBlock(key)`
+- **`Canvas.tsx`:** Replaced 9 individual `useState` booleans + 16 handler functions with unified `activeEditor` state. Simple blocks render via `GenericBlockEditor`, complex blocks use their existing custom editors
+- **`hclGenerator.ts`:** Replaced hardcoded cache/lock/semaphore/dedupe HCL blocks with generic loop using `getSimpleFlowBlocks()` + `hclFields` mappings
+- **`FlowConfig/index.ts`:** Removed exports for `CacheEditor`, `LockEditor`, `SemaphoreEditor`, `EnrichEditor` (replaced by GenericBlockEditor)
+
+### Architecture
+
+- Adding a new simple flow block now requires only creating a definition file in `src/flow-blocks/definitions/` — no changes needed to FlowContextMenu, Canvas, or hclGenerator
+- Field-driven HCL generation: each definition declares `hclFields` with key→hclKey mapping, type, and optional `omitDefault`
+- Block groups (data, concurrency, output) control menu organization
+
+---
+
+## [0.5.0] - Connector Registry Refactor (SOLID)
+
+### Added
+
+- **Data-driven connector registry (`src/connectors/`):**
+  - `types.ts` — Core interfaces: `ConnectorDefinition`, `FieldDefinition`, `DriverDefinition`
+  - `registry.ts` — Central Map with helper functions: `getConnector()`, `getAllConnectors()`, `getConnectorsByCategory()`, `getConnectorMode()`, `getDefaultDirection()`
+  - `index.ts` — Public API barrel export
+
+- **One definition file per connector (`src/connectors/definitions/`):**
+  - 10 existing connectors migrated: `rest`, `database`, `queue`, `cache`, `grpc`, `graphql`, `tcp`, `file`, `s3`, `exec`
+  - 15 new connectors added: `http`, `websocket`, `sse`, `cdc`, `elasticsearch`, `oauth`, `mqtt`, `ftp`, `soap`, `email`, `slack`, `discord`, `sms`, `push`, `webhook`
+  - Each file defines: type, label, icon, color, category, defaultDirection, fields, drivers, modeMapping
+
+- **25 connector types total** (was 10), matching Mycel runtime v1.11.0
+
+### Changed
+
+- **`ConnectorNode.tsx`:** Replaced hardcoded `iconMap`/`colorMap` with `getConnector()` registry lookup
+- **`Palette.tsx`:** Replaced hardcoded categories array with `getConnectorsByCategory()`, auto-generates palette from registry
+- **`Properties.tsx`:** Replaced ~460 lines of hardcoded switch/case with generic `FieldRenderer` component (~100 lines) that renders any connector's fields from its definition
+- **`hclGenerator.ts`:** Replaced hardcoded `switch` in `generateConnectorHCL()` with generic field-driven algorithm that reads fields from the registry
+- **`types/index.ts`:** Extended `ConnectorType` union from 10 to 25 types; updated `DEFAULT_CONNECTOR_DIRECTIONS` to include all 25
+
+### Architecture
+
+- Adding a new connector now requires only creating a single file in `src/connectors/definitions/` — no changes needed to Palette, Properties, ConnectorNode, or hclGenerator
+- Connector categories: API & Web, Database, Messaging, Real-time, Storage, Execution, Integration, Notifications
+
+---
+
+## [0.4.0] - Phase 3: Fix Foundations (Complete)
+
+### Added
+
+- **Step Editor (`StepEditor.tsx`):**
+  - Replaces `enrich` as the primary orchestration mechanism
+  - Configure multiple steps with: name, connector, operation, query, params
+  - Advanced options: conditional execution (`when`), timeout, on_error (fail/skip/default)
+  - Default value editor for on_error="default" steps
+  - Results available as `step.name.field` in transforms
+
+- **Response Editor (`ResponseEditor.tsx`):**
+  - Configure HTTP response status code with presets (200, 201, 202, 204, 4xx, 5xx)
+  - Custom response headers
+  - Response body with CEL expressions
+  - Body templates: "Success with data", "Created with ID", "Accepted"
+  - Live HCL preview
+
+- **Deduplication (inline in Canvas):**
+  - Prevent processing duplicate events
+  - Configure: storage (cache connector), key (CEL), TTL, on_duplicate (skip/error)
+  - Visual indicator on flow nodes
+
+- **Filter in `from` block:**
+  - CEL expression field in flow Properties panel
+  - Skip events where condition evaluates to false
+  - Visual "(filtered)" indicator on flow nodes
+
+- **Multi-to (fan-out):**
+  - "Add Target" button in flow Properties
+  - Each `to` block: connector, target, optional condition (`when`)
+  - Per-destination transforms
+  - Visual "+N more" indicator on flow nodes
+
+### Changed
+
+- **ErrorHandlingEditor:** Complete rewrite with three collapsible sections:
+  - **Retry:** attempts, initial delay, max delay (NEW), backoff strategy, preview
+  - **Fallback (NEW):** dead letter queue — connector, target, include_error, transform
+  - **Error Response (NEW):** custom HTTP error — status, headers, body with CEL expressions
+  - Now receives `availableConnectors` prop for fallback connector selection
+
+- **FlowContextMenu:** Added Steps and Dedupe entries, removed legacy Enrich from menu
+
+- **FlowNode:** New visual indicators for steps, dedupe, response, filter, multi-to count
+
+- **Properties/FlowProperties:** Filter field in FROM section, multi-to support with add/remove targets
+
+- **hclGenerator.ts:** Complete rewrite of flow generation:
+  - Step blocks with on_error, when, timeout, params, default
+  - Filter in from (string and block syntax)
+  - Multi-to with per-destination when, parallel, transform
+  - Dedupe block
+  - Response block with headers and body
+  - Fallback block in error_handling
+  - Error response block in error_handling
+  - Max delay in retry config
+  - Redis Pub/Sub queue driver support (channels, patterns)
+
+- **Types (`types/index.ts`):** Added FlowStep, FlowFilter, FlowDedupe, FlowResponse, FlowFallback, FlowErrorResponse; FlowTo now supports when/parallel/transform; FlowNodeData.to supports array for multi-to
+
+### New Files
+
+- `src/components/FlowConfig/ResponseEditor.tsx`
+- `src/components/FlowConfig/StepEditor.tsx`
+
+---
+
+## [0.3.5] - Complete Flow Configuration (Phase 2)
+
+### Added
+
+- **EnrichEditor modal:**
+  - Add multiple enrichment sources
+  - Select connector and operation
+  - Configure parameters with CEL expressions
+  - Collapsible entries for complex configurations
+
+- **LockEditor modal:**
+  - Configure mutex locks for exclusive execution
+  - Select storage (cache/redis connector)
+  - Lock key with CEL expression patterns
+  - Wait option and retry interval configuration
+
+- **SemaphoreEditor modal:**
+  - Configure concurrent execution limits
+  - Preset permit counts (1, 2, 3, 5, 10, 20, 50, 100)
+  - Acquire timeout and lease time configuration
+
+- **ErrorHandlingEditor modal:**
+  - Enable/disable retry with visual toggle
+  - Configure max attempts (1-10)
+  - Initial delay with presets
+  - Backoff strategy (exponential, linear, constant)
+  - Live preview of retry sequence
+
+### Changed
+
+- **Canvas.tsx:** Integrated all new editors with proper state management
+- **TODO.md:** Phase 2 marked as complete
+
+### New Files
+
+- `src/components/FlowConfig/EnrichEditor.tsx`
+- `src/components/FlowConfig/LockEditor.tsx`
+- `src/components/FlowConfig/SemaphoreEditor.tsx`
+- `src/components/FlowConfig/ErrorHandlingEditor.tsx`
+
+---
+
 ## [0.3.4] - Flow Configuration UI (Transform, Cache)
 
 ### Added

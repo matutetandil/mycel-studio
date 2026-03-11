@@ -1,27 +1,13 @@
 import { useCallback } from 'react'
-import {
-  RefreshCw,
-  Database,
-  Link,
-  Lock,
-  Gauge,
-  MessageSquare,
-  AlertTriangle,
-  X,
-} from 'lucide-react'
+import { X } from 'lucide-react'
+import { getFlowBlocksByGroup } from '../../flow-blocks'
 import type { FlowNodeData } from '../../types'
 
 interface FlowContextMenuProps {
   position: { x: number; y: number }
   flowData: FlowNodeData
   onClose: () => void
-  onAddTransform: () => void
-  onAddCache: () => void
-  onAddEnrich: () => void
-  onAddLock: () => void
-  onAddSemaphore: () => void
-  onAddResponse: () => void
-  onAddErrorHandling: () => void
+  onSelectBlock: (blockKey: string) => void
 }
 
 interface MenuItemProps {
@@ -58,20 +44,9 @@ export default function FlowContextMenu({
   position,
   flowData,
   onClose,
-  onAddTransform,
-  onAddCache,
-  onAddEnrich,
-  onAddLock,
-  onAddSemaphore,
-  onAddResponse,
-  onAddErrorHandling,
+  onSelectBlock,
 }: FlowContextMenuProps) {
-  const hasTransform = flowData.transform && Object.keys(flowData.transform.fields || {}).length > 0
-  const hasCache = !!flowData.cache
-  const hasEnrich = flowData.enrich && flowData.enrich.length > 0
-  const hasLock = !!flowData.lock
-  const hasSemaphore = !!flowData.semaphore
-  const hasErrorHandling = !!flowData.errorHandling
+  const groups = getFlowBlocksByGroup()
 
   const handleBackdropClick = useCallback((e: React.MouseEvent) => {
     if (e.target === e.currentTarget) {
@@ -99,67 +74,25 @@ export default function FlowContextMenu({
         </div>
 
         <div className="space-y-1">
-          <MenuItem
-            icon={RefreshCw}
-            label="Transform"
-            description="Map and transform data with CEL expressions"
-            onClick={onAddTransform}
-            active={hasTransform}
-            color="text-amber-400"
-          />
-          <MenuItem
-            icon={Database}
-            label="Cache"
-            description="Cache responses to improve performance"
-            onClick={onAddCache}
-            active={hasCache}
-            color="text-cyan-400"
-          />
-          <MenuItem
-            icon={Link}
-            label="Enrich"
-            description="Fetch additional data from another connector"
-            onClick={onAddEnrich}
-            active={hasEnrich}
-            color="text-purple-400"
-          />
-
-          <div className="border-t border-neutral-700 my-2" />
-
-          <MenuItem
-            icon={Lock}
-            label="Lock (Mutex)"
-            description="Ensure only one execution at a time"
-            onClick={onAddLock}
-            active={hasLock}
-            color="text-yellow-400"
-          />
-          <MenuItem
-            icon={Gauge}
-            label="Semaphore"
-            description="Limit concurrent executions"
-            onClick={onAddSemaphore}
-            active={hasSemaphore}
-            color="text-orange-400"
-          />
-
-          <div className="border-t border-neutral-700 my-2" />
-
-          <MenuItem
-            icon={MessageSquare}
-            label="Response"
-            description="Configure HTTP response (status, body)"
-            onClick={onAddResponse}
-            color="text-green-400"
-          />
-          <MenuItem
-            icon={AlertTriangle}
-            label="Error Handling"
-            description="Retry, DLQ, and error configuration"
-            onClick={onAddErrorHandling}
-            active={hasErrorHandling}
-            color="text-red-400"
-          />
+          {groups.map((group, gi) => (
+            <div key={group.group}>
+              {gi > 0 && <div className="border-t border-neutral-700 my-2" />}
+              {group.blocks.map(block => (
+                <MenuItem
+                  key={block.key}
+                  icon={block.icon}
+                  label={block.label}
+                  description={block.menuDescription}
+                  onClick={() => {
+                    onClose()
+                    onSelectBlock(block.key)
+                  }}
+                  active={block.isActive(flowData)}
+                  color={block.color}
+                />
+              ))}
+            </div>
+          ))}
         </div>
       </div>
     </div>

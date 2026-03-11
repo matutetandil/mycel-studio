@@ -1,3 +1,5 @@
 export { default as FlowContextMenu } from './FlowContextMenu'
 export { default as TransformEditor } from './TransformEditor'
-export { default as CacheEditor } from './CacheEditor'
+export { default as StepEditor } from './StepEditor'
+export { default as ResponseEditor } from './ResponseEditor'
+export { default as ErrorHandlingEditor } from './ErrorHandlingEditor'

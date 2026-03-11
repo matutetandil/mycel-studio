@@ -6,6 +6,7 @@ import type { Node, Edge } from '@xyflow/react'
 
 export type ConnectorType =
   | 'rest'
+  | 'http'
   | 'database'
   | 'queue'
   | 'cache'
@@ -15,6 +16,20 @@ export type ConnectorType =
   | 'file'
   | 's3'
   | 'exec'
+  | 'websocket'
+  | 'sse'
+  | 'cdc'
+  | 'elasticsearch'
+  | 'oauth'
+  | 'mqtt'
+  | 'ftp'
+  | 'soap'
+  | 'email'
+  | 'slack'
+  | 'discord'
+  | 'sms'
+  | 'push'
+  | 'webhook'
 
 export type DatabaseDriver = 'sqlite' | 'postgres' | 'mysql' | 'mongodb'
 export type QueueDriver = 'rabbitmq' | 'kafka'
@@ -28,17 +43,34 @@ export type ConnectorMode = 'server' | 'client'
 export type ConnectorDirection = 'input' | 'output' | 'bidirectional'
 
 // Default directions for each connector type
+// NOTE: This is the canonical source. The connector registry also exposes
+// getDefaultDirection() but this record is kept for backward compatibility.
 export const DEFAULT_CONNECTOR_DIRECTIONS: Record<ConnectorType, ConnectorDirection> = {
-  rest: 'input',        // REST server is input by default (exposes endpoints)
-  graphql: 'input',     // GraphQL server is input by default
-  grpc: 'input',        // gRPC server is input by default
-  tcp: 'input',         // TCP server is input by default
-  queue: 'input',       // Queue consumer is input by default
-  database: 'output',   // Database is output by default (writes data)
-  cache: 'bidirectional', // Cache can be read or write
-  file: 'output',       // File is output by default (writes files)
-  s3: 'output',         // S3 is output by default (stores objects)
-  exec: 'output',       // Exec is always output (runs commands)
+  rest: 'input',
+  http: 'output',
+  graphql: 'input',
+  grpc: 'input',
+  tcp: 'input',
+  queue: 'input',
+  database: 'output',
+  cache: 'bidirectional',
+  file: 'output',
+  s3: 'output',
+  exec: 'output',
+  websocket: 'bidirectional',
+  sse: 'output',
+  cdc: 'input',
+  elasticsearch: 'bidirectional',
+  oauth: 'input',
+  mqtt: 'bidirectional',
+  ftp: 'bidirectional',
+  soap: 'bidirectional',
+  email: 'output',
+  slack: 'output',
+  discord: 'output',
+  sms: 'output',
+  push: 'output',
+  webhook: 'output',
 }
 
 // REST Connector
@@ -298,15 +330,56 @@ export type ConnectorConfig =
 // Flow Types
 // =============================================================================
 
+export interface FlowFilter {
+  condition: string
+  onReject?: 'ack' | 'reject' | 'requeue'
+  idField?: string
+  maxRequeue?: number
+}
+
 export interface FlowFrom {
   connector: string
   operation: string
+  filter?: string | FlowFilter
 }
 
 export interface FlowTo {
   connector: string
   target?: string
   query?: string
+  operation?: string
+  exchange?: string
+  when?: string
+  parallel?: boolean
+  transform?: Record<string, string>
+}
+
+export interface FlowStep {
+  name: string
+  connector: string
+  operation?: string
+  query?: string
+  target?: string
+  params?: Record<string, string>
+  body?: Record<string, string>
+  format?: 'json' | 'xml'
+  when?: string
+  timeout?: string
+  onError?: 'fail' | 'skip' | 'default'
+  default?: Record<string, string>
+}
+
+export interface FlowResponse {
+  status: number
+  headers?: Record<string, string>
+  body?: Record<string, string>
+}
+
+export interface FlowDedupe {
+  storage: string
+  key: string
+  ttl?: string
+  onDuplicate?: 'skip' | 'error'
 }
 
 export interface FlowTransform {
@@ -369,12 +442,28 @@ export interface FlowRequire {
   roles?: string[]
 }
 
+export interface FlowFallback {
+  connector: string
+  target: string
+  includeError?: boolean
+  transform?: Record<string, string>
+}
+
+export interface FlowErrorResponse {
+  status: number
+  headers?: Record<string, string>
+  body?: Record<string, string>
+}
+
 export interface FlowErrorHandling {
   retry?: {
     attempts: number
     delay: string
+    maxDelay?: string
     backoff?: 'exponential' | 'linear' | 'constant'
   }
+  fallback?: FlowFallback
+  errorResponse?: FlowErrorResponse
 }
 
 export interface FlowValidate {
@@ -446,10 +535,13 @@ export interface ConnectorNodeData extends Record<string, unknown> {
 export interface FlowNodeData extends Record<string, unknown> {
   label: string
   from?: FlowFrom
-  to?: FlowTo
+  to?: FlowTo | FlowTo[]
   validate?: FlowValidate
   transform?: FlowTransform
+  steps?: FlowStep[]
   enrich?: FlowEnrich[]
+  dedupe?: FlowDedupe
+  response?: FlowResponse
   cache?: FlowCache
   lock?: FlowLock
   semaphore?: FlowSemaphore

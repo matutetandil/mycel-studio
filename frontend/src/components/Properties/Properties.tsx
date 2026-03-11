@@ -1,9 +1,10 @@
 import { useState, useCallback } from 'react'
 import { GripVertical } from 'lucide-react'
 import { useStudioStore } from '../../stores/useStudioStore'
-import type { ConnectorNodeData, FlowNodeData, ConnectorType, ConnectorDirection, RestOperation, GraphQLOperation, ConnectorOperation } from '../../types'
+import type { ConnectorNodeData, FlowNodeData, FlowTo, ConnectorDirection, RestOperation, GraphQLOperation, ConnectorOperation } from '../../types'
 import OperationsEditor from './OperationsEditor'
 import GraphQLOperationsEditor from './GraphQLOperationsEditor'
+import { getConnector, type FieldDefinition } from '../../connectors'
 
 const directionOptions: { value: ConnectorDirection; label: string; description: string }[] = [
   { value: 'input', label: 'Source', description: 'Triggers flows (e.g., API server, queue consumer)' },
@@ -11,13 +12,124 @@ const directionOptions: { value: ConnectorDirection; label: string; description:
   { value: 'bidirectional', label: 'Both', description: 'Can be source or target' },
 ]
 
-const driverOptions: Partial<Record<ConnectorType, string[]>> = {
-  database: ['sqlite', 'postgres', 'mysql', 'mongodb'],
-  queue: ['rabbitmq', 'kafka'],
-  cache: ['memory', 'redis'],
-  file: ['local'],
-  grpc: ['server', 'client'],
-  graphql: ['server', 'client'],
+// Generic field renderer for connector properties
+function FieldRenderer({
+  field,
+  value,
+  config,
+  onChange,
+}: {
+  field: FieldDefinition
+  value: unknown
+  config: Record<string, unknown>
+  onChange: (key: string, val: unknown) => void
+}) {
+  const inputClass = "w-full px-3 py-2 text-sm bg-neutral-800 border border-neutral-700 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-white placeholder-neutral-500"
+
+  // Check visibility condition
+  if (field.visibleWhen) {
+    const depValue = config[field.visibleWhen.field]
+    const allowed = Array.isArray(field.visibleWhen.value)
+      ? field.visibleWhen.value.includes(String(depValue))
+      : String(depValue) === field.visibleWhen.value
+    if (!allowed) return null
+  }
+
+  switch (field.type) {
+    case 'boolean':
+      return (
+        <div className="flex items-center gap-2">
+          <input
+            type="checkbox"
+            id={`field-${field.key}`}
+            checked={Boolean(value)}
+            onChange={(e) => onChange(field.key, e.target.checked || undefined)}
+            className="w-4 h-4 text-indigo-600 bg-neutral-800 border-neutral-600 rounded focus:ring-indigo-500"
+          />
+          <label htmlFor={`field-${field.key}`} className="text-sm text-neutral-300">
+            {field.label}
+          </label>
+        </div>
+      )
+
+    case 'select':
+      return (
+        <div>
+          <label className="block text-xs font-medium text-neutral-400 mb-1">{field.label}</label>
+          <select
+            value={String(value || '')}
+            onChange={(e) => onChange(field.key, e.target.value || undefined)}
+            className={inputClass}
+          >
+            {!field.required && <option value="">Select...</option>}
+            {field.options?.map((opt) => (
+              <option key={opt.value} value={opt.value}>{opt.label}</option>
+            ))}
+          </select>
+          {field.helpText && <p className="text-xs text-neutral-500 mt-1">{field.helpText}</p>}
+        </div>
+      )
+
+    case 'number':
+      return (
+        <div>
+          <label className="block text-xs font-medium text-neutral-400 mb-1">{field.label}</label>
+          <input
+            type="number"
+            value={value != null ? String(value) : ''}
+            onChange={(e) => onChange(field.key, e.target.value ? parseInt(e.target.value) : undefined)}
+            placeholder={field.placeholder}
+            className={inputClass}
+          />
+          {field.helpText && <p className="text-xs text-neutral-500 mt-1">{field.helpText}</p>}
+        </div>
+      )
+
+    case 'password':
+      return (
+        <div>
+          <label className="block text-xs font-medium text-neutral-400 mb-1">{field.label}</label>
+          <input
+            type="password"
+            value={String(value || '')}
+            onChange={(e) => onChange(field.key, e.target.value || undefined)}
+            placeholder={field.placeholder || '••••••••'}
+            className={inputClass}
+          />
+          {field.helpText && <p className="text-xs text-neutral-500 mt-1">{field.helpText}</p>}
+        </div>
+      )
+
+    case 'text':
+      return (
+        <div>
+          <label className="block text-xs font-medium text-neutral-400 mb-1">{field.label}</label>
+          <textarea
+            value={String(value || '')}
+            onChange={(e) => onChange(field.key, e.target.value || undefined)}
+            placeholder={field.placeholder}
+            rows={3}
+            className={inputClass + ' resize-y'}
+          />
+          {field.helpText && <p className="text-xs text-neutral-500 mt-1">{field.helpText}</p>}
+        </div>
+      )
+
+    default: // string
+      return (
+        <div>
+          <label className="block text-xs font-medium text-neutral-400 mb-1">{field.label}</label>
+          <input
+            type="text"
+            value={String(value || '')}
+            onChange={(e) => onChange(field.key, e.target.value || undefined)}
+            placeholder={field.placeholder}
+            className={inputClass}
+          />
+          {field.helpText && <p className="text-xs text-neutral-500 mt-1">{field.helpText}</p>}
+        </div>
+      )
+  }
 }
 
 function ConnectorProperties({
@@ -27,8 +139,21 @@ function ConnectorProperties({
   data: ConnectorNodeData
   onChange: (data: Partial<ConnectorNodeData>) => void
 }) {
-  const drivers = driverOptions[data.connectorType] || []
+  const def = getConnector(data.connectorType)
   const config = data.config || {}
+
+  const handleFieldChange = (key: string, value: unknown) => {
+    // Special handling for CORS (REST) — preserve complex object
+    if (key === 'cors') {
+      onChange({ config: { ...config, cors: value ? { origins: ['*'], methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'] } : undefined } })
+      return
+    }
+    onChange({ config: { ...config, [key]: value } })
+  }
+
+  // Get current driver's additional fields
+  const currentDriver = config.driver as string | undefined
+  const driverDef = def?.drivers?.find(d => d.value === currentDriver)
 
   return (
     <div className="space-y-4">
@@ -42,7 +167,7 @@ function ConnectorProperties({
         />
       </div>
 
-      {/* Direction (input/output/bidirectional) */}
+      {/* Direction */}
       <div>
         <label className="block text-xs font-medium text-neutral-400 mb-1">Direction</label>
         <select
@@ -61,431 +186,60 @@ function ConnectorProperties({
         </p>
       </div>
 
-      {/* Port for server connectors */}
-      {(data.connectorType === 'rest' || data.connectorType === 'grpc' || data.connectorType === 'graphql' || data.connectorType === 'tcp') && (
-        <div>
-          <label className="block text-xs font-medium text-neutral-400 mb-1">Port</label>
-          <input
-            type="number"
-            value={(config.port as number) || ''}
-            onChange={(e) =>
-              onChange({ config: { ...config, port: parseInt(e.target.value) || undefined } })
-            }
-            placeholder="3000"
-            className="w-full px-3 py-2 text-sm bg-neutral-800 border border-neutral-700 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-white placeholder-neutral-500"
-          />
-        </div>
-      )}
-
-      {/* Driver selector */}
-      {drivers.length > 0 && (
+      {/* Driver selector (if connector has drivers) */}
+      {def?.drivers && def.drivers.length > 0 && (
         <div>
           <label className="block text-xs font-medium text-neutral-400 mb-1">Driver</label>
           <select
-            value={(config.driver as string) || ''}
-            onChange={(e) => onChange({ config: { ...config, driver: e.target.value } })}
+            value={currentDriver || ''}
+            onChange={(e) => onChange({ config: { ...config, driver: e.target.value || undefined } })}
             className="w-full px-3 py-2 text-sm bg-neutral-800 border border-neutral-700 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-white"
           >
             <option value="">Select driver...</option>
-            {drivers.map((driver) => (
-              <option key={driver} value={driver}>
-                {driver}
-              </option>
+            {def.drivers.map((d) => (
+              <option key={d.value} value={d.value}>{d.label}</option>
             ))}
           </select>
         </div>
       )}
 
-      {/* Database connector - SQLite */}
-      {data.connectorType === 'database' && config.driver === 'sqlite' && (
-        <div>
-          <label className="block text-xs font-medium text-neutral-400 mb-1">Database Path</label>
-          <input
-            type="text"
-            value={(config.database as string) || ''}
-            onChange={(e) => onChange({ config: { ...config, database: e.target.value } })}
-            placeholder="./data/app.db"
-            className="w-full px-3 py-2 text-sm bg-neutral-800 border border-neutral-700 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-white placeholder-neutral-500"
-          />
-        </div>
-      )}
+      {/* Common fields from definition */}
+      {def?.fields.map((field) => (
+        <FieldRenderer
+          key={field.key}
+          field={field}
+          value={config[field.key]}
+          config={config}
+          onChange={handleFieldChange}
+        />
+      ))}
 
-      {/* Database connector - PostgreSQL/MySQL */}
-      {data.connectorType === 'database' && (config.driver === 'postgres' || config.driver === 'mysql') && (
-        <>
-          <div>
-            <label className="block text-xs font-medium text-neutral-400 mb-1">Host</label>
-            <input
-              type="text"
-              value={(config.host as string) || ''}
-              onChange={(e) => onChange({ config: { ...config, host: e.target.value } })}
-              placeholder="localhost"
-              className="w-full px-3 py-2 text-sm bg-neutral-800 border border-neutral-700 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-white placeholder-neutral-500"
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-neutral-400 mb-1">Port</label>
-            <input
-              type="number"
-              value={(config.port as number) || ''}
-              onChange={(e) => onChange({ config: { ...config, port: parseInt(e.target.value) || undefined } })}
-              placeholder={config.driver === 'postgres' ? '5432' : '3306'}
-              className="w-full px-3 py-2 text-sm bg-neutral-800 border border-neutral-700 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-white placeholder-neutral-500"
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-neutral-400 mb-1">Database</label>
-            <input
-              type="text"
-              value={(config.database as string) || ''}
-              onChange={(e) => onChange({ config: { ...config, database: e.target.value } })}
-              placeholder="myapp"
-              className="w-full px-3 py-2 text-sm bg-neutral-800 border border-neutral-700 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-white placeholder-neutral-500"
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-neutral-400 mb-1">User</label>
-            <input
-              type="text"
-              value={(config.user as string) || ''}
-              onChange={(e) => onChange({ config: { ...config, user: e.target.value } })}
-              placeholder="postgres"
-              className="w-full px-3 py-2 text-sm bg-neutral-800 border border-neutral-700 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-white placeholder-neutral-500"
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-neutral-400 mb-1">Password</label>
-            <input
-              type="password"
-              value={(config.password as string) || ''}
-              onChange={(e) => onChange({ config: { ...config, password: e.target.value } })}
-              placeholder="••••••••"
-              className="w-full px-3 py-2 text-sm bg-neutral-800 border border-neutral-700 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-white placeholder-neutral-500"
-            />
-          </div>
-          {config.driver === 'postgres' && (
-            <div>
-              <label className="block text-xs font-medium text-neutral-400 mb-1">SSL Mode</label>
-              <select
-                value={(config.ssl_mode as string) || ''}
-                onChange={(e) => onChange({ config: { ...config, ssl_mode: e.target.value } })}
-                className="w-full px-3 py-2 text-sm bg-neutral-800 border border-neutral-700 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-white"
-              >
-                <option value="">Default</option>
-                <option value="disable">Disable</option>
-                <option value="require">Require</option>
-                <option value="verify-full">Verify Full</option>
-              </select>
-            </div>
-          )}
-          {config.driver === 'mysql' && (
-            <div>
-              <label className="block text-xs font-medium text-neutral-400 mb-1">Charset</label>
-              <input
-                type="text"
-                value={(config.charset as string) || ''}
-                onChange={(e) => onChange({ config: { ...config, charset: e.target.value } })}
-                placeholder="utf8mb4"
-                className="w-full px-3 py-2 text-sm bg-neutral-800 border border-neutral-700 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-white placeholder-neutral-500"
-              />
-            </div>
-          )}
-        </>
-      )}
+      {/* Driver-specific fields */}
+      {driverDef?.fields.map((field) => (
+        <FieldRenderer
+          key={field.key}
+          field={field}
+          value={config[field.key]}
+          config={config}
+          onChange={handleFieldChange}
+        />
+      ))}
 
-      {/* Database connector - MongoDB */}
-      {data.connectorType === 'database' && config.driver === 'mongodb' && (
-        <>
-          <div>
-            <label className="block text-xs font-medium text-neutral-400 mb-1">URI</label>
-            <input
-              type="text"
-              value={(config.uri as string) || ''}
-              onChange={(e) => onChange({ config: { ...config, uri: e.target.value } })}
-              placeholder="mongodb://localhost:27017"
-              className="w-full px-3 py-2 text-sm bg-neutral-800 border border-neutral-700 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-white placeholder-neutral-500"
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-neutral-400 mb-1">Database</label>
-            <input
-              type="text"
-              value={(config.database as string) || ''}
-              onChange={(e) => onChange({ config: { ...config, database: e.target.value } })}
-              placeholder="myapp"
-              className="w-full px-3 py-2 text-sm bg-neutral-800 border border-neutral-700 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-white placeholder-neutral-500"
-            />
-          </div>
-        </>
-      )}
-
-      {/* Queue connector */}
-      {data.connectorType === 'queue' && (
-        <>
-          {config.driver === 'rabbitmq' && (
-            <div>
-              <label className="block text-xs font-medium text-neutral-400 mb-1">URL</label>
-              <input
-                type="text"
-                value={(config.url as string) || ''}
-                onChange={(e) => onChange({ config: { ...config, url: e.target.value } })}
-                placeholder="amqp://guest:guest@localhost:5672/"
-                className="w-full px-3 py-2 text-sm bg-neutral-800 border border-neutral-700 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-white placeholder-neutral-500"
-              />
-            </div>
-          )}
-          {config.driver === 'kafka' && (
-            <div>
-              <label className="block text-xs font-medium text-neutral-400 mb-1">Brokers</label>
-              <input
-                type="text"
-                value={(config.brokers as string) || ''}
-                onChange={(e) => onChange({ config: { ...config, brokers: e.target.value } })}
-                placeholder="kafka1:9092,kafka2:9092"
-                className="w-full px-3 py-2 text-sm bg-neutral-800 border border-neutral-700 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-white placeholder-neutral-500"
-              />
-            </div>
-          )}
-        </>
-      )}
-
-      {/* Cache connector */}
-      {data.connectorType === 'cache' && (
-        <>
-          {config.driver === 'memory' && (
-            <>
-              <div>
-                <label className="block text-xs font-medium text-neutral-400 mb-1">Max Items</label>
-                <input
-                  type="number"
-                  value={(config.max_items as number) || ''}
-                  onChange={(e) => onChange({ config: { ...config, max_items: parseInt(e.target.value) || undefined } })}
-                  placeholder="10000"
-                  className="w-full px-3 py-2 text-sm bg-neutral-800 border border-neutral-700 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-white placeholder-neutral-500"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-neutral-400 mb-1">Default TTL</label>
-                <input
-                  type="text"
-                  value={(config.default_ttl as string) || ''}
-                  onChange={(e) => onChange({ config: { ...config, default_ttl: e.target.value } })}
-                  placeholder="5m"
-                  className="w-full px-3 py-2 text-sm bg-neutral-800 border border-neutral-700 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-white placeholder-neutral-500"
-                />
-              </div>
-            </>
-          )}
-          {config.driver === 'redis' && (
-            <>
-              <div>
-                <label className="block text-xs font-medium text-neutral-400 mb-1">Address</label>
-                <input
-                  type="text"
-                  value={(config.address as string) || ''}
-                  onChange={(e) => onChange({ config: { ...config, address: e.target.value } })}
-                  placeholder="localhost:6379"
-                  className="w-full px-3 py-2 text-sm bg-neutral-800 border border-neutral-700 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-white placeholder-neutral-500"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-neutral-400 mb-1">Password</label>
-                <input
-                  type="password"
-                  value={(config.password as string) || ''}
-                  onChange={(e) => onChange({ config: { ...config, password: e.target.value } })}
-                  placeholder="••••••••"
-                  className="w-full px-3 py-2 text-sm bg-neutral-800 border border-neutral-700 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-white placeholder-neutral-500"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-neutral-400 mb-1">DB</label>
-                <input
-                  type="number"
-                  value={(config.db as number) || ''}
-                  onChange={(e) => onChange({ config: { ...config, db: parseInt(e.target.value) || 0 } })}
-                  placeholder="0"
-                  className="w-full px-3 py-2 text-sm bg-neutral-800 border border-neutral-700 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-white placeholder-neutral-500"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-neutral-400 mb-1">Key Prefix</label>
-                <input
-                  type="text"
-                  value={(config.key_prefix as string) || ''}
-                  onChange={(e) => onChange({ config: { ...config, key_prefix: e.target.value } })}
-                  placeholder="myapp:"
-                  className="w-full px-3 py-2 text-sm bg-neutral-800 border border-neutral-700 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-white placeholder-neutral-500"
-                />
-              </div>
-            </>
-          )}
-        </>
-      )}
-
-      {/* REST connector */}
+      {/* Operations editor for REST */}
       {data.connectorType === 'rest' && (
-        <>
-          <div className="flex items-center gap-2">
-            <input
-              type="checkbox"
-              id="cors"
-              checked={Boolean(config.cors)}
-              onChange={(e) => onChange({ config: { ...config, cors: e.target.checked ? { origins: ['*'], methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'] } : undefined } })}
-              className="w-4 h-4 text-indigo-600 bg-neutral-800 border-neutral-600 rounded focus:ring-indigo-500"
-            />
-            <label htmlFor="cors" className="text-sm text-neutral-300">
-              Enable CORS
-            </label>
-          </div>
-
-          <OperationsEditor
-            connectorType={data.connectorType}
-            operations={(data.operations || []) as RestOperation[]}
-            onChange={(operations) => onChange({ operations })}
-          />
-        </>
+        <OperationsEditor
+          connectorType={data.connectorType}
+          operations={(data.operations || []) as RestOperation[]}
+          onChange={(operations) => onChange({ operations })}
+        />
       )}
 
-      {/* GraphQL connector */}
+      {/* Operations editor for GraphQL */}
       {data.connectorType === 'graphql' && (
-        <>
-          <div>
-            <label className="block text-xs font-medium text-neutral-400 mb-1">Endpoint</label>
-            <input
-              type="text"
-              value={(config.endpoint as string) || ''}
-              onChange={(e) => onChange({ config: { ...config, endpoint: e.target.value } })}
-              placeholder="/graphql"
-              className="w-full px-3 py-2 text-sm bg-neutral-800 border border-neutral-700 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-white placeholder-neutral-500"
-            />
-          </div>
-          {config.driver === 'server' && (
-            <div className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                id="playground"
-                checked={Boolean(config.playground)}
-                onChange={(e) => onChange({ config: { ...config, playground: e.target.checked } })}
-                className="w-4 h-4 text-indigo-600 bg-neutral-800 border-neutral-600 rounded focus:ring-indigo-500"
-              />
-              <label htmlFor="playground" className="text-sm text-neutral-300">
-                Enable Playground
-              </label>
-            </div>
-          )}
-
-          <GraphQLOperationsEditor
-            operations={(data.operations || []) as GraphQLOperation[]}
-            onChange={(operations) => onChange({ operations })}
-          />
-        </>
-      )}
-
-      {/* S3 connector */}
-      {data.connectorType === 's3' && (
-        <>
-          <div>
-            <label className="block text-xs font-medium text-neutral-400 mb-1">Bucket</label>
-            <input
-              type="text"
-              value={(config.bucket as string) || ''}
-              onChange={(e) => onChange({ config: { ...config, bucket: e.target.value } })}
-              placeholder="my-bucket"
-              className="w-full px-3 py-2 text-sm bg-neutral-800 border border-neutral-700 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-white placeholder-neutral-500"
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-neutral-400 mb-1">Region</label>
-            <input
-              type="text"
-              value={(config.region as string) || ''}
-              onChange={(e) => onChange({ config: { ...config, region: e.target.value } })}
-              placeholder="us-east-1"
-              className="w-full px-3 py-2 text-sm bg-neutral-800 border border-neutral-700 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-white placeholder-neutral-500"
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-neutral-400 mb-1">Access Key</label>
-            <input
-              type="text"
-              value={(config.access_key as string) || ''}
-              onChange={(e) => onChange({ config: { ...config, access_key: e.target.value } })}
-              placeholder="AKIAIOSFODNN7EXAMPLE"
-              className="w-full px-3 py-2 text-sm bg-neutral-800 border border-neutral-700 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-white placeholder-neutral-500"
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-neutral-400 mb-1">Secret Key</label>
-            <input
-              type="password"
-              value={(config.secret_key as string) || ''}
-              onChange={(e) => onChange({ config: { ...config, secret_key: e.target.value } })}
-              placeholder="••••••••"
-              className="w-full px-3 py-2 text-sm bg-neutral-800 border border-neutral-700 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-white placeholder-neutral-500"
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-neutral-400 mb-1">Endpoint (optional)</label>
-            <input
-              type="text"
-              value={(config.endpoint as string) || ''}
-              onChange={(e) => onChange({ config: { ...config, endpoint: e.target.value } })}
-              placeholder="http://localhost:9000 (for MinIO)"
-              className="w-full px-3 py-2 text-sm bg-neutral-800 border border-neutral-700 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-white placeholder-neutral-500"
-            />
-          </div>
-        </>
-      )}
-
-      {/* Exec connector */}
-      {data.connectorType === 'exec' && (
-        <>
-          <div>
-            <label className="block text-xs font-medium text-neutral-400 mb-1">Command</label>
-            <input
-              type="text"
-              value={(config.command as string) || ''}
-              onChange={(e) => onChange({ config: { ...config, command: e.target.value } })}
-              placeholder="/usr/bin/python3"
-              className="w-full px-3 py-2 text-sm bg-neutral-800 border border-neutral-700 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-white placeholder-neutral-500"
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-neutral-400 mb-1">Working Directory</label>
-            <input
-              type="text"
-              value={(config.working_dir as string) || ''}
-              onChange={(e) => onChange({ config: { ...config, working_dir: e.target.value } })}
-              placeholder="/app/scripts"
-              className="w-full px-3 py-2 text-sm bg-neutral-800 border border-neutral-700 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-white placeholder-neutral-500"
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-neutral-400 mb-1">Timeout</label>
-            <input
-              type="text"
-              value={(config.timeout as string) || ''}
-              onChange={(e) => onChange({ config: { ...config, timeout: e.target.value } })}
-              placeholder="30s"
-              className="w-full px-3 py-2 text-sm bg-neutral-800 border border-neutral-700 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-white placeholder-neutral-500"
-            />
-          </div>
-        </>
-      )}
-
-      {/* File connector */}
-      {data.connectorType === 'file' && (
-        <div>
-          <label className="block text-xs font-medium text-neutral-400 mb-1">Base Path</label>
-          <input
-            type="text"
-            value={(config.base_path as string) || ''}
-            onChange={(e) => onChange({ config: { ...config, base_path: e.target.value } })}
-            placeholder="/data/files"
-            className="w-full px-3 py-2 text-sm bg-neutral-800 border border-neutral-700 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-white placeholder-neutral-500"
-          />
-        </div>
+        <GraphQLOperationsEditor
+          operations={(data.operations || []) as GraphQLOperation[]}
+          onChange={(operations) => onChange({ operations })}
+        />
       )}
     </div>
   )
@@ -504,35 +258,52 @@ function FlowProperties({
 
   // Find connected connectors
   const incomingEdge = edges.find((e) => e.target === nodeId)
-  const outgoingEdge = edges.find((e) => e.source === nodeId)
+  const outgoingEdges = edges.filter((e) => e.source === nodeId)
 
   const sourceConnector = incomingEdge
     ? nodes.find((n) => n.id === incomingEdge.source && n.type === 'connector')
     : null
-  const targetConnector = outgoingEdge
-    ? nodes.find((n) => n.id === outgoingEdge.target && n.type === 'connector')
-    : null
 
   const sourceData = sourceConnector?.data as ConnectorNodeData | undefined
-  const targetData = targetConnector?.data as ConnectorNodeData | undefined
 
   // Get operations from source connector
   const sourceOperations = (sourceData?.operations as ConnectorOperation[]) || []
 
   // Get current values
   const fromOperation = data.from?.operation || ''
-  const toTarget = data.to?.target || ''
+  const fromFilter = typeof data.from?.filter === 'string' ? data.from.filter : (data.from?.filter as { condition?: string } | undefined)?.condition || ''
+
+  // Multi-to support
+  const toTargets: FlowTo[] = data.to
+    ? Array.isArray(data.to)
+      ? data.to
+      : [data.to]
+    : []
 
   // Format operation display based on type
   const formatOperation = (op: ConnectorOperation): string => {
     if ('method' in op && 'path' in op) {
-      // REST operation
       return `${op.method} ${op.path}`
     } else if ('type' in op && 'name' in op) {
-      // GraphQL operation
       return `${op.type}.${op.name}`
     }
     return op.id
+  }
+
+  const updateToTarget = (index: number, updates: Partial<FlowTo>) => {
+    const newTargets = [...toTargets]
+    newTargets[index] = { ...newTargets[index], ...updates }
+    onChange({ to: newTargets.length === 1 ? newTargets[0] : newTargets })
+  }
+
+  const addToTarget = () => {
+    const newTargets = [...toTargets, { connector: '', target: '' }]
+    onChange({ to: newTargets })
+  }
+
+  const removeToTarget = (index: number) => {
+    const newTargets = toTargets.filter((_, i) => i !== index)
+    onChange({ to: newTargets.length === 1 ? newTargets[0] : newTargets.length === 0 ? undefined : newTargets })
   }
 
   return (
@@ -565,7 +336,7 @@ function FlowProperties({
             <label className="block text-xs font-medium text-neutral-400 mb-1">Operation</label>
             <select
               value={fromOperation}
-              onChange={(e) => onChange({ from: { connector: sourceData?.label.toLowerCase().replace(/\s+/g, '_') || '', operation: e.target.value } })}
+              onChange={(e) => onChange({ from: { ...data.from, connector: sourceData?.label.toLowerCase().replace(/\s+/g, '_') || '', operation: e.target.value } })}
               className="w-full px-3 py-2 text-sm bg-neutral-800 border border-neutral-700 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-white"
             >
               <option value="">Select operation...</option>
@@ -582,7 +353,7 @@ function FlowProperties({
             <input
               type="text"
               value={fromOperation}
-              onChange={(e) => onChange({ from: { connector: sourceData?.label.toLowerCase().replace(/\s+/g, '_') || '', operation: e.target.value } })}
+              onChange={(e) => onChange({ from: { ...data.from, connector: sourceData?.label.toLowerCase().replace(/\s+/g, '_') || '', operation: e.target.value } })}
               placeholder={
                 sourceData?.connectorType === 'rest'
                   ? 'GET /users (define on connector)'
@@ -596,34 +367,108 @@ function FlowProperties({
             />
           </div>
         )}
-      </div>
 
-      {/* Target (To) */}
-      <div className="p-3 bg-neutral-800/50 rounded-md space-y-3">
-        <div className="flex items-center gap-2 text-xs text-neutral-400 flex-wrap">
-          <span className="font-medium">TO</span>
-          {targetData ? (
-            <span className="px-2 py-0.5 bg-blue-600/20 text-blue-400 rounded text-xs">
-              {targetData.label} ({targetData.connectorType})
-            </span>
-          ) : (
-            <span className="text-amber-500 italic">Not connected</span>
-          )}
-        </div>
-
+        {/* Filter */}
         <div>
-          <label className="block text-xs font-medium text-neutral-400 mb-1">
-            {targetData?.connectorType === 'database' ? 'Table/Collection' : 'Target'}
-          </label>
+          <label className="block text-xs font-medium text-neutral-400 mb-1">Filter (CEL, optional)</label>
           <input
             type="text"
-            value={toTarget}
-            onChange={(e) => onChange({ to: { connector: targetData?.label.toLowerCase().replace(/\s+/g, '_') || '', target: e.target.value } })}
-            placeholder={targetData?.connectorType === 'database' ? 'users' : 'target'}
-            className="w-full px-3 py-2 text-sm bg-neutral-800 border border-neutral-700 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-white placeholder-neutral-500"
+            value={fromFilter}
+            onChange={(e) => {
+              const filter = e.target.value || undefined
+              onChange({ from: { ...data.from, connector: data.from?.connector || '', operation: data.from?.operation || '', filter } })
+            }}
+            placeholder="input.status != 'internal'"
+            className="w-full px-3 py-2 text-sm bg-neutral-800 border border-neutral-700 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-white placeholder-neutral-500 font-mono"
           />
+          <p className="text-xs text-neutral-500 mt-1">Skip events where condition is false</p>
         </div>
       </div>
+
+      {/* Targets (To) - Multi-to support */}
+      {toTargets.map((to, idx) => {
+        const targetConnector = outgoingEdges[idx]
+          ? nodes.find((n) => n.id === outgoingEdges[idx].target && n.type === 'connector')
+          : null
+        const targetData = targetConnector?.data as ConnectorNodeData | undefined
+
+        return (
+          <div key={idx} className="p-3 bg-neutral-800/50 rounded-md space-y-3">
+            <div className="flex items-center gap-2 text-xs text-neutral-400 flex-wrap">
+              <span className="font-medium">TO {toTargets.length > 1 ? `#${idx + 1}` : ''}</span>
+              {targetData ? (
+                <span className="px-2 py-0.5 bg-blue-600/20 text-blue-400 rounded text-xs">
+                  {targetData.label} ({targetData.connectorType})
+                </span>
+              ) : (
+                to.connector ? (
+                  <span className="px-2 py-0.5 bg-blue-600/20 text-blue-400 rounded text-xs">
+                    {to.connector}
+                  </span>
+                ) : (
+                  <span className="text-amber-500 italic">Not connected</span>
+                )
+              )}
+              {toTargets.length > 1 && (
+                <button
+                  onClick={() => removeToTarget(idx)}
+                  className="ml-auto text-xs text-red-500 hover:text-red-400"
+                >
+                  Remove
+                </button>
+              )}
+            </div>
+
+            {!targetData && (
+              <div>
+                <label className="block text-xs font-medium text-neutral-400 mb-1">Connector</label>
+                <input
+                  type="text"
+                  value={to.connector}
+                  onChange={(e) => updateToTarget(idx, { connector: e.target.value })}
+                  placeholder="connector_name"
+                  className="w-full px-3 py-2 text-sm bg-neutral-800 border border-neutral-700 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-white placeholder-neutral-500"
+                />
+              </div>
+            )}
+
+            <div>
+              <label className="block text-xs font-medium text-neutral-400 mb-1">
+                {targetData?.connectorType === 'database' ? 'Table/Collection' : 'Target'}
+              </label>
+              <input
+                type="text"
+                value={to.target || ''}
+                onChange={(e) => updateToTarget(idx, { connector: targetData?.label.toLowerCase().replace(/\s+/g, '_') || to.connector || '', target: e.target.value })}
+                placeholder={targetData?.connectorType === 'database' ? 'users' : 'target'}
+                className="w-full px-3 py-2 text-sm bg-neutral-800 border border-neutral-700 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-white placeholder-neutral-500"
+              />
+            </div>
+
+            {/* Per-to condition (for multi-to) */}
+            {toTargets.length > 1 && (
+              <div>
+                <label className="block text-xs font-medium text-neutral-400 mb-1">Condition (optional)</label>
+                <input
+                  type="text"
+                  value={to.when || ''}
+                  onChange={(e) => updateToTarget(idx, { when: e.target.value || undefined })}
+                  placeholder="input.amount > 500"
+                  className="w-full px-3 py-2 text-sm bg-neutral-800 border border-neutral-700 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-white placeholder-neutral-500 font-mono"
+                />
+              </div>
+            )}
+          </div>
+        )
+      })}
+
+      {/* Add target button */}
+      <button
+        onClick={addToTarget}
+        className="w-full px-3 py-2 text-xs text-blue-400 hover:text-blue-300 border border-dashed border-neutral-700 hover:border-blue-500/50 rounded-md transition-colors"
+      >
+        + Add Target
+      </button>
 
       {/* Schedule */}
       <div>

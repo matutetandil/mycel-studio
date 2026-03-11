@@ -1,27 +1,13 @@
 import { useState } from 'react'
 import {
-  Globe,
-  Database,
-  MessageSquare,
-  Zap,
-  Server,
-  Hexagon,
-  Folder,
   ArrowRight,
   ChevronRight,
   ChevronDown,
   FileCode,
   RefreshCw,
-  Cloud,
-  Terminal,
-  Network,
 } from 'lucide-react'
 import { type ConnectorType, DEFAULT_CONNECTOR_DIRECTIONS } from '../../types'
-
-interface PaletteCategory {
-  name: string
-  items: PaletteItem[]
-}
+import { getConnectorsByCategory, type ConnectorDefinition } from '../../connectors'
 
 interface PaletteItem {
   type: 'connector' | 'flow' | 'type' | 'transform'
@@ -31,38 +17,7 @@ interface PaletteItem {
   color: string
 }
 
-const categories: PaletteCategory[] = [
-  {
-    name: 'Connectors',
-    items: [
-      { type: 'connector', connectorType: 'rest', label: 'REST API', icon: Globe, color: 'bg-blue-500' },
-      { type: 'connector', connectorType: 'database', label: 'Database', icon: Database, color: 'bg-green-500' },
-      { type: 'connector', connectorType: 'queue', label: 'Message Queue', icon: MessageSquare, color: 'bg-orange-500' },
-      { type: 'connector', connectorType: 'cache', label: 'Cache', icon: Zap, color: 'bg-yellow-500' },
-      { type: 'connector', connectorType: 'grpc', label: 'gRPC', icon: Server, color: 'bg-purple-500' },
-      { type: 'connector', connectorType: 'graphql', label: 'GraphQL', icon: Hexagon, color: 'bg-pink-500' },
-      { type: 'connector', connectorType: 'tcp', label: 'TCP', icon: Network, color: 'bg-cyan-600' },
-      { type: 'connector', connectorType: 'file', label: 'File Storage', icon: Folder, color: 'bg-neutral-500' },
-      { type: 'connector', connectorType: 's3', label: 'S3 Storage', icon: Cloud, color: 'bg-amber-600' },
-      { type: 'connector', connectorType: 'exec', label: 'Exec/Script', icon: Terminal, color: 'bg-slate-600' },
-    ],
-  },
-  {
-    name: 'Logic',
-    items: [
-      { type: 'flow', label: 'Flow', icon: ArrowRight, color: 'bg-indigo-500' },
-    ],
-  },
-  {
-    name: 'Schema',
-    items: [
-      { type: 'type', label: 'Type', icon: FileCode, color: 'bg-cyan-500' },
-      { type: 'transform', label: 'Transform', icon: RefreshCw, color: 'bg-amber-500' },
-    ],
-  },
-]
-
-function PaletteItem({ item }: { item: PaletteItem }) {
+function PaletteItemView({ item }: { item: PaletteItem }) {
   const Icon = item.icon
 
   const onDragStart = (event: React.DragEvent) => {
@@ -71,7 +26,7 @@ function PaletteItem({ item }: { item: PaletteItem }) {
         ? {
             label: item.label,
             connectorType: item.connectorType,
-            direction: DEFAULT_CONNECTOR_DIRECTIONS[item.connectorType],
+            direction: DEFAULT_CONNECTOR_DIRECTIONS[item.connectorType!],
             config: { type: item.connectorType },
           }
         : {
@@ -97,7 +52,7 @@ function PaletteItem({ item }: { item: PaletteItem }) {
   )
 }
 
-function CategorySection({ category }: { category: PaletteCategory }) {
+function CategorySection({ name, items }: { name: string; items: PaletteItem[] }) {
   const [isExpanded, setIsExpanded] = useState(true)
 
   return (
@@ -111,12 +66,12 @@ function CategorySection({ category }: { category: PaletteCategory }) {
         ) : (
           <ChevronRight className="w-3 h-3" />
         )}
-        {category.name}
+        {name}
       </button>
       {isExpanded && (
         <div className="pl-2">
-          {category.items.map((item, index) => (
-            <PaletteItem key={index} item={item} />
+          {items.map((item, index) => (
+            <PaletteItemView key={index} item={item} />
           ))}
         </div>
       )}
@@ -124,11 +79,52 @@ function CategorySection({ category }: { category: PaletteCategory }) {
   )
 }
 
+// Convert connector definitions to palette items
+function connectorToItem(def: ConnectorDefinition): PaletteItem {
+  return {
+    type: 'connector',
+    connectorType: def.type as ConnectorType,
+    label: def.label,
+    icon: def.icon,
+    color: def.color,
+  }
+}
+
+// Build categories from registry
+function buildCategories(): Array<{ name: string; items: PaletteItem[] }> {
+  const groups = getConnectorsByCategory()
+
+  const categories: Array<{ name: string; items: PaletteItem[] }> = groups.map(g => ({
+    name: g.category,
+    items: g.connectors.map(connectorToItem),
+  }))
+
+  // Add non-connector categories
+  categories.push({
+    name: 'Logic',
+    items: [
+      { type: 'flow', label: 'Flow', icon: ArrowRight, color: 'bg-indigo-500' },
+    ],
+  })
+
+  categories.push({
+    name: 'Schema',
+    items: [
+      { type: 'type', label: 'Type', icon: FileCode, color: 'bg-cyan-500' },
+      { type: 'transform', label: 'Transform', icon: RefreshCw, color: 'bg-amber-500' },
+    ],
+  })
+
+  return categories
+}
+
+const categories = buildCategories()
+
 export default function Palette() {
   return (
     <div className="px-2">
       {categories.map((category) => (
-        <CategorySection key={category.name} category={category} />
+        <CategorySection key={category.name} name={category.name} items={category.items} />
       ))}
     </div>
   )

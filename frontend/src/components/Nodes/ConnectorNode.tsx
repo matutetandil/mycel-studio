@@ -2,46 +2,12 @@ import { memo } from 'react'
 import { Handle, Position } from '@xyflow/react'
 import {
   Globe,
-  Database,
-  MessageSquare,
-  Zap,
-  Server,
-  Hexagon,
-  Folder,
-  Cloud,
-  Terminal,
-  Network,
   ArrowRight,
   ArrowLeft,
   ArrowLeftRight,
 } from 'lucide-react'
-import type { ConnectorNodeData, ConnectorType, ConnectorDirection } from '../../types'
-
-const iconMap: Record<ConnectorType, React.ElementType> = {
-  rest: Globe,
-  database: Database,
-  queue: MessageSquare,
-  cache: Zap,
-  grpc: Server,
-  graphql: Hexagon,
-  file: Folder,
-  s3: Cloud,
-  exec: Terminal,
-  tcp: Network,
-}
-
-const colorMap: Record<ConnectorType, string> = {
-  rest: 'bg-blue-500',
-  database: 'bg-green-500',
-  queue: 'bg-orange-500',
-  cache: 'bg-yellow-500',
-  grpc: 'bg-purple-500',
-  graphql: 'bg-pink-500',
-  file: 'bg-neutral-500',
-  s3: 'bg-amber-600',
-  exec: 'bg-slate-600',
-  tcp: 'bg-cyan-600',
-}
+import type { ConnectorNodeData, ConnectorDirection } from '../../types'
+import { getConnector } from '../../connectors'
 
 const directionIcons: Record<ConnectorDirection, React.ElementType> = {
   input: ArrowRight,
@@ -61,8 +27,9 @@ interface ConnectorNodeProps {
 }
 
 function ConnectorNode({ data, selected }: ConnectorNodeProps) {
-  const Icon = iconMap[data.connectorType] || Globe
-  const colorClass = colorMap[data.connectorType] || 'bg-neutral-500'
+  const def = getConnector(data.connectorType)
+  const Icon = def?.icon || Globe
+  const colorClass = def?.color || 'bg-neutral-500'
   const direction = data.direction || 'bidirectional'
   const DirectionIcon = directionIcons[direction]
 

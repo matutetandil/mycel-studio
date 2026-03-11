@@ -14,8 +14,15 @@ import { useStudioStore } from '../../stores/useStudioStore'
 import { useProjectStore } from '../../stores/useProjectStore'
 import { nodeTypes } from '../Nodes'
 import { useSync } from '../../hooks/useSync'
-import { FlowContextMenu, TransformEditor, CacheEditor } from '../FlowConfig'
-import type { ConnectorNodeData, FlowNodeData, FlowTransform, FlowCache } from '../../types'
+import { getFlowBlock, GenericBlockEditor } from '../../flow-blocks'
+import {
+  FlowContextMenu,
+  TransformEditor,
+  StepEditor,
+  ResponseEditor,
+  ErrorHandlingEditor,
+} from '../FlowConfig'
+import type { ConnectorNodeData, FlowNodeData, FlowTransform, FlowStep, FlowResponse, FlowErrorHandling } from '../../types'
 
 type StudioNode = Node<ConnectorNodeData | FlowNodeData>
 
@@ -42,8 +49,9 @@ export default function Canvas() {
 
   // Context menu state
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null)
-  const [transformEditorOpen, setTransformEditorOpen] = useState(false)
-  const [cacheEditorOpen, setCacheEditorOpen] = useState(false)
+
+  // Unified editor state: which block editor is open
+  const [activeEditor, setActiveEditor] = useState<string | null>(null)
 
   // Get the selected flow node data for editors
   const selectedFlowNode = useMemo(() => {
@@ -53,27 +61,34 @@ export default function Canvas() {
     return node as Node<FlowNodeData>
   }, [contextMenu, nodes])
 
-  // Get available cache storages for CacheEditor
+  // Get available cache storages
   const availableCacheStorages = useMemo(() => {
     return nodes
       .filter(n => n.type === 'connector' && (n.data as ConnectorNodeData).connectorType === 'cache')
       .map(n => (n.data as ConnectorNodeData).label.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, ''))
   }, [nodes])
 
-  // Sync to HCL when nodes change significantly (not just position during drag)
-  useEffect(() => {
-    // Skip if no active file
-    if (!activeFile) return
+  // Get available connectors for StepEditor/ErrorHandlingEditor
+  const availableConnectors = useMemo(() => {
+    return nodes
+      .filter(n => n.type === 'connector')
+      .map(n => {
+        const data = n.data as ConnectorNodeData
+        return {
+          name: data.label.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, ''),
+          type: data.connectorType,
+        }
+      })
+  }, [nodes])
 
-    // Create a stable string representation of node data (without positions)
+  // Sync to HCL when nodes change significantly
+  useEffect(() => {
+    if (!activeFile) return
     const nodesData = JSON.stringify(
       nodes.map(n => ({ id: n.id, type: n.type, data: n.data }))
     )
-
-    // Only sync if data actually changed
     if (nodesData !== prevNodesRef.current) {
       prevNodesRef.current = nodesData
-      // Skip initial render
       if (nodes.length > 0) {
         syncToHCL(activeFile)
       }
@@ -99,10 +114,8 @@ export default function Canvas() {
   const onDrop = useCallback(
     (event: React.DragEvent) => {
       event.preventDefault()
-
       const type = event.dataTransfer.getData('application/mycel-node-type')
       const dataStr = event.dataTransfer.getData('application/mycel-node-data')
-
       if (!type || !dataStr) return
 
       const data = JSON.parse(dataStr)
@@ -117,18 +130,14 @@ export default function Canvas() {
         position,
         data,
       }
-
       addNode(newNode)
     },
     [addNode]
   )
 
-  // Handle right-click on nodes
   const onNodeContextMenu: NodeMouseHandler = useCallback(
     (event, node) => {
-      // Only show context menu for flow nodes
       if (node.type !== 'flow') return
-
       event.preventDefault()
       setContextMenu({
         position: { x: event.clientX, y: event.clientY },
@@ -138,9 +147,12 @@ export default function Canvas() {
     []
   )
 
-  // Close context menu
   const closeContextMenu = useCallback(() => {
     setContextMenu(null)
+  }, [])
+
+  const closeEditor = useCallback(() => {
+    setActiveEditor(null)
   }, [])
 
   // Update flow node data
@@ -149,7 +161,6 @@ export default function Canvas() {
       if (!contextMenu) return
       const node = nodes.find(n => n.id === contextMenu.nodeId)
       if (!node || node.type !== 'flow') return
-
       updateNode(contextMenu.nodeId, {
         ...node.data,
         ...updates,
@@ -158,62 +169,25 @@ export default function Canvas() {
     [contextMenu, nodes, updateNode]
   )
 
-  // Transform handlers
-  const handleAddTransform = useCallback(() => {
-    closeContextMenu()
-    setTransformEditorOpen(true)
-  }, [closeContextMenu])
+  // Unified handler: open the right editor for a block key
+  const handleSelectBlock = useCallback((blockKey: string) => {
+    setActiveEditor(blockKey)
+  }, [])
 
-  const handleSaveTransform = useCallback(
-    (transform: FlowTransform | undefined) => {
-      updateFlowData({ transform })
+  // Generic block save handler (for simple blocks via GenericBlockEditor)
+  const handleGenericSave = useCallback(
+    (data: Record<string, unknown> | undefined) => {
+      if (!activeEditor) return
+      const def = getFlowBlock(activeEditor)
+      if (!def) return
+      updateFlowData({ [def.dataKey]: data })
     },
-    [updateFlowData]
+    [activeEditor, updateFlowData]
   )
 
-  // Cache handlers
-  const handleAddCache = useCallback(() => {
-    closeContextMenu()
-    setCacheEditorOpen(true)
-  }, [closeContextMenu])
-
-  const handleSaveCache = useCallback(
-    (cache: FlowCache | undefined) => {
-      updateFlowData({ cache })
-    },
-    [updateFlowData]
-  )
-
-  // Placeholder handlers for other features (to be implemented)
-  const handleAddEnrich = useCallback(() => {
-    closeContextMenu()
-    // TODO: Open EnrichEditor
-    console.log('Add Enrich - not implemented yet')
-  }, [closeContextMenu])
-
-  const handleAddLock = useCallback(() => {
-    closeContextMenu()
-    // TODO: Open LockEditor
-    console.log('Add Lock - not implemented yet')
-  }, [closeContextMenu])
-
-  const handleAddSemaphore = useCallback(() => {
-    closeContextMenu()
-    // TODO: Open SemaphoreEditor
-    console.log('Add Semaphore - not implemented yet')
-  }, [closeContextMenu])
-
-  const handleAddResponse = useCallback(() => {
-    closeContextMenu()
-    // TODO: Open ResponseEditor
-    console.log('Add Response - not implemented yet')
-  }, [closeContextMenu])
-
-  const handleAddErrorHandling = useCallback(() => {
-    closeContextMenu()
-    // TODO: Open ErrorHandlingEditor
-    console.log('Add Error Handling - not implemented yet')
-  }, [closeContextMenu])
+  // Get the active definition for generic editor
+  const activeDefinition = activeEditor ? getFlowBlock(activeEditor) : null
+  const isGenericEditor = activeDefinition && !activeDefinition.customEditor && activeDefinition.fields
 
   return (
     <div className="flex-1 h-full bg-neutral-950">
@@ -260,31 +234,52 @@ export default function Canvas() {
           position={contextMenu.position}
           flowData={selectedFlowNode.data}
           onClose={closeContextMenu}
-          onAddTransform={handleAddTransform}
-          onAddCache={handleAddCache}
-          onAddEnrich={handleAddEnrich}
-          onAddLock={handleAddLock}
-          onAddSemaphore={handleAddSemaphore}
-          onAddResponse={handleAddResponse}
-          onAddErrorHandling={handleAddErrorHandling}
+          onSelectBlock={handleSelectBlock}
         />
       )}
 
-      {/* Transform Editor Modal */}
+      {/* Generic Block Editor (cache, lock, semaphore, dedupe) */}
+      {isGenericEditor && (
+        <GenericBlockEditor
+          definition={activeDefinition}
+          isOpen={true}
+          data={selectedFlowNode?.data[activeDefinition.dataKey] as Record<string, unknown> | undefined}
+          availableStorages={availableCacheStorages}
+          onSave={handleGenericSave}
+          onClose={closeEditor}
+        />
+      )}
+
+      {/* Custom Editors */}
+      {/* Custom Editors — each calls onClose() after onSave() internally */}
       <TransformEditor
-        isOpen={transformEditorOpen}
+        isOpen={activeEditor === 'transform'}
         transform={selectedFlowNode?.data.transform}
-        onSave={handleSaveTransform}
-        onClose={() => setTransformEditorOpen(false)}
+        onSave={(transform: FlowTransform | undefined) => updateFlowData({ transform })}
+        onClose={closeEditor}
       />
 
-      {/* Cache Editor Modal */}
-      <CacheEditor
-        isOpen={cacheEditorOpen}
-        cache={selectedFlowNode?.data.cache}
-        availableStorages={availableCacheStorages}
-        onSave={handleSaveCache}
-        onClose={() => setCacheEditorOpen(false)}
+      <StepEditor
+        isOpen={activeEditor === 'step'}
+        steps={selectedFlowNode?.data.steps}
+        availableConnectors={availableConnectors}
+        onSave={(steps: FlowStep[] | undefined) => updateFlowData({ steps })}
+        onClose={closeEditor}
+      />
+
+      <ResponseEditor
+        isOpen={activeEditor === 'response'}
+        response={selectedFlowNode?.data.response}
+        onSave={(response: FlowResponse | undefined) => updateFlowData({ response })}
+        onClose={closeEditor}
+      />
+
+      <ErrorHandlingEditor
+        isOpen={activeEditor === 'errorHandling'}
+        errorHandling={selectedFlowNode?.data.errorHandling}
+        availableConnectors={availableConnectors}
+        onSave={(errorHandling: FlowErrorHandling | undefined) => updateFlowData({ errorHandling })}
+        onClose={closeEditor}
       />
     </div>
   )

@@ -333,3 +333,97 @@ Dentro del flow falta UI para configurar:
   - GETTING_STARTED.md: Corregido `service.hcl` → `config.hcl`, eliminado `port` del service block, corregida sintaxis de flows
   - CONFIGURATION.md: Nota sobre importancia del service block
 - **Próximo paso:** Continuar con Phase 3 del ROADMAP (Step blocks, filter, multi-to)
+
+### 2026-03-10 - Phase 3: Fix Foundations (COMPLETADO)
+- **Estado:** ✅ Completado - v0.4.0
+- **Step Editor (`StepEditor.tsx`):**
+  - Reemplaza `enrich` como mecanismo principal de orquestación
+  - Nombre, conector, operación, query, params
+  - Opciones avanzadas: `when` (condicional), timeout, on_error (fail/skip/default)
+  - Editor de valor default para on_error="default"
+  - Resultados disponibles como `step.name.field`
+- **Response Editor (`ResponseEditor.tsx`):**
+  - Status code con presets (200, 201, 202, 204, 4xx, 5xx)
+  - Headers custom, body con CEL expressions
+  - Templates predefinidos, preview de HCL
+- **Deduplication (inline en Canvas):**
+  - Storage (cache connector), key (CEL), TTL, on_duplicate
+  - Indicador visual en flow nodes
+- **Filter en `from`:**
+  - Campo CEL en Properties, indicador "(filtered)" en nodo
+- **Multi-to (fan-out):**
+  - Botón "Add Target", cada `to` con connector/target/when
+  - Indicador "+N more" en nodo
+- **ErrorHandlingEditor reescrito:**
+  - Retry (con max_delay nuevo)
+  - Fallback/DLQ (conector, target, include_error, transform)
+  - Error Response (status, headers, body con CEL)
+- **FlowContextMenu:** Agregados Step y Dedupe
+- **FlowNode:** Indicadores visuales nuevos (step, dedupe, response, filter)
+- **hclGenerator.ts:** Generación completa de HCL para todos los bloques nuevos
+- **Types:** FlowStep, FlowFilter, FlowDedupe, FlowResponse, FlowFallback, FlowErrorResponse
+- **ROADMAP.md actualizado:**
+  - Phase 3 marcada como completa
+  - Phase 9 agregada: Monaco IDE Enhancement (syntax highlighting, autocompletion, validation, hover, LSP)
+- **Build:** ✅ TypeScript + Vite build exitosos
+- **Próximo paso:** Phase 4 (Types & Validation) o Phase 6 (Missing Connectors)
+
+### 2026-03-10 - Connector Registry Refactor (SOLID) — v0.5.0
+- **Estado:** ✅ Completado
+- **Decisión arquitectónica:**
+  - Un archivo por conector en `src/connectors/definitions/`
+  - Interfaz `ConnectorDefinition` con: type, label, icon, color, category, defaultDirection, fields, drivers, modeMapping
+  - `FieldDefinition` soporta: string, number, boolean, password, select, text + visibleWhen + helpText
+  - `DriverDefinition` para campos específicos por driver (e.g., SQLite vs Postgres)
+- **Archivos creados (30):**
+  - `src/connectors/types.ts` — Interfaces core
+  - `src/connectors/registry.ts` — Map + helpers (getConnector, getAllConnectors, getConnectorsByCategory, etc.)
+  - `src/connectors/index.ts` — Barrel export
+  - `src/connectors/definitions/index.ts` — Barrel de todas las definiciones
+  - 25 archivos de definición: rest, http, database, queue, cache, grpc, graphql, tcp, file, s3, exec, websocket, sse, cdc, elasticsearch, oauth, mqtt, ftp, soap, email, slack, discord, sms, push, webhook
+- **Refactors a consumidores:**
+  - `ConnectorNode.tsx` — Icon/color vía `getConnector()` en vez de hardcoded maps
+  - `Palette.tsx` — Categorías auto-generadas desde `getConnectorsByCategory()`
+  - `Properties.tsx` — `FieldRenderer` genérico (~100 líneas) reemplaza ~460 líneas de switch/case
+  - `hclGenerator.ts` — `generateConnectorHCL()` ahora lee campos del registry, algoritmo genérico
+- **Types actualizados:**
+  - `ConnectorType` extendido de 10 a 25 tipos
+  - `DEFAULT_CONNECTOR_DIRECTIONS` actualizado con los 25 tipos
+- **Categorías del Palette:**
+  - API & Web: REST, HTTP, gRPC, GraphQL, TCP, SOAP
+  - Database: Database, Cache, CDC, Elasticsearch
+  - Messaging: Queue, MQTT
+  - Real-time: WebSocket, SSE
+  - Storage: File, S3, FTP
+  - Execution: Exec
+  - Integration: OAuth, Webhook
+  - Notifications: Email, Slack, Discord, SMS, Push
+- **Build:** ✅ TypeScript + Vite build exitosos
+- **Próximo paso:** Phase 4 (Types & Validation) o continuar con roadmap
+
+### 2026-03-10 - Flow Block Registry (SOLID) — v0.6.0
+- **Estado:** ✅ Completado
+- **Mismo patrón que connectors aplicado a flow blocks:**
+  - `src/flow-blocks/types.ts` — `FlowBlockDefinition`, `FlowBlockField`, `HclFieldMapping`
+  - `src/flow-blocks/registry.ts` — Map + helpers (getFlowBlock, getAllFlowBlocks, getFlowBlocksByGroup, getSimpleFlowBlocks, getCustomFlowBlocks)
+  - `src/flow-blocks/GenericBlockEditor.tsx` — Modal genérico que renderiza cualquier bloque simple desde su definición
+  - `src/flow-blocks/index.ts` — Barrel export
+- **8 definiciones de bloques (`src/flow-blocks/definitions/`):**
+  - Simple (100% data-driven): `cache`, `lock`, `semaphore`, `dedupe`
+  - Complex (definición para menú/HCL + custom editor): `transform`, `step`, `response`, `errorHandling`
+- **Refactors a consumidores:**
+  - `FlowContextMenu.tsx` — 8 `onAdd*` callbacks → single `onSelectBlock(key)`, menú auto-generado
+  - `Canvas.tsx` — 9 useState + 16 handlers → unified `activeEditor` state, GenericBlockEditor para simples
+  - `hclGenerator.ts` — Cache/lock/semaphore/dedupe hardcoded → `getSimpleFlowBlocks()` + `hclFields` loop genérico
+  - `FlowConfig/index.ts` — Removidos exports de CacheEditor, LockEditor, SemaphoreEditor, EnrichEditor
+- **GenericBlockEditor soporta field types:**
+  - `storage_select` — Dropdown de cache connectors con empty state
+  - `cel_expression` — Input mono + dropdown de patterns
+  - `duration` — Input + preset buttons
+  - `number` — Input + preset buttons
+  - `select` — Standard dropdown
+  - `boolean` — Checkbox
+  - `string` — Text input
+  - `visibleWhen` — Conditional field visibility
+- **Build:** ✅ TypeScript + Vite build exitosos
+- **Próximo paso:** Aplicar patrón a top-level blocks (Type, Validator, Aspect) o Phase 4

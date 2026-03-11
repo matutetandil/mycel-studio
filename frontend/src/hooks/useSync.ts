@@ -385,11 +385,15 @@ function convertNodesToProject(nodes: Node[]): GenerateRequest['project'] {
           connector: data.from.connector,
           operation: data.from.operation,
         } : undefined,
-        to: data.to ? {
+        to: data.to ? (Array.isArray(data.to) ? {
+          connector: data.to[0]?.connector,
+          target: data.to[0]?.target,
+          query: data.to[0]?.query,
+        } : {
           connector: data.to.connector,
           target: data.to.target,
           query: data.to.query,
-        } : undefined,
+        }) : undefined,
         transform: data.transform ? {
           use: data.transform.use,
           mappings: data.transform.fields,
