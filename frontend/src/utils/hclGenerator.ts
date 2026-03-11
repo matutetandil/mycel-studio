@@ -1,5 +1,5 @@
 import type { Node, Edge } from '@xyflow/react'
-import type { ConnectorNodeData, FlowNodeData, FlowTo, ServiceConfig, TypeNodeData, TypeFieldDefinition, ValidatorNodeData, TransformNodeData, AspectNodeData, SagaNodeData, SagaAction, StateMachineNodeData, AuthConfig, EnvironmentConfig } from '../types'
+import type { ConnectorNodeData, FlowNodeData, FlowTo, ServiceConfig, TypeNodeData, TypeFieldDefinition, ValidatorNodeData, TransformNodeData, AspectNodeData, SagaNodeData, SagaAction, StateMachineNodeData, AuthConfig, EnvironmentConfig, SecurityConfig, PluginConfig } from '../types'
 import { getConnector, getConnectorMode } from '../connectors'
 import { getSimpleFlowBlocks } from '../flow-blocks'
 
@@ -721,6 +721,65 @@ function generateStateMachineHCL(node: StudioNode): string {
   return lines.join('\n')
 }
 
+function generatePluginHCL(config: PluginConfig): string {
+  const lines: string[] = ['# Plugin configuration', '']
+
+  for (const plugin of config.plugins) {
+    if (!plugin.name || !plugin.source) continue
+    lines.push(`plugin "${plugin.name}" {`)
+    lines.push(`  source = "${plugin.source}"`)
+    if (plugin.version) lines.push(`  version = "${plugin.version}"`)
+    if (plugin.functions && plugin.functions.length > 0) {
+      lines.push(`  functions = [${plugin.functions.map(f => `"${f}"`).join(', ')}]`)
+    }
+    lines.push('}')
+    lines.push('')
+  }
+
+  return lines.join('\n')
+}
+
+function generateSecurityHCL(security: SecurityConfig): string {
+  const lines: string[] = []
+
+  lines.push('# Security configuration')
+  lines.push('security {')
+
+  if (security.maxInputLength && security.maxInputLength !== 1048576) {
+    lines.push(`  max_input_length = ${security.maxInputLength}`)
+  }
+  if (security.maxFieldLength && security.maxFieldLength !== 65536) {
+    lines.push(`  max_field_length = ${security.maxFieldLength}`)
+  }
+  if (security.maxFieldDepth && security.maxFieldDepth !== 20) {
+    lines.push(`  max_field_depth  = ${security.maxFieldDepth}`)
+  }
+  if (security.allowedControlChars) {
+    lines.push(`  allowed_control_chars = [${security.allowedControlChars.map(c => `"${c}"`).join(', ')}]`)
+  }
+
+  for (const sanitizer of security.sanitizers) {
+    if (!sanitizer.name || !sanitizer.wasm) continue
+    lines.push('')
+    lines.push(`  sanitizer "${sanitizer.name}" {`)
+    lines.push('    source     = "wasm"')
+    lines.push(`    wasm       = "${sanitizer.wasm}"`)
+    if (sanitizer.entrypoint && sanitizer.entrypoint !== 'sanitize') {
+      lines.push(`    entrypoint = "${sanitizer.entrypoint}"`)
+    }
+    if (sanitizer.applyTo && sanitizer.applyTo.length > 0) {
+      lines.push(`    apply_to   = [${sanitizer.applyTo.map(p => `"${p}"`).join(', ')}]`)
+    }
+    if (sanitizer.fields && sanitizer.fields.length > 0) {
+      lines.push(`    fields     = [${sanitizer.fields.map(f => `"${f}"`).join(', ')}]`)
+    }
+    lines.push('  }')
+  }
+
+  lines.push('}')
+  return lines.join('\n')
+}
+
 function generateAuthHCL(auth: AuthConfig): string {
   const lines: string[] = []
 
@@ -933,7 +992,7 @@ export function validateProject(nodes: StudioNode[]): string[] {
 }
 
 // Generate project with multiple files
-export function generateProject(nodes: StudioNode[], edges: Edge[], serviceConfig?: ServiceConfig, authConfig?: AuthConfig, envConfig?: EnvironmentConfig): GeneratedProject {
+export function generateProject(nodes: StudioNode[], edges: Edge[], serviceConfig?: ServiceConfig, authConfig?: AuthConfig, envConfig?: EnvironmentConfig, securityConfig?: SecurityConfig, pluginConfig?: PluginConfig): GeneratedProject {
   const nodesMap = new Map(nodes.map((n) => [n.id, n]))
   const files: GeneratedFile[] = []
   const errors = validateProject(nodes)
@@ -951,10 +1010,21 @@ export function generateProject(nodes: StudioNode[], edges: Edge[], serviceConfi
   const version = serviceConfig?.version || '1.0.0'
 
   // Generate config.hcl
+  const configLines = ['# Service configuration', 'service {', `  name    = "${name}"`, `  version = "${version}"`]
+  if (serviceConfig?.workflow?.enabled) {
+    const wf = serviceConfig.workflow
+    configLines.push('')
+    configLines.push('  workflow {')
+    if (wf.storage) configLines.push(`    storage     = "${wf.storage}"`)
+    configLines.push(`    table       = "${wf.table || 'mycel_workflows'}"`)
+    if (wf.autoCreate !== false) configLines.push('    auto_create = true')
+    configLines.push('  }')
+  }
+  configLines.push('}', '')
   files.push({
     path: 'config.hcl',
     name: 'config.hcl',
-    content: `# Service configuration\nservice {\n  name    = "${name}"\n  version = "${version}"\n}\n`
+    content: configLines.join('\n')
   })
 
   // Generate auth file
@@ -963,6 +1033,24 @@ export function generateProject(nodes: StudioNode[], edges: Edge[], serviceConfi
       path: 'auth/auth.hcl',
       name: 'auth.hcl',
       content: generateAuthHCL(authConfig) + '\n'
+    })
+  }
+
+  // Generate security file
+  if (securityConfig?.enabled) {
+    files.push({
+      path: 'security/security.hcl',
+      name: 'security.hcl',
+      content: generateSecurityHCL(securityConfig) + '\n'
+    })
+  }
+
+  // Generate plugins file
+  if (pluginConfig && pluginConfig.plugins.some(p => p.name && p.source)) {
+    files.push({
+      path: 'plugins/plugins.hcl',
+      name: 'plugins.hcl',
+      content: generatePluginHCL(pluginConfig)
     })
   }
 
@@ -1116,7 +1204,7 @@ export function generateProject(nodes: StudioNode[], edges: Edge[], serviceConfi
 }
 
 // Legacy function for backward compatibility - generates single HCL string
-export function generateHCL(nodes: StudioNode[], edges: Edge[], serviceConfig?: ServiceConfig, authConfig?: AuthConfig, envConfig?: EnvironmentConfig): string {
-  const project = generateProject(nodes, edges, serviceConfig, authConfig, envConfig)
+export function generateHCL(nodes: StudioNode[], edges: Edge[], serviceConfig?: ServiceConfig, authConfig?: AuthConfig, envConfig?: EnvironmentConfig, securityConfig?: SecurityConfig, pluginConfig?: PluginConfig): string {
+  const project = generateProject(nodes, edges, serviceConfig, authConfig, envConfig, securityConfig, pluginConfig)
   return project.files.map(f => `# === ${f.path} ===\n${f.content}`).join('\n')
 }

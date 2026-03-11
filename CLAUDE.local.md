@@ -285,18 +285,29 @@ En vez de escribir HCL manualmente, el usuario:
   - Genera: `.env`, `.env.example`, `environments/{name}.env`
   - `EnvironmentConfig`, `EnvVariable`, `EnvironmentOverlay` types
   - `envConfig` en `useStudioStore` con `updateEnvConfig()`
+- **7.6 Long-Running Workflows:**
+  - `WorkflowStorageConfig` type en ServiceConfig
+  - UI en ServiceProperties — aparece cuando hay sagas, warning cuando sagas con delay/await no tienen storage
+  - DB connector selector, table name, auto_create
+  - Info de endpoints auto-generados (GET status, POST signal, POST cancel)
+  - SagaNode muestra "WORKFLOW" cuando tiene delay/await
+  - Genera `workflow {}` block en `config.hcl`
+- **7.7 Security:**
+  - `SecurityProperties` — Input limits + WASM sanitizers
+  - max_input_length, max_field_length, max_field_depth, allowed_control_chars
+  - Sanitizer management (name, wasm path, apply_to, fields)
+  - Genera `security/security.hcl`
+- **7.9 WASM Plugins:**
+  - `PluginProperties` — Plugin management (name, source, version, functions)
+  - Genera `plugins/plugins.hcl`
 - **Build:** ✅ TypeScript + Vite build exitosos
-- **Próximo paso:** Phase 7.6 (Long-Running Workflows) o commit
+- **Próximo paso:** Phase 7 COMPLETADO. Continuar con Phase 8 (UX Polish) o commit
 
 ---
 
 ## Próximos pasos (pendientes para siguiente sesión)
 
-### Pendientes de Phase 7:
-- 7.6 Long-Running Workflows
-- 7.7 Security (sanitization, WASM sanitizers)
-- 7.8 Mocks
-- 7.9 WASM/Plugins
+### Phase 7 COMPLETADO (7.1-7.9)
 
 ### Pendientes de Phase 8-9:
 - Phase 8: UX Polish (undo/redo, copy/paste, shortcuts, templates)

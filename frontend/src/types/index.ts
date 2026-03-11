@@ -756,6 +756,42 @@ export interface AuthConfig {
 }
 
 // =============================================================================
+// Security Types
+// =============================================================================
+
+export interface SecuritySanitizer {
+  name: string
+  wasm: string
+  entrypoint?: string
+  applyTo?: string[]
+  fields?: string[]
+}
+
+export interface SecurityConfig {
+  enabled: boolean
+  maxInputLength?: number
+  maxFieldLength?: number
+  maxFieldDepth?: number
+  allowedControlChars?: string[]
+  sanitizers: SecuritySanitizer[]
+}
+
+// =============================================================================
+// Plugin Types
+// =============================================================================
+
+export interface PluginDefinition {
+  name: string
+  source: string
+  version?: string
+  functions?: string[]
+}
+
+export interface PluginConfig {
+  plugins: PluginDefinition[]
+}
+
+// =============================================================================
 // Environment Variables
 // =============================================================================
 
@@ -809,9 +845,17 @@ export type StudioEdge = Edge
 // Project Types
 // =============================================================================
 
+export interface WorkflowStorageConfig {
+  enabled: boolean
+  storage?: string
+  table?: string
+  autoCreate?: boolean
+}
+
 export interface ServiceConfig {
   name: string
   version: string
+  workflow?: WorkflowStorageConfig
 }
 
 export interface ProjectMetadata {

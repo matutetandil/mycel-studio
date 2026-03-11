@@ -108,12 +108,12 @@ export function setVirtualActiveFile(path: string | null) {
 
 export default function FileTree() {
   const { projectName, files, activeFile, setActiveFile, openProject, createFile, capabilities } = useProjectStore()
-  const { nodes, edges, selectedNodeId, serviceConfig, authConfig, envConfig } = useStudioStore()
+  const { nodes, edges, selectedNodeId, serviceConfig, authConfig, envConfig, securityConfig, pluginConfig } = useStudioStore()
   const virtualState = useVirtualProjectState()
   const [isExpanded, setIsExpanded] = useState(true)
 
   // Generate project from canvas
-  const generatedProject = useMemo(() => generateProject(nodes, edges, serviceConfig, authConfig, envConfig), [nodes, edges, serviceConfig, authConfig, envConfig])
+  const generatedProject = useMemo(() => generateProject(nodes, edges, serviceConfig, authConfig, envConfig, securityConfig, pluginConfig), [nodes, edges, serviceConfig, authConfig, envConfig, securityConfig, pluginConfig])
 
   // Auto-select file when component is selected
   useEffect(() => {
@@ -254,7 +254,7 @@ interface VirtualProjectTreeProps {
 
 function VirtualProjectTree({ project, activeFile, onFileClick, onOpenProject, openLabel }: VirtualProjectTreeProps) {
   const [isExpanded, setIsExpanded] = useState(true)
-  const [expandedDirs, setExpandedDirs] = useState<Set<string>>(new Set(['connectors', 'flows', 'types', 'validators', 'transforms', 'aspects', 'sagas', 'machines', 'auth', 'environments']))
+  const [expandedDirs, setExpandedDirs] = useState<Set<string>>(new Set(['connectors', 'flows', 'types', 'validators', 'transforms', 'aspects', 'sagas', 'machines', 'auth', 'security', 'plugins', 'environments']))
 
   const toggleDir = (dir: string) => {
     const next = new Set(expandedDirs)

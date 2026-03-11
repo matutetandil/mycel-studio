@@ -9,7 +9,7 @@ import {
   type EdgeChange,
   type Connection,
 } from '@xyflow/react'
-import type { ConnectorNodeData, FlowNodeData, ServiceConfig, AuthConfig, EnvironmentConfig } from '../types'
+import type { ConnectorNodeData, FlowNodeData, ServiceConfig, AuthConfig, EnvironmentConfig, SecurityConfig, PluginConfig } from '../types'
 
 type StudioNode = Node<ConnectorNodeData | FlowNodeData>
 
@@ -20,6 +20,8 @@ interface StudioState {
   serviceConfig: ServiceConfig
   authConfig: AuthConfig
   envConfig: EnvironmentConfig
+  securityConfig: SecurityConfig
+  pluginConfig: PluginConfig
   setNodes: (nodes: StudioNode[]) => void
   setEdges: (edges: Edge[]) => void
   addNode: (node: StudioNode) => void
@@ -29,6 +31,8 @@ interface StudioState {
   updateServiceConfig: (config: Partial<ServiceConfig>) => void
   updateAuthConfig: (config: Partial<AuthConfig>) => void
   updateEnvConfig: (config: Partial<EnvironmentConfig>) => void
+  updateSecurityConfig: (config: Partial<SecurityConfig>) => void
+  updatePluginConfig: (config: Partial<PluginConfig>) => void
   onNodesChange: (changes: NodeChange<StudioNode>[]) => void
   onEdgesChange: (changes: EdgeChange<Edge>[]) => void
   onConnect: (connection: Connection) => void
@@ -73,6 +77,13 @@ export const useStudioStore = create<StudioState>((set) => ({
     variables: [],
     environments: [],
   },
+  securityConfig: {
+    enabled: false,
+    sanitizers: [],
+  },
+  pluginConfig: {
+    plugins: [],
+  },
 
   setNodes: (nodes) => set({ nodes }),
   setEdges: (edges) => set({ edges }),
@@ -108,6 +119,16 @@ export const useStudioStore = create<StudioState>((set) => ({
   updateEnvConfig: (config) =>
     set((state) => ({
       envConfig: { ...state.envConfig, ...config },
+    })),
+
+  updateSecurityConfig: (config) =>
+    set((state) => ({
+      securityConfig: { ...state.securityConfig, ...config },
+    })),
+
+  updatePluginConfig: (config) =>
+    set((state) => ({
+      pluginConfig: { ...state.pluginConfig, ...config },
     })),
 
   onNodesChange: (changes) =>

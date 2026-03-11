@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react'
 import { GripVertical, Plus, Trash2 } from 'lucide-react'
 import { useStudioStore } from '../../stores/useStudioStore'
-import type { ConnectorNodeData, FlowNodeData, FlowTo, ConnectorDirection, RestOperation, GraphQLOperation, ConnectorOperation, TypeNodeData, TypeFieldDefinition, ValidatorNodeData, TransformNodeData, AspectNodeData, SagaNodeData, SagaStep, SagaAction, StateMachineNodeData, StateMachineState, StateMachineTransition, AuthConfig, AuthPreset, JwtAlgorithm, MfaRequirement, MfaMethod, AuthSocialProvider, EnvVariable, EnvironmentOverlay } from '../../types'
+import type { ConnectorNodeData, FlowNodeData, FlowTo, ConnectorDirection, RestOperation, GraphQLOperation, ConnectorOperation, TypeNodeData, TypeFieldDefinition, ValidatorNodeData, TransformNodeData, AspectNodeData, SagaNodeData, SagaStep, SagaAction, StateMachineNodeData, StateMachineState, StateMachineTransition, AuthConfig, AuthPreset, JwtAlgorithm, MfaRequirement, MfaMethod, AuthSocialProvider, EnvVariable, EnvironmentOverlay, SecuritySanitizer, PluginDefinition } from '../../types'
 import OperationsEditor from './OperationsEditor'
 import GraphQLOperationsEditor from './GraphQLOperationsEditor'
 import { getConnector, type FieldDefinition } from '../../connectors'
@@ -1448,6 +1448,297 @@ function StateMachineProperties({ data, onChange }: { data: StateMachineNodeData
 }
 
 // =============================================================================
+// Security Properties
+// =============================================================================
+
+const controlCharOptions = [
+  { value: 'tab', label: 'Tab' },
+  { value: 'newline', label: 'Newline' },
+  { value: 'cr', label: 'Carriage Return' },
+]
+
+function SecurityProperties() {
+  const { securityConfig, updateSecurityConfig } = useStudioStore()
+  const [isExpanded, setIsExpanded] = useState(false)
+
+  const inputClass = "w-full px-3 py-2 text-sm bg-neutral-800 border border-neutral-700 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-white placeholder-neutral-500"
+
+  const updateSanitizer = (index: number, fields: Partial<SecuritySanitizer>) => {
+    const updated = securityConfig.sanitizers.map((s, i) =>
+      i === index ? { ...s, ...fields } : s
+    )
+    updateSecurityConfig({ sanitizers: updated })
+  }
+
+  const addSanitizer = () => {
+    updateSecurityConfig({
+      sanitizers: [...securityConfig.sanitizers, { name: '', wasm: '', entrypoint: 'sanitize' }],
+    })
+  }
+
+  const removeSanitizer = (index: number) => {
+    updateSecurityConfig({ sanitizers: securityConfig.sanitizers.filter((_, i) => i !== index) })
+  }
+
+  const toggleControlChar = (char: string) => {
+    const current = securityConfig.allowedControlChars || ['tab', 'newline', 'cr']
+    const updated = current.includes(char)
+      ? current.filter(c => c !== char)
+      : [...current, char]
+    updateSecurityConfig({ allowedControlChars: updated })
+  }
+
+  if (!securityConfig.enabled) {
+    return (
+      <div className="space-y-3 pt-3 border-t border-neutral-800">
+        <div className="flex items-center justify-between">
+          <h3 className="text-xs font-semibold text-neutral-400 uppercase tracking-wider">Security</h3>
+        </div>
+        <p className="text-xs text-neutral-500">Input sanitization and limits are not configured.</p>
+        <button
+          onClick={() => updateSecurityConfig({ enabled: true, maxInputLength: 1048576, maxFieldLength: 65536, maxFieldDepth: 20, allowedControlChars: ['tab', 'newline', 'cr'] })}
+          className="w-full px-3 py-2 text-sm bg-neutral-700 hover:bg-neutral-600 text-neutral-300 rounded-md transition-colors"
+        >
+          Enable Security
+        </button>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-3 pt-3 border-t border-neutral-800">
+      <div className="flex items-center justify-between">
+        <h3 className="text-xs font-semibold text-neutral-400 uppercase tracking-wider">Security</h3>
+        <button
+          onClick={() => updateSecurityConfig({ enabled: false })}
+          className="text-xs text-red-500 hover:text-red-400"
+        >
+          Disable
+        </button>
+      </div>
+
+      {/* Input Limits */}
+      <div>
+        <button
+          onClick={() => setIsExpanded(!isExpanded)}
+          className="w-full flex items-center justify-between py-1 text-xs font-medium text-neutral-400 hover:text-neutral-300"
+        >
+          <span>Input Limits</span>
+          <span className="text-neutral-600">{isExpanded ? '−' : '+'}</span>
+        </button>
+        {isExpanded && (
+          <div className="space-y-2 pl-1">
+            <div>
+              <label className="block text-xs text-neutral-500 mb-1">Max Input Length (bytes)</label>
+              <input
+                type="number"
+                value={securityConfig.maxInputLength || 1048576}
+                onChange={(e) => updateSecurityConfig({ maxInputLength: parseInt(e.target.value) || 1048576 })}
+                className={inputClass}
+              />
+              <p className="text-xs text-neutral-600 mt-0.5">Default: 1MB (1048576)</p>
+            </div>
+            <div>
+              <label className="block text-xs text-neutral-500 mb-1">Max Field Length (bytes)</label>
+              <input
+                type="number"
+                value={securityConfig.maxFieldLength || 65536}
+                onChange={(e) => updateSecurityConfig({ maxFieldLength: parseInt(e.target.value) || 65536 })}
+                className={inputClass}
+              />
+              <p className="text-xs text-neutral-600 mt-0.5">Default: 64KB (65536)</p>
+            </div>
+            <div>
+              <label className="block text-xs text-neutral-500 mb-1">Max Field Depth</label>
+              <input
+                type="number"
+                value={securityConfig.maxFieldDepth || 20}
+                onChange={(e) => updateSecurityConfig({ maxFieldDepth: parseInt(e.target.value) || 20 })}
+                min={1}
+                max={100}
+                className={inputClass}
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-neutral-500 mb-1">Allowed Control Characters</label>
+              <div className="flex gap-2">
+                {controlCharOptions.map(opt => (
+                  <label key={opt.value} className="flex items-center gap-1">
+                    <input
+                      type="checkbox"
+                      checked={(securityConfig.allowedControlChars || ['tab', 'newline', 'cr']).includes(opt.value)}
+                      onChange={() => toggleControlChar(opt.value)}
+                      className="w-3 h-3 text-indigo-600 bg-neutral-800 border-neutral-600 rounded"
+                    />
+                    <span className="text-xs text-neutral-400">{opt.label}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* WASM Sanitizers */}
+      <div>
+        <label className="block text-xs font-medium text-neutral-400 mb-1">WASM Sanitizers</label>
+        {securityConfig.sanitizers.map((s, i) => (
+          <div key={i} className="p-2 bg-neutral-800 rounded-md space-y-1.5 mb-2">
+            <div className="flex items-center justify-between">
+              <input
+                type="text"
+                value={s.name}
+                onChange={(e) => updateSanitizer(i, { name: e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '') })}
+                placeholder="sanitizer_name"
+                className="flex-1 px-2 py-1 text-xs bg-neutral-900 border border-neutral-700 rounded text-white font-mono placeholder-neutral-600"
+              />
+              <button onClick={() => removeSanitizer(i)} className="ml-1 text-red-500 hover:text-red-400">
+                <Trash2 className="w-3 h-3" />
+              </button>
+            </div>
+            <div>
+              <label className="block text-xs text-neutral-600 mb-0.5">WASM Path</label>
+              <input
+                type="text"
+                value={s.wasm}
+                onChange={(e) => updateSanitizer(i, { wasm: e.target.value })}
+                placeholder="./wasm/sanitizer.wasm"
+                className="w-full px-2 py-1 text-xs bg-neutral-900 border border-neutral-700 rounded text-white placeholder-neutral-600"
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-neutral-600 mb-0.5">Apply To (glob patterns, comma-sep)</label>
+              <input
+                type="text"
+                value={(s.applyTo || []).join(', ')}
+                onChange={(e) => updateSanitizer(i, { applyTo: e.target.value ? e.target.value.split(',').map(s => s.trim()) : undefined })}
+                placeholder="flows/api/*"
+                className="w-full px-2 py-1 text-xs bg-neutral-900 border border-neutral-700 rounded text-white placeholder-neutral-600"
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-neutral-600 mb-0.5">Fields (comma-sep, empty = all)</label>
+              <input
+                type="text"
+                value={(s.fields || []).join(', ')}
+                onChange={(e) => updateSanitizer(i, { fields: e.target.value ? e.target.value.split(',').map(s => s.trim()) : undefined })}
+                placeholder="email, phone, body"
+                className="w-full px-2 py-1 text-xs bg-neutral-900 border border-neutral-700 rounded text-white placeholder-neutral-600"
+              />
+            </div>
+          </div>
+        ))}
+        <button
+          onClick={addSanitizer}
+          className="w-full flex items-center justify-center gap-1 px-2 py-1.5 text-xs text-neutral-500 hover:text-neutral-300 border border-dashed border-neutral-700 hover:border-neutral-600 rounded"
+        >
+          <Plus className="w-3 h-3" />
+          Add Sanitizer
+        </button>
+      </div>
+    </div>
+  )
+}
+
+// =============================================================================
+// Plugin Properties
+// =============================================================================
+
+function PluginProperties() {
+  const { pluginConfig, updatePluginConfig } = useStudioStore()
+
+  const addPlugin = () => {
+    updatePluginConfig({
+      plugins: [...pluginConfig.plugins, { name: '', source: '' }],
+    })
+  }
+
+  const updatePlugin = (index: number, fields: Partial<PluginDefinition>) => {
+    const updated = pluginConfig.plugins.map((p, i) =>
+      i === index ? { ...p, ...fields } : p
+    )
+    updatePluginConfig({ plugins: updated })
+  }
+
+  const removePlugin = (index: number) => {
+    updatePluginConfig({ plugins: pluginConfig.plugins.filter((_, i) => i !== index) })
+  }
+
+  if (pluginConfig.plugins.length === 0) {
+    return (
+      <div className="space-y-2 pt-3 border-t border-neutral-800">
+        <h3 className="text-xs font-semibold text-neutral-400 uppercase tracking-wider">Plugins</h3>
+        <p className="text-xs text-neutral-500">No plugins configured.</p>
+        <button
+          onClick={addPlugin}
+          className="w-full flex items-center justify-center gap-1 px-2 py-1.5 text-xs text-neutral-500 hover:text-neutral-300 border border-dashed border-neutral-700 hover:border-neutral-600 rounded"
+        >
+          <Plus className="w-3 h-3" /> Add Plugin
+        </button>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-2 pt-3 border-t border-neutral-800">
+      <h3 className="text-xs font-semibold text-neutral-400 uppercase tracking-wider">Plugins</h3>
+      {pluginConfig.plugins.map((p, i) => (
+        <div key={i} className="p-2 bg-neutral-800 rounded-md space-y-1.5">
+          <div className="flex items-center justify-between">
+            <input
+              type="text"
+              value={p.name}
+              onChange={(e) => updatePlugin(i, { name: e.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, '') })}
+              placeholder="plugin-name"
+              className="flex-1 px-2 py-1 text-xs bg-neutral-900 border border-neutral-700 rounded text-white font-mono placeholder-neutral-600"
+            />
+            <button onClick={() => removePlugin(i)} className="ml-1 text-red-500 hover:text-red-400">
+              <Trash2 className="w-3 h-3" />
+            </button>
+          </div>
+          <div>
+            <label className="block text-xs text-neutral-600 mb-0.5">Source (git URL or path)</label>
+            <input
+              type="text"
+              value={p.source}
+              onChange={(e) => updatePlugin(i, { source: e.target.value })}
+              placeholder="github.com/org/plugin or ./plugins/my.wasm"
+              className="w-full px-2 py-1 text-xs bg-neutral-900 border border-neutral-700 rounded text-white placeholder-neutral-600"
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-neutral-600 mb-0.5">Version</label>
+            <input
+              type="text"
+              value={p.version || ''}
+              onChange={(e) => updatePlugin(i, { version: e.target.value || undefined })}
+              placeholder="v1.0.0 or latest"
+              className="w-full px-2 py-1 text-xs bg-neutral-900 border border-neutral-700 rounded text-white placeholder-neutral-600"
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-neutral-600 mb-0.5">Exported functions (comma-sep)</label>
+            <input
+              type="text"
+              value={(p.functions || []).join(', ')}
+              onChange={(e) => updatePlugin(i, { functions: e.target.value ? e.target.value.split(',').map(s => s.trim()) : undefined })}
+              placeholder="validate, transform, sanitize"
+              className="w-full px-2 py-1 text-xs bg-neutral-900 border border-neutral-700 rounded text-white placeholder-neutral-600"
+            />
+          </div>
+        </div>
+      ))}
+      <button
+        onClick={addPlugin}
+        className="w-full flex items-center justify-center gap-1 px-2 py-1.5 text-xs text-neutral-500 hover:text-neutral-300 border border-dashed border-neutral-700 hover:border-neutral-600 rounded"
+      >
+        <Plus className="w-3 h-3" /> Add Plugin
+      </button>
+    </div>
+  )
+}
+
+// =============================================================================
 // Auth Properties
 // =============================================================================
 
@@ -2320,7 +2611,22 @@ function EnvProperties() {
 }
 
 function ServiceProperties() {
-  const { serviceConfig, updateServiceConfig } = useStudioStore()
+  const { serviceConfig, updateServiceConfig, nodes } = useStudioStore()
+  const inputClass = "w-full px-3 py-2 text-sm bg-neutral-800 border border-neutral-700 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-white placeholder-neutral-500"
+
+  const hasSagas = nodes.some(n => n.type === 'saga')
+  const hasLongRunning = nodes.some(n => {
+    if (n.type !== 'saga') return false
+    const data = n.data as SagaNodeData
+    return data.steps?.some(s => s.delay || s.await)
+  })
+
+  const connectorNodes = nodes.filter(n => n.type === 'connector')
+  const workflow = serviceConfig.workflow || { enabled: false }
+
+  const updateWorkflow = (fields: Partial<typeof workflow>) => {
+    updateServiceConfig({ workflow: { ...workflow, ...fields } })
+  }
 
   return (
     <div className="space-y-4">
@@ -2334,7 +2640,7 @@ function ServiceProperties() {
           value={serviceConfig.name}
           onChange={(e) => updateServiceConfig({ name: e.target.value })}
           placeholder="my-service"
-          className="w-full px-3 py-2 text-sm bg-neutral-800 border border-neutral-700 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-white placeholder-neutral-500"
+          className={inputClass}
         />
         <p className="text-xs text-neutral-500 mt-1">Shown in /health, metrics, and logs</p>
       </div>
@@ -2345,9 +2651,86 @@ function ServiceProperties() {
           value={serviceConfig.version}
           onChange={(e) => updateServiceConfig({ version: e.target.value })}
           placeholder="1.0.0"
-          className="w-full px-3 py-2 text-sm bg-neutral-800 border border-neutral-700 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-white placeholder-neutral-500"
+          className={inputClass}
         />
       </div>
+
+      {/* Workflow Storage — shown when sagas exist */}
+      {hasSagas && (
+        <div className="space-y-2 pt-2 border-t border-neutral-800">
+          <div className="flex items-center justify-between">
+            <h3 className="text-xs font-semibold text-neutral-400 uppercase tracking-wider">
+              Workflow Storage
+            </h3>
+            <input
+              type="checkbox"
+              checked={workflow.enabled}
+              onChange={(e) => updateWorkflow({ enabled: e.target.checked })}
+              className="w-4 h-4 text-indigo-600 bg-neutral-800 border-neutral-600 rounded"
+            />
+          </div>
+          {hasLongRunning && !workflow.enabled && (
+            <p className="text-xs text-amber-500">
+              Sagas with delay/await need persistent storage to survive restarts.
+            </p>
+          )}
+          {workflow.enabled && (
+            <div className="space-y-2">
+              <div>
+                <label className="block text-xs text-neutral-500 mb-1">Database Connector</label>
+                <select
+                  value={workflow.storage || ''}
+                  onChange={(e) => updateWorkflow({ storage: e.target.value || undefined })}
+                  className={inputClass}
+                >
+                  <option value="">Select connector...</option>
+                  {connectorNodes
+                    .filter(n => {
+                      const d = n.data as ConnectorNodeData
+                      return d.connectorType === 'database'
+                    })
+                    .map(n => {
+                      const d = n.data as ConnectorNodeData
+                      const name = d.label.toLowerCase().replace(/\s+/g, '_')
+                      return <option key={n.id} value={name}>{d.label}</option>
+                    })}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs text-neutral-500 mb-1">Table</label>
+                <input
+                  type="text"
+                  value={workflow.table || ''}
+                  onChange={(e) => updateWorkflow({ table: e.target.value || undefined })}
+                  placeholder="mycel_workflows"
+                  className={inputClass}
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="wf-autocreate"
+                  checked={workflow.autoCreate !== false}
+                  onChange={(e) => updateWorkflow({ autoCreate: e.target.checked })}
+                  className="w-4 h-4 text-indigo-600 bg-neutral-800 border-neutral-600 rounded"
+                />
+                <label htmlFor="wf-autocreate" className="text-xs text-neutral-300">Auto-create table on startup</label>
+              </div>
+              <div className="p-2 bg-neutral-800 rounded text-xs text-neutral-500">
+                <p className="font-medium text-neutral-400 mb-1">Auto-generated endpoints:</p>
+                <p className="font-mono">GET /workflows/:id</p>
+                <p className="font-mono">POST /workflows/:id/signal/:event</p>
+                <p className="font-mono">POST /workflows/:id/cancel</p>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      <SecurityProperties />
+
+      <PluginProperties />
+
       <AuthProperties />
 
       <EnvProperties />

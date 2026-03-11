@@ -27,6 +27,30 @@ All notable changes to this project will be documented in this file.
   - HCL generation: `state_machine "name" { initial, state "name" { on "event" { transition_to, guard, action } } }`
   - Output to `machines/machines.hcl`
 
+- **Long-Running Workflows (7.6):**
+  - Workflow storage configuration in service block (`workflow { storage, table, auto_create }`)
+  - UI appears automatically when saga nodes exist on canvas
+  - Warning when sagas with delay/await lack persistent storage
+  - Database connector selector for workflow state persistence
+  - Auto-generated REST endpoints info (GET status, POST signal, POST cancel)
+  - SagaNode now shows "WORKFLOW" label when it contains delay/await steps
+  - `WorkflowStorageConfig` type, generates `workflow {}` block in `config.hcl`
+
+- **Security (7.7) — Input Sanitization:**
+  - `SecurityProperties` — Enable/disable, input limits, WASM sanitizers
+  - Input limits: max_input_length, max_field_length, max_field_depth, allowed_control_chars
+  - WASM sanitizer management: name, wasm path, entrypoint, apply_to (globs), fields
+  - `SecurityConfig`, `SecuritySanitizer` types
+  - HCL generation: `security { max_input_length, sanitizer "name" { source, wasm, apply_to, fields } }`
+  - Output to `security/security.hcl`
+
+- **WASM Plugins (7.9):**
+  - `PluginProperties` — Plugin management panel
+  - Plugin definition: name, source (git URL or path), version (semver), exported functions
+  - `PluginConfig`, `PluginDefinition` types
+  - HCL generation: `plugin "name" { source, version, functions }`
+  - Output to `plugins/plugins.hcl`
+
 - **Environment Variables (7.5):**
   - `EnvProperties` — Variables panel with two tabs (Variables / Environments)
   - Auto-scan of env() references across all nodes and auth config
@@ -55,11 +79,12 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
-- **useStudioStore:** Added `authConfig` + `envConfig` state with update methods
+- **useStudioStore:** Added `authConfig`, `envConfig`, `securityConfig`, `pluginConfig` state with update methods
 - **Properties.tsx:** AuthProperties panel shown below ServiceProperties when no node selected
-- **hclGenerator.ts:** `generateProject()` and `generateHCL()` accept optional `authConfig` and `envConfig` parameters
-- **FileTree.tsx:** Passes `authConfig` + `envConfig` to `generateProject()`, expanded dirs include `auth`, `environments`
-- **Preview.tsx:** Passes `authConfig` + `envConfig` to `generateProject()`
+- **hclGenerator.ts:** `generateProject()` and `generateHCL()` accept optional `authConfig`, `envConfig`, `securityConfig`, `pluginConfig` parameters
+- **FileTree.tsx:** Passes all configs to `generateProject()`, expanded dirs include `auth`, `security`, `plugins`, `environments`
+- **Preview.tsx:** Passes all configs to `generateProject()`
+- **SagaNode.tsx:** Shows "WORKFLOW" label for sagas with delay/await steps
 - **Palette.tsx:** Saga and State Machine in Logic category
 - **Nodes/index.ts:** Registered SagaNode and StateMachineNode
 

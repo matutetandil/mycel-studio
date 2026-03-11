@@ -9,6 +9,8 @@ interface SagaNodeProps {
 }
 
 function SagaNode({ data, selected }: SagaNodeProps) {
+  const isLongRunning = data.steps?.some(s => s.delay || s.await) || false
+
   return (
     <div
       className={`
@@ -25,7 +27,7 @@ function SagaNode({ data, selected }: SagaNodeProps) {
         <div className="flex-1 min-w-0">
           <div className="font-semibold text-neutral-100 truncate">{data.label}</div>
           <div className="text-xs text-neutral-400">
-            SAGA
+            {isLongRunning ? 'WORKFLOW' : 'SAGA'}
             {data.timeout && <span className="ml-1 text-rose-400">({data.timeout})</span>}
           </div>
         </div>
