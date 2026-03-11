@@ -4,13 +4,13 @@ import {
   ChevronRight,
   ChevronDown,
   FileCode,
-  RefreshCw,
+  ShieldCheck,
 } from 'lucide-react'
 import { type ConnectorType, DEFAULT_CONNECTOR_DIRECTIONS } from '../../types'
 import { getConnectorsByCategory, type ConnectorDefinition } from '../../connectors'
 
 interface PaletteItem {
-  type: 'connector' | 'flow' | 'type' | 'transform'
+  type: 'connector' | 'flow' | 'type' | 'validator'
   connectorType?: ConnectorType
   label: string
   icon: React.ElementType
@@ -21,17 +21,22 @@ function PaletteItemView({ item }: { item: PaletteItem }) {
   const Icon = item.icon
 
   const onDragStart = (event: React.DragEvent) => {
-    const nodeData =
-      item.type === 'connector' && item.connectorType
-        ? {
-            label: item.label,
-            connectorType: item.connectorType,
-            direction: DEFAULT_CONNECTOR_DIRECTIONS[item.connectorType!],
-            config: { type: item.connectorType },
-          }
-        : {
-            label: `New ${item.label}`,
-          }
+    let nodeData: Record<string, unknown>
+
+    if (item.type === 'connector' && item.connectorType) {
+      nodeData = {
+        label: item.label,
+        connectorType: item.connectorType,
+        direction: DEFAULT_CONNECTOR_DIRECTIONS[item.connectorType!],
+        config: { type: item.connectorType },
+      }
+    } else if (item.type === 'type') {
+      nodeData = { label: `New ${item.label}`, fields: {} }
+    } else if (item.type === 'validator') {
+      nodeData = { label: `New ${item.label}`, validatorType: 'regex', message: '' }
+    } else {
+      nodeData = { label: `New ${item.label}` }
+    }
 
     event.dataTransfer.setData('application/mycel-node-type', item.type)
     event.dataTransfer.setData('application/mycel-node-data', JSON.stringify(nodeData))
@@ -110,8 +115,8 @@ function buildCategories(): Array<{ name: string; items: PaletteItem[] }> {
   categories.push({
     name: 'Schema',
     items: [
-      { type: 'type', label: 'Type', icon: FileCode, color: 'bg-cyan-500' },
-      { type: 'transform', label: 'Transform', icon: RefreshCw, color: 'bg-amber-500' },
+      { type: 'type', label: 'Type', icon: FileCode, color: 'bg-cyan-600' },
+      { type: 'validator', label: 'Validator', icon: ShieldCheck, color: 'bg-purple-500' },
     ],
   })
 

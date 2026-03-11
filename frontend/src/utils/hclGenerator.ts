@@ -1,9 +1,9 @@
 import type { Node, Edge } from '@xyflow/react'
-import type { ConnectorNodeData, FlowNodeData, FlowTo, ServiceConfig } from '../types'
+import type { ConnectorNodeData, FlowNodeData, FlowTo, ServiceConfig, TypeNodeData, TypeFieldDefinition, ValidatorNodeData } from '../types'
 import { getConnector, getConnectorMode } from '../connectors'
 import { getSimpleFlowBlocks } from '../flow-blocks'
 
-type StudioNode = Node<ConnectorNodeData | FlowNodeData>
+type StudioNode = Node<ConnectorNodeData | FlowNodeData | TypeNodeData | ValidatorNodeData>
 
 export interface GeneratedFile {
   path: string
@@ -379,6 +379,88 @@ function generateFlowHCL(
   return lines.join('\n')
 }
 
+function generateTypeFieldHCL(name: string, field: TypeFieldDefinition, indent: string): string[] {
+  const lines: string[] = []
+  const constraints: string[] = []
+
+  // Required (only emit if false, since default is true)
+  if (field.required === false) {
+    constraints.push(`${indent}    required = false`)
+  }
+
+  if (field.type === 'string') {
+    if (field.format) constraints.push(`${indent}    format = "${field.format}"`)
+    if (field.minLength != null) constraints.push(`${indent}    min_length = ${field.minLength}`)
+    if (field.maxLength != null) constraints.push(`${indent}    max_length = ${field.maxLength}`)
+    if (field.pattern) constraints.push(`${indent}    pattern = "${field.pattern}"`)
+    if (field.enum && field.enum.length > 0) {
+      constraints.push(`${indent}    enum = [${field.enum.map(v => `"${v}"`).join(', ')}]`)
+    }
+    if (field.validate) constraints.push(`${indent}    validate = "${field.validate}"`)
+  }
+
+  if (field.type === 'number') {
+    if (field.min != null) constraints.push(`${indent}    min = ${field.min}`)
+    if (field.max != null) constraints.push(`${indent}    max = ${field.max}`)
+  }
+
+  if (constraints.length > 0) {
+    lines.push(`${indent}  ${name} = ${field.type} {`)
+    lines.push(...constraints)
+    lines.push(`${indent}  }`)
+  } else {
+    lines.push(`${indent}  ${name} = ${field.type}`)
+  }
+
+  return lines
+}
+
+function generateTypeHCL(node: StudioNode): string {
+  const data = node.data as TypeNodeData
+  const name = toIdentifier(data.label)
+  const lines: string[] = []
+
+  lines.push(`# ${data.label} type`)
+  lines.push(`type "${name}" {`)
+
+  for (const [fieldName, field] of Object.entries(data.fields || {})) {
+    lines.push(...generateTypeFieldHCL(fieldName, field, ''))
+  }
+
+  lines.push('}')
+  return lines.join('\n')
+}
+
+function generateValidatorHCL(node: StudioNode): string {
+  const data = node.data as ValidatorNodeData
+  const name = toIdentifier(data.label)
+  const lines: string[] = []
+
+  lines.push(`# ${data.label} validator`)
+  lines.push(`validator "${name}" {`)
+  lines.push(`  type    = "${data.validatorType}"`)
+
+  if (data.validatorType === 'regex' && data.pattern) {
+    lines.push(`  pattern = "${data.pattern}"`)
+  }
+
+  if (data.validatorType === 'cel' && data.expr) {
+    lines.push(`  expr    = "${data.expr}"`)
+  }
+
+  if (data.validatorType === 'wasm') {
+    if (data.module) lines.push(`  wasm       = "${data.module}"`)
+    if (data.function) lines.push(`  entrypoint = "${data.function}"`)
+  }
+
+  if (data.message) {
+    lines.push(`  message = "${data.message}"`)
+  }
+
+  lines.push('}')
+  return lines.join('\n')
+}
+
 // Validate project - returns array of error messages
 export function validateProject(nodes: StudioNode[]): string[] {
   const errors: string[] = []
@@ -448,6 +530,8 @@ export function generateProject(nodes: StudioNode[], edges: Edge[], serviceConfi
 
   const connectorNodes = nodes.filter((n) => n.type === 'connector')
   const flowNodes = nodes.filter((n) => n.type === 'flow')
+  const typeNodes = nodes.filter((n) => n.type === 'type')
+  const validatorNodes = nodes.filter((n) => n.type === 'validator')
 
   const name = serviceConfig?.name || 'my-service'
   const version = serviceConfig?.version || '1.0.0'
@@ -467,6 +551,34 @@ export function generateProject(nodes: StudioNode[], edges: Edge[], serviceConfi
       path: `connectors/${fileName}`,
       name: fileName,
       content: generateConnectorHCL(node) + '\n'
+    })
+  }
+
+  // Generate types file
+  if (typeNodes.length > 0) {
+    const typesContent: string[] = ['# Type definitions', '']
+    for (const node of typeNodes) {
+      typesContent.push(generateTypeHCL(node))
+      typesContent.push('')
+    }
+    files.push({
+      path: 'types/types.hcl',
+      name: 'types.hcl',
+      content: typesContent.join('\n')
+    })
+  }
+
+  // Generate validators file
+  if (validatorNodes.length > 0) {
+    const validatorsContent: string[] = ['# Validators', '']
+    for (const node of validatorNodes) {
+      validatorsContent.push(generateValidatorHCL(node))
+      validatorsContent.push('')
+    }
+    files.push({
+      path: 'validators/validators.hcl',
+      name: 'validators.hcl',
+      content: validatorsContent.join('\n')
     })
   }
 

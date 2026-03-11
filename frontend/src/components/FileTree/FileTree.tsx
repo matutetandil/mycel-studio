@@ -123,15 +123,14 @@ export default function FileTree() {
         const data = selectedNode.data as ConnectorNodeData | FlowNodeData
         const name = toIdentifier(data.label)
 
-        if (selectedNode.type === 'connector') {
-          const filePath = `connectors/${name}.hcl`
-          if (projectName) {
-            setActiveFile(filePath)
-          } else {
-            setVirtualActiveFile(filePath)
-          }
-        } else if (selectedNode.type === 'flow') {
-          const filePath = 'flows/flows.hcl'
+        const filePathMap: Record<string, string> = {
+          connector: `connectors/${name}.hcl`,
+          flow: 'flows/flows.hcl',
+          type: 'types/types.hcl',
+          validator: 'validators/validators.hcl',
+        }
+        const filePath = filePathMap[selectedNode.type || '']
+        if (filePath) {
           if (projectName) {
             setActiveFile(filePath)
           } else {

@@ -2,6 +2,46 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.7.0] - Phase 4: Types & Validators
+
+### Added
+
+- **Type nodes:**
+  - `TypeNode.tsx` — Visual node showing type name and field preview (names, types, required markers)
+  - `TypeProperties` in Properties panel — Full type field editor with add/remove/rename
+  - Per-field constraints: string (format, min_length, max_length, pattern, enum, validate), number (min, max), boolean
+  - Format presets: email, url, uuid, date, datetime, phone, ip
+  - Validator reference dropdown (populated from validator nodes on canvas)
+
+- **Validator nodes with registry pattern (`src/validators/`):**
+  - `ValidatorNode.tsx` — Visual node with type-specific icon and color
+  - `ValidatorProperties` — Type selector (regex/cel/wasm) with registry-driven fields
+  - `validators/definitions/regex.ts` — Pattern field
+  - `validators/definitions/cel.ts` — CEL expression field
+  - `validators/definitions/wasm.ts` — WASM path + entrypoint fields
+  - `validators/registry.ts` — Central Map with `getValidatorType()`, `getAllValidatorTypes()`
+
+- **Validate flow block (`flow-blocks/definitions/validate.ts`):**
+  - Simple block (data-driven via GenericBlockEditor)
+  - Input/output type references
+  - Appears in flow context menu under "Data" group
+  - Node indicator icon on flow nodes
+
+- **HCL generation:**
+  - `generateTypeHCL()` — Generates `type "name" { field = base_type { constraints } }` with proper HCL2 multi-line syntax
+  - `generateValidatorHCL()` — Generates `validator "name" { type, pattern/expr/wasm, message }`
+  - Types output to `types/types.hcl`, validators to `validators/validators.hcl`
+
+### Changed
+
+- **Palette:** Added Type and Validator to Schema category (replaced Transform placeholder)
+- **Nodes/index.ts:** Registered TypeNode and ValidatorNode in nodeTypes
+- **Properties.tsx:** Added TypeProperties and ValidatorProperties panels
+- **FileTree.tsx:** Type/validator node selection auto-navigates to correct generated file
+- **hclGenerator.ts:** Extended generateProject to output types and validators files
+
+---
+
 ## [0.6.0] - Flow Block Registry (SOLID)
 
 ### Added

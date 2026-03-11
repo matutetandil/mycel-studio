@@ -1,10 +1,11 @@
 import { useState, useCallback } from 'react'
-import { GripVertical } from 'lucide-react'
+import { GripVertical, Plus, Trash2 } from 'lucide-react'
 import { useStudioStore } from '../../stores/useStudioStore'
-import type { ConnectorNodeData, FlowNodeData, FlowTo, ConnectorDirection, RestOperation, GraphQLOperation, ConnectorOperation } from '../../types'
+import type { ConnectorNodeData, FlowNodeData, FlowTo, ConnectorDirection, RestOperation, GraphQLOperation, ConnectorOperation, TypeNodeData, TypeFieldDefinition, ValidatorNodeData } from '../../types'
 import OperationsEditor from './OperationsEditor'
 import GraphQLOperationsEditor from './GraphQLOperationsEditor'
 import { getConnector, type FieldDefinition } from '../../connectors'
+import { getAllValidatorTypes, getValidatorType } from '../../validators'
 
 const directionOptions: { value: ConnectorDirection; label: string; description: string }[] = [
   { value: 'input', label: 'Source', description: 'Triggers flows (e.g., API server, queue consumer)' },
@@ -485,6 +486,367 @@ function FlowProperties({
   )
 }
 
+// =============================================================================
+// Type constraint options per base type
+// =============================================================================
+
+const baseTypeOptions = [
+  { value: 'string', label: 'String' },
+  { value: 'number', label: 'Number' },
+  { value: 'boolean', label: 'Boolean' },
+  { value: 'object', label: 'Object' },
+  { value: 'array', label: 'Array' },
+]
+
+const formatOptions = [
+  { value: '', label: 'None' },
+  { value: 'email', label: 'Email' },
+  { value: 'url', label: 'URL' },
+  { value: 'uuid', label: 'UUID' },
+  { value: 'date', label: 'Date (ISO)' },
+  { value: 'datetime', label: 'DateTime (RFC3339)' },
+  { value: 'phone', label: 'Phone' },
+  { value: 'ip', label: 'IP Address' },
+]
+
+function TypeFieldEditor({
+  name,
+  field,
+  validators,
+  onUpdate,
+  onRemove,
+  onRename,
+}: {
+  name: string
+  field: TypeFieldDefinition
+  validators: string[]
+  onUpdate: (field: TypeFieldDefinition) => void
+  onRemove: () => void
+  onRename: (newName: string) => void
+}) {
+  const inputClass = "w-full px-3 py-2 text-sm bg-neutral-800 border border-neutral-700 rounded-md focus:ring-2 focus:ring-cyan-500 focus:border-transparent text-white placeholder-neutral-500"
+
+  return (
+    <div className="p-3 bg-neutral-800/50 rounded-md space-y-2">
+      <div className="flex items-center gap-2">
+        <input
+          type="text"
+          value={name}
+          onChange={(e) => onRename(e.target.value)}
+          placeholder="field_name"
+          className="flex-1 px-2 py-1 text-sm bg-neutral-800 border border-neutral-700 rounded text-cyan-300 font-mono focus:ring-2 focus:ring-cyan-500 focus:border-transparent"
+        />
+        <select
+          value={field.type}
+          onChange={(e) => onUpdate({ ...field, type: e.target.value as TypeFieldDefinition['type'] })}
+          className="px-2 py-1 text-sm bg-neutral-800 border border-neutral-700 rounded text-white"
+        >
+          {baseTypeOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+        </select>
+        <button onClick={onRemove} className="text-red-500 hover:text-red-400 p-1">
+          <Trash2 className="w-3.5 h-3.5" />
+        </button>
+      </div>
+
+      <div className="flex items-center gap-2">
+        <label className="flex items-center gap-1.5 text-xs text-neutral-400 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={field.required !== false}
+            onChange={(e) => onUpdate({ ...field, required: e.target.checked ? undefined : false })}
+            className="w-3.5 h-3.5 text-cyan-600 bg-neutral-800 border-neutral-600 rounded"
+          />
+          Required
+        </label>
+      </div>
+
+      {/* String constraints */}
+      {field.type === 'string' && (
+        <div className="space-y-2 pl-2 border-l-2 border-neutral-700">
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="block text-[10px] font-medium text-neutral-500 mb-0.5">Format</label>
+              <select
+                value={field.format || ''}
+                onChange={(e) => onUpdate({ ...field, format: e.target.value || undefined })}
+                className="w-full px-2 py-1 text-xs bg-neutral-800 border border-neutral-700 rounded text-white"
+              >
+                {formatOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-[10px] font-medium text-neutral-500 mb-0.5">Validator</label>
+              <select
+                value={field.validate || ''}
+                onChange={(e) => onUpdate({ ...field, validate: e.target.value || undefined })}
+                className="w-full px-2 py-1 text-xs bg-neutral-800 border border-neutral-700 rounded text-white"
+              >
+                <option value="">None</option>
+                {validators.map(v => <option key={v} value={v}>{v}</option>)}
+              </select>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="block text-[10px] font-medium text-neutral-500 mb-0.5">Min Length</label>
+              <input
+                type="number"
+                value={field.minLength ?? ''}
+                onChange={(e) => onUpdate({ ...field, minLength: e.target.value ? Number(e.target.value) : undefined })}
+                className="w-full px-2 py-1 text-xs bg-neutral-800 border border-neutral-700 rounded text-white"
+              />
+            </div>
+            <div>
+              <label className="block text-[10px] font-medium text-neutral-500 mb-0.5">Max Length</label>
+              <input
+                type="number"
+                value={field.maxLength ?? ''}
+                onChange={(e) => onUpdate({ ...field, maxLength: e.target.value ? Number(e.target.value) : undefined })}
+                className="w-full px-2 py-1 text-xs bg-neutral-800 border border-neutral-700 rounded text-white"
+              />
+            </div>
+          </div>
+          <div>
+            <label className="block text-[10px] font-medium text-neutral-500 mb-0.5">Pattern (regex)</label>
+            <input
+              type="text"
+              value={field.pattern || ''}
+              onChange={(e) => onUpdate({ ...field, pattern: e.target.value || undefined })}
+              placeholder="^[a-zA-Z]+$"
+              className={inputClass + ' text-xs font-mono'}
+            />
+          </div>
+          <div>
+            <label className="block text-[10px] font-medium text-neutral-500 mb-0.5">Enum (comma-separated)</label>
+            <input
+              type="text"
+              value={field.enum?.join(', ') || ''}
+              onChange={(e) => {
+                const val = e.target.value.trim()
+                onUpdate({ ...field, enum: val ? val.split(',').map(s => s.trim()) : undefined })
+              }}
+              placeholder="admin, user, guest"
+              className={inputClass + ' text-xs'}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Number constraints */}
+      {field.type === 'number' && (
+        <div className="space-y-2 pl-2 border-l-2 border-neutral-700">
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="block text-[10px] font-medium text-neutral-500 mb-0.5">Min</label>
+              <input
+                type="number"
+                value={field.min ?? ''}
+                onChange={(e) => onUpdate({ ...field, min: e.target.value ? Number(e.target.value) : undefined })}
+                className="w-full px-2 py-1 text-xs bg-neutral-800 border border-neutral-700 rounded text-white"
+              />
+            </div>
+            <div>
+              <label className="block text-[10px] font-medium text-neutral-500 mb-0.5">Max</label>
+              <input
+                type="number"
+                value={field.max ?? ''}
+                onChange={(e) => onUpdate({ ...field, max: e.target.value ? Number(e.target.value) : undefined })}
+                className="w-full px-2 py-1 text-xs bg-neutral-800 border border-neutral-700 rounded text-white"
+              />
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function TypeProperties({
+  data,
+  onChange,
+}: {
+  data: TypeNodeData
+  onChange: (data: Partial<TypeNodeData>) => void
+}) {
+  const { nodes } = useStudioStore()
+
+  // Get validator names from canvas
+  const validatorNames = nodes
+    .filter(n => n.type === 'validator')
+    .map(n => (n.data as ValidatorNodeData).label.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, ''))
+
+  const fields = data.fields || {}
+
+  const updateField = (name: string, field: TypeFieldDefinition) => {
+    onChange({ fields: { ...fields, [name]: field } })
+  }
+
+  const removeField = (name: string) => {
+    const newFields = { ...fields }
+    delete newFields[name]
+    onChange({ fields: newFields })
+  }
+
+  const renameField = (oldName: string, newName: string) => {
+    if (!newName || newName === oldName) return
+    const clean = newName.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '')
+    if (!clean || clean in fields) return
+    const newFields: Record<string, TypeFieldDefinition> = {}
+    for (const [k, v] of Object.entries(fields)) {
+      newFields[k === oldName ? clean : k] = v
+    }
+    onChange({ fields: newFields })
+  }
+
+  const addField = () => {
+    let name = 'new_field'
+    let i = 1
+    while (name in fields) { name = `new_field_${i++}` }
+    onChange({ fields: { ...fields, [name]: { type: 'string' } } })
+  }
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <label className="block text-xs font-medium text-neutral-400 mb-1">Name</label>
+        <input
+          type="text"
+          value={data.label}
+          onChange={(e) => onChange({ label: e.target.value })}
+          className="w-full px-3 py-2 text-sm bg-neutral-800 border border-neutral-700 rounded-md focus:ring-2 focus:ring-cyan-500 focus:border-transparent text-white"
+        />
+      </div>
+
+      <div>
+        <div className="flex items-center justify-between mb-2">
+          <label className="text-xs font-medium text-neutral-400">Fields</label>
+          <button
+            onClick={addField}
+            className="flex items-center gap-1 text-xs text-cyan-400 hover:text-cyan-300"
+          >
+            <Plus className="w-3 h-3" /> Add Field
+          </button>
+        </div>
+
+        <div className="space-y-2">
+          {Object.entries(fields).map(([name, field]) => (
+            <TypeFieldEditor
+              key={name}
+              name={name}
+              field={field}
+              validators={validatorNames}
+              onUpdate={(f) => updateField(name, f)}
+              onRemove={() => removeField(name)}
+              onRename={(newName) => renameField(name, newName)}
+            />
+          ))}
+
+          {Object.keys(fields).length === 0 && (
+            <div className="text-xs text-neutral-500 text-center py-4 border border-dashed border-neutral-700 rounded">
+              No fields defined. Click "Add Field" to start.
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function ValidatorProperties({
+  data,
+  onChange,
+}: {
+  data: ValidatorNodeData
+  onChange: (data: Partial<ValidatorNodeData>) => void
+}) {
+  const allTypes = getAllValidatorTypes()
+  const currentType = getValidatorType(data.validatorType)
+  const inputClass = "w-full px-3 py-2 text-sm bg-neutral-800 border border-neutral-700 rounded-md focus:ring-2 focus:ring-purple-500 focus:border-transparent text-white placeholder-neutral-500"
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <label className="block text-xs font-medium text-neutral-400 mb-1">Name</label>
+        <input
+          type="text"
+          value={data.label}
+          onChange={(e) => onChange({ label: e.target.value })}
+          className={inputClass}
+        />
+      </div>
+
+      <div>
+        <label className="block text-xs font-medium text-neutral-400 mb-1">Validator Type</label>
+        <div className="grid grid-cols-3 gap-1">
+          {allTypes.map(vt => {
+            const Icon = vt.icon
+            const isActive = data.validatorType === vt.type
+            return (
+              <button
+                key={vt.type}
+                onClick={() => onChange({ validatorType: vt.type as ValidatorNodeData['validatorType'] })}
+                className={`flex flex-col items-center gap-1 p-2 rounded-md border text-xs transition-colors ${
+                  isActive
+                    ? 'bg-purple-600/20 border-purple-500/50 text-purple-300'
+                    : 'border-neutral-700 text-neutral-400 hover:text-neutral-200 hover:border-neutral-600'
+                }`}
+              >
+                <Icon className="w-4 h-4" />
+                {vt.label}
+              </button>
+            )
+          })}
+        </div>
+        {currentType && (
+          <p className="text-xs text-neutral-500 mt-1">{currentType.description}</p>
+        )}
+      </div>
+
+      {/* Type-specific fields from registry */}
+      {currentType?.fields.map(field => (
+        <div key={field.key}>
+          <label className="block text-xs font-medium text-neutral-400 mb-1">
+            {field.label}
+            {field.required && <span className="text-red-400 ml-1">*</span>}
+          </label>
+          {field.type === 'text' ? (
+            <textarea
+              value={String((data as Record<string, unknown>)[field.key] || '')}
+              onChange={(e) => onChange({ [field.key]: e.target.value || undefined } as Partial<ValidatorNodeData>)}
+              placeholder={field.placeholder}
+              rows={3}
+              className={inputClass + (field.mono ? ' font-mono' : '') + ' resize-y'}
+            />
+          ) : (
+            <input
+              type="text"
+              value={String((data as Record<string, unknown>)[field.key] || '')}
+              onChange={(e) => onChange({ [field.key]: e.target.value || undefined } as Partial<ValidatorNodeData>)}
+              placeholder={field.placeholder}
+              className={inputClass + (field.mono ? ' font-mono' : '')}
+            />
+          )}
+          {field.helpText && <p className="text-xs text-neutral-500 mt-1">{field.helpText}</p>}
+        </div>
+      ))}
+
+      <div>
+        <label className="block text-xs font-medium text-neutral-400 mb-1">
+          Error Message <span className="text-red-400">*</span>
+        </label>
+        <input
+          type="text"
+          value={data.message || ''}
+          onChange={(e) => onChange({ message: e.target.value })}
+          placeholder="Invalid value"
+          className={inputClass}
+        />
+        <p className="text-xs text-neutral-500 mt-1">Shown when validation fails</p>
+      </div>
+    </div>
+  )
+}
+
 function ServiceProperties() {
   const { serviceConfig, updateServiceConfig } = useStudioStore()
 
@@ -593,15 +955,28 @@ export default function Properties() {
         </button>
       </div>
 
-      {selectedNode.type === 'connector' ? (
+      {selectedNode.type === 'connector' && (
         <ConnectorProperties
           data={selectedNode.data as ConnectorNodeData}
           onChange={handleChange}
         />
-      ) : (
+      )}
+      {selectedNode.type === 'flow' && (
         <FlowProperties
           data={selectedNode.data as FlowNodeData}
           nodeId={selectedNode.id}
+          onChange={handleChange}
+        />
+      )}
+      {selectedNode.type === 'type' && (
+        <TypeProperties
+          data={selectedNode.data as TypeNodeData}
+          onChange={handleChange}
+        />
+      )}
+      {selectedNode.type === 'validator' && (
+        <ValidatorProperties
+          data={selectedNode.data as ValidatorNodeData}
           onChange={handleChange}
         />
       )}

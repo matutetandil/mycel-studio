@@ -427,3 +427,29 @@ Dentro del flow falta UI para configurar:
   - `visibleWhen` — Conditional field visibility
 - **Build:** ✅ TypeScript + Vite build exitosos
 - **Próximo paso:** Aplicar patrón a top-level blocks (Type, Validator, Aspect) o Phase 4
+
+### 2026-03-11 - Phase 4: Types & Validators — v0.7.0
+- **Estado:** ✅ Completado
+- **Validator Registry (`src/validators/`):**
+  - 3 tipos: regex (pattern), cel (expr), wasm (wasm+entrypoint)
+  - Registry con `getValidatorType()`, `getAllValidatorTypes()`
+  - Selector visual con íconos por tipo
+- **Type Node:**
+  - `TypeNode.tsx` — Preview de campos con nombre, tipo, y marcador required
+  - `TypeProperties` — Editor completo de campos con constraints por base type
+  - String: format, min_length, max_length, pattern, enum, validate
+  - Number: min, max
+  - Dropdown de validators del canvas
+- **Validator Node:**
+  - `ValidatorNode.tsx` — Ícono y color del registry
+  - `ValidatorProperties` — Type selector + campos auto-generados del registry
+- **Validate Flow Block:**
+  - `flow-blocks/definitions/validate.ts` — input/output type references
+  - Simple block vía GenericBlockEditor
+  - Indicador en flow nodes
+- **HCL Generation:**
+  - `generateTypeHCL()` — `type "name" { field = type { constraints } }`
+  - `generateValidatorHCL()` — `validator "name" { type, pattern/expr/wasm, message }`
+  - Output a `types/types.hcl` y `validators/validators.hcl`
+- **Build:** ✅ TypeScript + Vite build exitosos
+- **Próximo paso:** Phase 5 (Named Transforms, Aspects) o seguir completando v1.11.0
