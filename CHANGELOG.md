@@ -2,6 +2,43 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.8.0] - Phase 5: Named Transforms & Aspects
+
+### Added
+
+- **Transform nodes:**
+  - `TransformNode.tsx` — Visual node showing field mappings preview (up to 4 fields with overflow indicator)
+  - `TransformProperties` in Properties panel — Field mappings editor with add/rename/remove
+  - CEL expressions for field values
+  - Generates `transform "name" { field = "expression" }` HCL
+
+- **Aspect nodes (AOP - cross-cutting concerns):**
+  - `AspectNode.tsx` — Visual node with when-based colors (before=blue, after=green, around=purple, on_error=red)
+  - Shows matching patterns and action/cache/invalidate indicators
+  - `AspectProperties` in Properties panel:
+    - When selector (before/after/around/on_error)
+    - Glob pattern matching for flow targeting
+    - Optional condition and priority
+    - Action block (connector + target + transform) for before/after/on_error
+    - Cache block (storage + key + TTL) for around aspects
+    - Invalidation block (storage + keys/patterns) for after aspects
+  - Generates `aspect "name" { on, when, if, priority, action {}, cache {}, invalidate {} }` HCL
+
+- **HCL generation:**
+  - `generateNamedTransformHCL()` — Top-level named transform blocks
+  - `generateAspectHCL()` — Aspect blocks with all sub-blocks (action, cache, invalidate)
+  - Output to `transforms/transforms.hcl` and `aspects/aspects.hcl`
+
+### Changed
+
+- **Palette:** Added Transform and Aspect to Schema category with proper drag initialization
+- **Nodes/index.ts:** Registered TransformNode and AspectNode in nodeTypes
+- **Properties.tsx:** Added TransformProperties and AspectProperties panels (6 node types total)
+- **FileTree.tsx:** Transform/aspect node selection auto-navigates to correct generated file; expanded default directories include transforms/aspects
+- **hclGenerator.ts:** Extended generateProject to output transforms and aspects files
+
+---
+
 ## [0.7.0] - Phase 4: Types & Validators
 
 ### Added

@@ -453,3 +453,26 @@ Dentro del flow falta UI para configurar:
   - Output a `types/types.hcl` y `validators/validators.hcl`
 - **Build:** ✅ TypeScript + Vite build exitosos
 - **Próximo paso:** Phase 5 (Named Transforms, Aspects) o seguir completando v1.11.0
+
+### 2026-03-11 - Phase 5: Named Transforms & Aspects — v0.8.0
+- **Estado:** ✅ Completado
+- **Transform Node:**
+  - `TransformNode.tsx` — Preview de field mappings (hasta 4 con overflow)
+  - `TransformProperties` — Editor de mappings con add/rename/remove
+  - HCL: `transform "name" { field = "CEL" }`
+- **Aspect Node (AOP):**
+  - `AspectNode.tsx` — Colores por when (before=blue, after=green, around=purple, on_error=red)
+  - Muestra patterns, action/cache/invalidate indicators
+  - `AspectProperties` — Selector when, glob patterns, condition, priority
+    - Action (before/after/on_error): connector + target + transform
+    - Cache (around): storage + key + TTL
+    - Invalidation (after): storage + keys/patterns
+  - HCL: `aspect "name" { on, when, if, priority, action {}, cache {}, invalidate {} }`
+- **Integración completa:**
+  - `Palette.tsx` — Transform y Aspect en categoría Schema
+  - `Nodes/index.ts` — 6 tipos de nodos registrados
+  - `Properties.tsx` — 6 paneles de propiedades
+  - `FileTree.tsx` — Auto-navegación a `transforms/transforms.hcl` y `aspects/aspects.hcl`
+  - `hclGenerator.ts` — `generateProject()` genera archivos de transforms y aspects
+- **Build:** ✅ TypeScript + Vite build exitosos
+- **Próximo paso:** Phase 6 (Sagas, State Machines) o continuar con roadmap

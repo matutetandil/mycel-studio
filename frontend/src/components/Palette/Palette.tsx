@@ -5,12 +5,14 @@ import {
   ChevronDown,
   FileCode,
   ShieldCheck,
+  RefreshCw,
+  Eye,
 } from 'lucide-react'
 import { type ConnectorType, DEFAULT_CONNECTOR_DIRECTIONS } from '../../types'
 import { getConnectorsByCategory, type ConnectorDefinition } from '../../connectors'
 
 interface PaletteItem {
-  type: 'connector' | 'flow' | 'type' | 'validator'
+  type: 'connector' | 'flow' | 'type' | 'validator' | 'transform' | 'aspect'
   connectorType?: ConnectorType
   label: string
   icon: React.ElementType
@@ -34,6 +36,10 @@ function PaletteItemView({ item }: { item: PaletteItem }) {
       nodeData = { label: `New ${item.label}`, fields: {} }
     } else if (item.type === 'validator') {
       nodeData = { label: `New ${item.label}`, validatorType: 'regex', message: '' }
+    } else if (item.type === 'transform') {
+      nodeData = { label: `New ${item.label}`, fields: {} }
+    } else if (item.type === 'aspect') {
+      nodeData = { label: `New ${item.label}`, on: [], when: 'after' }
     } else {
       nodeData = { label: `New ${item.label}` }
     }
@@ -117,6 +123,8 @@ function buildCategories(): Array<{ name: string; items: PaletteItem[] }> {
     items: [
       { type: 'type', label: 'Type', icon: FileCode, color: 'bg-cyan-600' },
       { type: 'validator', label: 'Validator', icon: ShieldCheck, color: 'bg-purple-500' },
+      { type: 'transform', label: 'Transform', icon: RefreshCw, color: 'bg-amber-600' },
+      { type: 'aspect', label: 'Aspect', icon: Eye, color: 'bg-indigo-600' },
     ],
   })
 

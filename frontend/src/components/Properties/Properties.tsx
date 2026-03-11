@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react'
 import { GripVertical, Plus, Trash2 } from 'lucide-react'
 import { useStudioStore } from '../../stores/useStudioStore'
-import type { ConnectorNodeData, FlowNodeData, FlowTo, ConnectorDirection, RestOperation, GraphQLOperation, ConnectorOperation, TypeNodeData, TypeFieldDefinition, ValidatorNodeData } from '../../types'
+import type { ConnectorNodeData, FlowNodeData, FlowTo, ConnectorDirection, RestOperation, GraphQLOperation, ConnectorOperation, TypeNodeData, TypeFieldDefinition, ValidatorNodeData, TransformNodeData, AspectNodeData } from '../../types'
 import OperationsEditor from './OperationsEditor'
 import GraphQLOperationsEditor from './GraphQLOperationsEditor'
 import { getConnector, type FieldDefinition } from '../../connectors'
@@ -847,6 +847,329 @@ function ValidatorProperties({
   )
 }
 
+function TransformProperties({
+  data,
+  onChange,
+}: {
+  data: TransformNodeData
+  onChange: (data: Partial<TransformNodeData>) => void
+}) {
+  const fields = data.fields || {}
+  const inputClass = "w-full px-3 py-2 text-sm bg-neutral-800 border border-neutral-700 rounded-md focus:ring-2 focus:ring-amber-500 focus:border-transparent text-white placeholder-neutral-500"
+
+  const updateField = (key: string, value: string) => {
+    onChange({ fields: { ...fields, [key]: value } })
+  }
+
+  const removeField = (key: string) => {
+    const newFields = { ...fields }
+    delete newFields[key]
+    onChange({ fields: newFields })
+  }
+
+  const renameField = (oldKey: string, newKey: string) => {
+    if (!newKey || newKey === oldKey) return
+    const clean = newKey.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '')
+    if (!clean || clean in fields) return
+    const newFields: Record<string, string> = {}
+    for (const [k, v] of Object.entries(fields)) {
+      newFields[k === oldKey ? clean : k] = v
+    }
+    onChange({ fields: newFields })
+  }
+
+  const addField = () => {
+    let name = 'field'
+    let i = 1
+    while (name in fields) { name = `field_${i++}` }
+    onChange({ fields: { ...fields, [name]: '' } })
+  }
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <label className="block text-xs font-medium text-neutral-400 mb-1">Name</label>
+        <input
+          type="text"
+          value={data.label}
+          onChange={(e) => onChange({ label: e.target.value })}
+          className={inputClass}
+        />
+        <p className="text-xs text-neutral-500 mt-1">Reference in flows with <code className="text-amber-400">use = [transform.{'{name}'}]</code></p>
+      </div>
+
+      <div>
+        <div className="flex items-center justify-between mb-2">
+          <label className="text-xs font-medium text-neutral-400">Field Mappings (CEL)</label>
+          <button onClick={addField} className="flex items-center gap-1 text-xs text-amber-400 hover:text-amber-300">
+            <Plus className="w-3 h-3" /> Add
+          </button>
+        </div>
+        <div className="space-y-2">
+          {Object.entries(fields).map(([key, expr]) => (
+            <div key={key} className="flex items-center gap-1">
+              <input
+                type="text"
+                value={key}
+                onChange={(e) => renameField(key, e.target.value)}
+                className="w-28 px-2 py-1.5 text-xs bg-neutral-800 border border-neutral-700 rounded text-amber-300 font-mono focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+              />
+              <span className="text-neutral-500 text-xs">=</span>
+              <input
+                type="text"
+                value={expr}
+                onChange={(e) => updateField(key, e.target.value)}
+                placeholder="CEL expression"
+                className="flex-1 px-2 py-1.5 text-xs bg-neutral-800 border border-neutral-700 rounded text-white font-mono placeholder-neutral-500 focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+              />
+              <button onClick={() => removeField(key)} className="text-red-500 hover:text-red-400 p-0.5">
+                <Trash2 className="w-3 h-3" />
+              </button>
+            </div>
+          ))}
+          {Object.keys(fields).length === 0 && (
+            <div className="text-xs text-neutral-500 text-center py-3 border border-dashed border-neutral-700 rounded">
+              No mappings. Click "Add" to define fields.
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+const aspectWhenOptions = [
+  { value: 'before', label: 'Before', description: 'Run before the flow executes' },
+  { value: 'after', label: 'After', description: 'Run after the flow completes successfully' },
+  { value: 'around', label: 'Around', description: 'Wrap the flow (e.g., caching)' },
+  { value: 'on_error', label: 'On Error', description: 'Run when the flow fails' },
+]
+
+function AspectProperties({
+  data,
+  onChange,
+}: {
+  data: AspectNodeData
+  onChange: (data: Partial<AspectNodeData>) => void
+}) {
+  const inputClass = "w-full px-3 py-2 text-sm bg-neutral-800 border border-neutral-700 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-white placeholder-neutral-500"
+
+  const patterns = data.on || []
+
+  const updatePattern = (index: number, value: string) => {
+    const newPatterns = [...patterns]
+    newPatterns[index] = value
+    onChange({ on: newPatterns })
+  }
+
+  const addPattern = () => onChange({ on: [...patterns, '**/*.hcl'] })
+
+  const removePattern = (index: number) => {
+    onChange({ on: patterns.filter((_, i) => i !== index) })
+  }
+
+  // Action section
+  const action = data.action || { connector: '', target: '' }
+  const hasAction = !!data.action
+
+  const updateAction = (updates: Partial<typeof action>) => {
+    onChange({ action: { ...action, ...updates } })
+  }
+
+  // Action transform fields
+  const actionFields = data.action?.transform || {}
+
+  const updateActionField = (key: string, value: string) => {
+    updateAction({ transform: { ...actionFields, [key]: value } })
+  }
+
+  const removeActionField = (key: string) => {
+    const newFields = { ...actionFields }
+    delete newFields[key]
+    updateAction({ transform: newFields })
+  }
+
+  const addActionField = () => {
+    let name = 'field'
+    let i = 1
+    while (name in actionFields) { name = `field_${i++}` }
+    updateAction({ transform: { ...actionFields, [name]: '' } })
+  }
+
+  // Invalidation section
+  const invalidate = data.invalidate
+  const hasInvalidation = !!invalidate
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <label className="block text-xs font-medium text-neutral-400 mb-1">Name</label>
+        <input type="text" value={data.label} onChange={(e) => onChange({ label: e.target.value })} className={inputClass} />
+      </div>
+
+      {/* When */}
+      <div>
+        <label className="block text-xs font-medium text-neutral-400 mb-1">When</label>
+        <div className="grid grid-cols-2 gap-1">
+          {aspectWhenOptions.map(opt => (
+            <button
+              key={opt.value}
+              onClick={() => onChange({ when: opt.value as AspectNodeData['when'] })}
+              className={`px-2 py-1.5 text-xs rounded border transition-colors ${
+                data.when === opt.value
+                  ? 'bg-indigo-600/20 border-indigo-500/50 text-indigo-300'
+                  : 'border-neutral-700 text-neutral-400 hover:text-neutral-200'
+              }`}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+        <p className="text-xs text-neutral-500 mt-1">
+          {aspectWhenOptions.find(o => o.value === data.when)?.description}
+        </p>
+      </div>
+
+      {/* Flow Patterns (on) */}
+      <div>
+        <div className="flex items-center justify-between mb-1">
+          <label className="text-xs font-medium text-neutral-400">Match Flows (glob patterns)</label>
+          <button onClick={addPattern} className="flex items-center gap-1 text-xs text-indigo-400 hover:text-indigo-300">
+            <Plus className="w-3 h-3" /> Add
+          </button>
+        </div>
+        <div className="space-y-1">
+          {patterns.map((pattern, i) => (
+            <div key={i} className="flex items-center gap-1">
+              <input
+                type="text"
+                value={pattern}
+                onChange={(e) => updatePattern(i, e.target.value)}
+                placeholder="**/create_*.hcl"
+                className="flex-1 px-2 py-1.5 text-xs bg-neutral-800 border border-neutral-700 rounded text-white font-mono placeholder-neutral-500"
+              />
+              <button onClick={() => removePattern(i)} className="text-red-500 hover:text-red-400 p-0.5">
+                <Trash2 className="w-3 h-3" />
+              </button>
+            </div>
+          ))}
+          {patterns.length === 0 && (
+            <p className="text-xs text-neutral-500 italic">No patterns. Aspect won't match any flows.</p>
+          )}
+        </div>
+      </div>
+
+      {/* Condition */}
+      <div>
+        <label className="block text-xs font-medium text-neutral-400 mb-1">Condition (optional CEL)</label>
+        <input
+          type="text"
+          value={data.condition || ''}
+          onChange={(e) => onChange({ condition: e.target.value || undefined })}
+          placeholder='result.affected > 0'
+          className={inputClass + ' font-mono'}
+        />
+      </div>
+
+      {/* Priority */}
+      <div>
+        <label className="block text-xs font-medium text-neutral-400 mb-1">Priority (optional)</label>
+        <input
+          type="number"
+          value={data.priority ?? ''}
+          onChange={(e) => onChange({ priority: e.target.value ? Number(e.target.value) : undefined })}
+          placeholder="0 (lower = first)"
+          className={inputClass}
+        />
+      </div>
+
+      {/* Action (for before/after/on_error) */}
+      {data.when !== 'around' && (
+        <div className="p-3 bg-neutral-800/50 rounded-md space-y-2">
+          <div className="flex items-center justify-between">
+            <label className="text-xs font-medium text-neutral-400">Action</label>
+            {!hasAction ? (
+              <button onClick={() => onChange({ action: { connector: '', target: '' } })} className="text-xs text-blue-400 hover:text-blue-300">
+                + Add Action
+              </button>
+            ) : (
+              <button onClick={() => onChange({ action: undefined })} className="text-xs text-red-400 hover:text-red-300">
+                Remove
+              </button>
+            )}
+          </div>
+          {hasAction && (
+            <div className="space-y-2">
+              <input type="text" value={action.connector} onChange={(e) => updateAction({ connector: e.target.value })} placeholder="connector_name" className={inputClass + ' text-xs'} />
+              <input type="text" value={action.target} onChange={(e) => updateAction({ target: e.target.value })} placeholder="target (table, operation)" className={inputClass + ' text-xs'} />
+              <div className="flex items-center justify-between">
+                <label className="text-[10px] font-medium text-neutral-500">Transform</label>
+                <button onClick={addActionField} className="text-[10px] text-amber-400 hover:text-amber-300">+ Add</button>
+              </div>
+              {Object.entries(actionFields).map(([key, expr]) => (
+                <div key={key} className="flex items-center gap-1">
+                  <input type="text" value={key} onChange={(e) => {
+                    const newKey = e.target.value.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '')
+                    if (newKey && !(newKey in actionFields)) {
+                      const nf: Record<string, string> = {}
+                      for (const [k, v] of Object.entries(actionFields)) { nf[k === key ? newKey : k] = v }
+                      updateAction({ transform: nf })
+                    }
+                  }} className="w-24 px-1.5 py-1 text-[11px] bg-neutral-800 border border-neutral-700 rounded text-amber-300 font-mono" />
+                  <span className="text-neutral-600 text-[10px]">=</span>
+                  <input type="text" value={expr} onChange={(e) => updateActionField(key, e.target.value)} placeholder="CEL" className="flex-1 px-1.5 py-1 text-[11px] bg-neutral-800 border border-neutral-700 rounded text-white font-mono placeholder-neutral-500" />
+                  <button onClick={() => removeActionField(key)} className="text-red-500 hover:text-red-400"><Trash2 className="w-2.5 h-2.5" /></button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Cache (for around) */}
+      {data.when === 'around' && (
+        <div className="p-3 bg-neutral-800/50 rounded-md space-y-2">
+          <label className="text-xs font-medium text-neutral-400">Cache</label>
+          <input type="text" value={data.cache?.storage || ''} onChange={(e) => onChange({ cache: { storage: e.target.value, key: data.cache?.key || '', ttl: data.cache?.ttl || '5m' } })} placeholder="storage (cache connector)" className={inputClass + ' text-xs'} />
+          <input type="text" value={data.cache?.key || ''} onChange={(e) => onChange({ cache: { ...data.cache!, key: e.target.value } })} placeholder="cache key expression" className={inputClass + ' text-xs font-mono'} />
+          <input type="text" value={data.cache?.ttl || ''} onChange={(e) => onChange({ cache: { ...data.cache!, ttl: e.target.value } })} placeholder="TTL (e.g., 10m)" className={inputClass + ' text-xs font-mono'} />
+        </div>
+      )}
+
+      {/* Invalidation (for after) */}
+      {(data.when === 'after') && (
+        <div className="p-3 bg-neutral-800/50 rounded-md space-y-2">
+          <div className="flex items-center justify-between">
+            <label className="text-xs font-medium text-neutral-400">Invalidation</label>
+            {!hasInvalidation ? (
+              <button onClick={() => onChange({ invalidate: { storage: '' } })} className="text-xs text-orange-400 hover:text-orange-300">
+                + Add
+              </button>
+            ) : (
+              <button onClick={() => onChange({ invalidate: undefined })} className="text-xs text-red-400 hover:text-red-300">
+                Remove
+              </button>
+            )}
+          </div>
+          {hasInvalidation && (
+            <div className="space-y-2">
+              <input type="text" value={invalidate!.storage || ''} onChange={(e) => onChange({ invalidate: { ...invalidate!, storage: e.target.value } })} placeholder="storage (cache connector)" className={inputClass + ' text-xs'} />
+              <input type="text" value={invalidate!.keys?.join(', ') || ''} onChange={(e) => {
+                const val = e.target.value.trim()
+                onChange({ invalidate: { ...invalidate!, keys: val ? val.split(',').map(s => s.trim()) : undefined } })
+              }} placeholder="keys (comma-separated)" className={inputClass + ' text-xs font-mono'} />
+              <input type="text" value={invalidate!.patterns?.join(', ') || ''} onChange={(e) => {
+                const val = e.target.value.trim()
+                onChange({ invalidate: { ...invalidate!, patterns: val ? val.split(',').map(s => s.trim()) : undefined } })
+              }} placeholder="patterns (comma-separated globs)" className={inputClass + ' text-xs font-mono'} />
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function ServiceProperties() {
   const { serviceConfig, updateServiceConfig } = useStudioStore()
 
@@ -977,6 +1300,18 @@ export default function Properties() {
       {selectedNode.type === 'validator' && (
         <ValidatorProperties
           data={selectedNode.data as ValidatorNodeData}
+          onChange={handleChange}
+        />
+      )}
+      {selectedNode.type === 'transform' && (
+        <TransformProperties
+          data={selectedNode.data as TransformNodeData}
+          onChange={handleChange}
+        />
+      )}
+      {selectedNode.type === 'aspect' && (
+        <AspectProperties
+          data={selectedNode.data as AspectNodeData}
           onChange={handleChange}
         />
       )}

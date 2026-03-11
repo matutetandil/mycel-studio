@@ -1,9 +1,9 @@
 import type { Node, Edge } from '@xyflow/react'
-import type { ConnectorNodeData, FlowNodeData, FlowTo, ServiceConfig, TypeNodeData, TypeFieldDefinition, ValidatorNodeData } from '../types'
+import type { ConnectorNodeData, FlowNodeData, FlowTo, ServiceConfig, TypeNodeData, TypeFieldDefinition, ValidatorNodeData, TransformNodeData, AspectNodeData } from '../types'
 import { getConnector, getConnectorMode } from '../connectors'
 import { getSimpleFlowBlocks } from '../flow-blocks'
 
-type StudioNode = Node<ConnectorNodeData | FlowNodeData | TypeNodeData | ValidatorNodeData>
+type StudioNode = Node<ConnectorNodeData | FlowNodeData | TypeNodeData | ValidatorNodeData | TransformNodeData | AspectNodeData>
 
 export interface GeneratedFile {
   path: string
@@ -461,6 +461,87 @@ function generateValidatorHCL(node: StudioNode): string {
   return lines.join('\n')
 }
 
+function generateNamedTransformHCL(node: StudioNode): string {
+  const data = node.data as TransformNodeData
+  const name = toIdentifier(data.label)
+  const lines: string[] = []
+
+  lines.push(`# ${data.label} transform`)
+  lines.push(`transform "${name}" {`)
+  for (const [key, value] of Object.entries(data.fields || {})) {
+    if (value) {
+      lines.push(`  ${key} = "${value}"`)
+    }
+  }
+  lines.push('}')
+  return lines.join('\n')
+}
+
+function generateAspectHCL(node: StudioNode): string {
+  const data = node.data as AspectNodeData
+  const name = toIdentifier(data.label)
+  const lines: string[] = []
+
+  lines.push(`# ${data.label} aspect`)
+  lines.push(`aspect "${name}" {`)
+
+  if (data.on && data.on.length > 0) {
+    lines.push(`  on   = [${data.on.map(p => `"${p}"`).join(', ')}]`)
+  }
+  lines.push(`  when = "${data.when}"`)
+
+  if (data.condition) {
+    lines.push(`  if   = "${data.condition}"`)
+  }
+  if (data.priority != null) {
+    lines.push(`  priority = ${data.priority}`)
+  }
+
+  // Action block
+  if (data.action) {
+    lines.push('')
+    lines.push('  action {')
+    lines.push(`    connector = "${data.action.connector}"`)
+    if (data.action.target) lines.push(`    target    = "${data.action.target}"`)
+    if (data.action.transform && Object.keys(data.action.transform).length > 0) {
+      lines.push('')
+      lines.push('    transform {')
+      for (const [key, value] of Object.entries(data.action.transform)) {
+        lines.push(`      ${key} = "${value}"`)
+      }
+      lines.push('    }')
+    }
+    lines.push('  }')
+  }
+
+  // Cache block (for around aspects)
+  if (data.cache) {
+    lines.push('')
+    lines.push('  cache {')
+    lines.push(`    storage = "${data.cache.storage}"`)
+    if (data.cache.key) lines.push(`    key     = "${data.cache.key}"`)
+    if (data.cache.ttl) lines.push(`    ttl     = "${data.cache.ttl}"`)
+    lines.push('  }')
+  }
+
+  // Invalidation block
+  if (data.invalidate) {
+    lines.push('')
+    lines.push('  invalidate {')
+    lines.push(`    storage = "${data.invalidate.storage}"`)
+    if (data.invalidate.keys && data.invalidate.keys.length > 0) {
+      lines.push(`    keys    = [${data.invalidate.keys.map(k => `"${k}"`).join(', ')}]`)
+    }
+    if (data.invalidate.patterns && data.invalidate.patterns.length > 0) {
+      lines.push(`    patterns = [${data.invalidate.patterns.map(p => `"${p}"`).join(', ')}]`)
+    }
+    lines.push('  }')
+  }
+
+  lines.push('}')
+  return lines.join('\n')
+}
+
 // Validate project - returns array of error messages
 export function validateProject(nodes: StudioNode[]): string[] {
   const errors: string[] = []
@@ -532,6 +613,8 @@ export function generateProject(nodes: StudioNode[], edges: Edge[], serviceConfi
   const flowNodes = nodes.filter((n) => n.type === 'flow')
   const typeNodes = nodes.filter((n) => n.type === 'type')
   const validatorNodes = nodes.filter((n) => n.type === 'validator')
+  const transformNodes = nodes.filter((n) => n.type === 'transform')
+  const aspectNodes = nodes.filter((n) => n.type === 'aspect')
 
   const name = serviceConfig?.name || 'my-service'
   const version = serviceConfig?.version || '1.0.0'
@@ -579,6 +662,34 @@ export function generateProject(nodes: StudioNode[], edges: Edge[], serviceConfi
       path: 'validators/validators.hcl',
       name: 'validators.hcl',
       content: validatorsContent.join('\n')
+    })
+  }
+
+  // Generate transforms file
+  if (transformNodes.length > 0) {
+    const transformsContent: string[] = ['# Named transforms', '']
+    for (const node of transformNodes) {
+      transformsContent.push(generateNamedTransformHCL(node))
+      transformsContent.push('')
+    }
+    files.push({
+      path: 'transforms/transforms.hcl',
+      name: 'transforms.hcl',
+      content: transformsContent.join('\n')
+    })
+  }
+
+  // Generate aspects file
+  if (aspectNodes.length > 0) {
+    const aspectsContent: string[] = ['# Aspects (cross-cutting concerns)', '']
+    for (const node of aspectNodes) {
+      aspectsContent.push(generateAspectHCL(node))
+      aspectsContent.push('')
+    }
+    files.push({
+      path: 'aspects/aspects.hcl',
+      name: 'aspects.hcl',
+      content: aspectsContent.join('\n')
     })
   }
 
