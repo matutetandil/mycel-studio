@@ -476,3 +476,33 @@ Dentro del flow falta UI para configurar:
   - `hclGenerator.ts` — `generateProject()` genera archivos de transforms y aspects
 - **Build:** ✅ TypeScript + Vite build exitosos
 - **Próximo paso:** Phase 6 (Sagas, State Machines) o continuar con roadmap
+
+### 2026-03-11 - Mycel v1.12.0 Compatibility — v0.8.1
+- **Estado:** ✅ Completado
+- **3 breaking changes de v1.12.0 resueltos:**
+  1. **ResponseEditor reescrito** — De HTTP status/headers/body a CEL transform editor
+     - Fields con `input.*`/`output.*` variables
+     - Templates: pass through, normalize, echo with metadata
+     - Status code overrides: `http_status_code`, `grpc_status_code`
+  2. **Echo flows** — Flows sin `to` block son válidos. ResponseEditor detecta echo y ajusta hints
+  3. **Status code overrides** — Campos en response block editor
+- **FlowResponse type** cambiado: `{status, headers, body}` → `{fields, httpStatusCode?, grpcStatusCode?}`
+- **HCL generation** actualizado para nueva semántica
+- **Build:** ✅ TypeScript + Vite build exitosos
+- **Próximo paso:** Continuar con roadmap (Phase 7 enterprise features o Phase 8/9 polish)
+
+### 2026-03-11 - Docs update for Mycel v1.12.0
+- **Estado:** ✅ Completado (docs only, no code changes)
+- **Mycel v1.12.0 features that affect Studio:**
+  1. **Echo flows** — Flows without `to` block are now valid. Return transformed input directly. Studio currently requires `to`.
+  2. **Response block redesign** — `response {}` in Mycel is now CEL transforms applied AFTER destination (variables: `input.*`, `output.*`). Studio's ResponseEditor (v0.4.0) generates HTTP status/headers/body which is the WRONG semantics — that's `error_response`.
+  3. **Status code overrides** — `http_status_code` (REST/SOAP) and `grpc_status_code` (gRPC) in response block.
+- **Files updated:**
+  - `ROADMAP.md` — Version bumped to v1.12.0. Added 3 new entries to missing features table. Added 3 new inconsistencies (response semantics, echo flows, status code overrides). Phase 3.4 rewritten with correct response block examples and semantics.
+  - `CLAUDE.md` — Version bumped to v1.12.0. Added echo flow example, response block example with `output.*` variables, Key Concepts section explaining transform vs response vs echo flows. Updated gaps list.
+  - `CLAUDE.local.md` — Bitácora updated.
+- **Action items for next code session:**
+  - Rewrite `ResponseEditor.tsx` as CEL transform editor (like TransformEditor) with `input.*`/`output.*` variables
+  - Allow flows without `to` connector in canvas (echo flows)
+  - Add `http_status_code` field to response editor
+  - Move current HTTP status/headers/body logic to `error_response` only

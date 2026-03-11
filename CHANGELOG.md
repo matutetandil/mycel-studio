@@ -2,6 +2,31 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.8.1] - Mycel v1.12.0 Compatibility
+
+### Changed
+
+- **ResponseEditor rewritten** — Now a CEL transform editor instead of HTTP status/headers/body:
+  - Field mappings with `input.*` and `output.*` variables
+  - CEL pattern helpers and templates (pass through, normalize, echo with metadata)
+  - `http_status_code` and `grpc_status_code` override fields
+  - Context-aware help text (echo flow vs normal flow)
+  - HCL preview with correct v1.12.0 syntax
+
+- **FlowResponse type** — Changed from `{status, headers, body}` to `{fields, httpStatusCode?, grpcStatusCode?}`
+
+- **Echo flows supported** — Flows without a `to` block are now valid. The ResponseEditor detects echo flows and adjusts variable hints accordingly
+
+- **HCL generation** — Response block now generates CEL field mappings with optional status code overrides instead of HTTP status/headers/body
+
+- **Response flow block definition** — Updated description and isActive check for new data structure
+
+### Fixed
+
+- `.gitignore` — Added `backend/backend` binary
+
+---
+
 ## [0.8.0] - Phase 5: Named Transforms & Aspects
 
 ### Added
