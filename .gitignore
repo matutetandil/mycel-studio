@@ -5,6 +5,7 @@ vendor/
 # Build outputs
 frontend/dist/
 backend/server
+backend/backend
 
 # IDE
 .idea/

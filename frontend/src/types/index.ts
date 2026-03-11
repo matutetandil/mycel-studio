@@ -370,9 +370,9 @@ export interface FlowStep {
 }
 
 export interface FlowResponse {
-  status: number
-  headers?: Record<string, string>
-  body?: Record<string, string>
+  fields: Record<string, string>
+  httpStatusCode?: string
+  grpcStatusCode?: string
 }
 
 export interface FlowDedupe {

@@ -286,25 +286,18 @@ function generateFlowHCL(
     }
   }
 
-  // Response block
-  if (data.response) {
+  // Response block (CEL transforms applied after destination)
+  if (data.response && Object.keys(data.response.fields || {}).length > 0) {
     lines.push('')
     lines.push('  response {')
-    lines.push(`    status = ${data.response.status}`)
-    if (data.response.headers && Object.keys(data.response.headers).length > 0) {
-      lines.push(`    headers = {`)
-      for (const [key, value] of Object.entries(data.response.headers)) {
-        lines.push(`      "${key}" = "${value}"`)
-      }
-      lines.push('    }')
+    for (const [key, value] of Object.entries(data.response.fields)) {
+      lines.push(`    ${key} = "${value}"`)
     }
-    if (data.response.body && Object.keys(data.response.body).length > 0) {
-      lines.push('')
-      lines.push('    body {')
-      for (const [key, value] of Object.entries(data.response.body)) {
-        lines.push(`      ${key} = "${value}"`)
-      }
-      lines.push('    }')
+    if (data.response.httpStatusCode) {
+      lines.push(`    http_status_code = "${data.response.httpStatusCode}"`)
+    }
+    if (data.response.grpcStatusCode) {
+      lines.push(`    grpc_status_code = "${data.response.grpcStatusCode}"`)
     }
     lines.push('  }')
   }

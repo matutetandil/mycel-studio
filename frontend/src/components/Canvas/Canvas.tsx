@@ -270,6 +270,7 @@ export default function Canvas() {
       <ResponseEditor
         isOpen={activeEditor === 'response'}
         response={selectedFlowNode?.data.response}
+        isEchoFlow={selectedFlowNode ? !edges.some(e => e.source === selectedFlowNode.id) : false}
         onSave={(response: FlowResponse | undefined) => updateFlowData({ response })}
         onClose={closeEditor}
       />
