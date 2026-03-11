@@ -675,6 +675,109 @@ export interface StateMachineNodeData extends Record<string, unknown> {
 }
 
 // =============================================================================
+// Auth Types
+// =============================================================================
+
+export type AuthPreset = 'strict' | 'standard' | 'relaxed' | 'development'
+export type JwtAlgorithm = 'HS256' | 'HS384' | 'HS512' | 'RS256' | 'RS384' | 'RS512'
+export type MfaRequirement = 'required' | 'optional' | 'off'
+export type MfaMethod = 'totp' | 'webauthn' | 'sms' | 'email' | 'push'
+export type TokenStorageDriver = 'memory' | 'redis'
+
+export interface AuthJwtConfig {
+  secret?: string
+  algorithm: JwtAlgorithm
+  accessLifetime: string
+  refreshLifetime: string
+  issuer?: string
+  audience?: string[]
+  rotation?: boolean
+}
+
+export interface AuthPasswordConfig {
+  minLength: number
+  maxLength?: number
+  requireUpper: boolean
+  requireLower: boolean
+  requireNumber: boolean
+  requireSpecial: boolean
+  history?: number
+  breachCheck?: boolean
+}
+
+export interface AuthMfaConfig {
+  required: MfaRequirement
+  methods: MfaMethod[]
+  totpIssuer?: string
+  recoveryCodes?: boolean
+  recoveryCount?: number
+}
+
+export interface AuthSessionsConfig {
+  maxActive: number
+  idleTimeout: string
+  absoluteTimeout?: string
+  onMaxReached: 'deny' | 'revoke_oldest' | 'revoke_all'
+}
+
+export interface AuthSecurityConfig {
+  bruteForce?: boolean
+  bruteForceMaxAttempts?: number
+  bruteForceWindow?: string
+  bruteForceLockout?: string
+  replayProtection?: boolean
+}
+
+export interface AuthStorageConfig {
+  usersConnector?: string
+  usersTable?: string
+  tokenDriver: TokenStorageDriver
+  tokenAddress?: string
+}
+
+export interface AuthSocialProvider {
+  provider: string
+  clientId?: string
+  clientSecret?: string
+  scopes?: string[]
+}
+
+export interface AuthConfig {
+  enabled: boolean
+  preset: AuthPreset
+  jwt: AuthJwtConfig
+  password: AuthPasswordConfig
+  mfa: AuthMfaConfig
+  sessions: AuthSessionsConfig
+  security: AuthSecurityConfig
+  storage: AuthStorageConfig
+  socialProviders: AuthSocialProvider[]
+  endpointPrefix?: string
+}
+
+// =============================================================================
+// Environment Variables
+// =============================================================================
+
+export interface EnvVariable {
+  key: string
+  value: string
+  secret?: boolean
+  description?: string
+}
+
+export interface EnvironmentOverlay {
+  name: string
+  variables: EnvVariable[]
+}
+
+export interface EnvironmentConfig {
+  variables: EnvVariable[]
+  environments: EnvironmentOverlay[]
+  activeEnvironment?: string
+}
+
+// =============================================================================
 // React Flow Node Types
 // =============================================================================
 

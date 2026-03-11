@@ -244,36 +244,63 @@ En vez de escribir HCL manualmente, el usuario:
 - **Docker:** ✅ Build exitoso, running en http://localhost:8080
 - **Versión:** 0.3.2
 
+### 2026-03-11 - Phase 7: Enterprise Features — v0.9.0
+- **Estado:** ✅ Completado (7.1-7.4)
+- **7.1 Batch Processing:**
+  - `BatchEditor.tsx` — Source, query, chunk_size, on_error, transform, to
+  - `batch` flow block definition
+  - Visual indicator on flow nodes
+  - HCL generation for batch block with nested transform and to
+- **7.2 Sagas:**
+  - `SagaNode.tsx` — Rose-colored with step preview
+  - `SagaProperties` — Step editor with action/compensate, delay/await, on_complete/on_failure
+  - `generateSagaHCL()` + `generateSagaActionHCL()` (shared helper)
+  - Output to `sagas/sagas.hcl`
+- **7.3 State Machines:**
+  - `StateMachineNode.tsx` — Teal with state visualization
+  - `StateMachineProperties` — States with transitions (event → target + guard + action)
+  - `generateStateMachineHCL()` reuses `generateSagaActionHCL()`
+  - Output to `machines/machines.hcl`
+- **7.4 Auth UI:**
+  - `AuthProperties` in Properties panel — Full auth configuration
+  - Preset selector (strict/standard/relaxed/development) con auto-apply
+  - JWT: algorithm, secret, access/refresh TTL, issuer, rotation
+  - Password: min length, require upper/lower/number/special, breach check
+  - MFA: required/optional/off, 5 methods (TOTP, WebAuthn, SMS, email, push)
+  - Sessions: max active, idle timeout, on_max_reached
+  - Security: brute force protection, replay protection
+  - Storage: users connector ref, token driver (memory/redis)
+  - Social login: Google, GitHub, Apple
+  - Endpoint prefix
+  - `AuthConfig` type hierarchy en `types/index.ts`
+  - `authConfig` en `useStudioStore` con `updateAuthConfig()`
+  - `generateAuthHCL()` → `auth/auth.hcl`
+- **7.5 Environment Variables:**
+  - `EnvProperties` en Properties — Tabs (Variables / Environments)
+  - Auto-scan de `env()` references en todos los nodos + auth config
+  - Warning panel para refs no definidas con click-to-add
+  - Soporte para secrets (ocultos en `.env.example`)
+  - Overlays por entorno (dev/staging/prod) con overrides
+  - Active environment selector
+  - Genera: `.env`, `.env.example`, `environments/{name}.env`
+  - `EnvironmentConfig`, `EnvVariable`, `EnvironmentOverlay` types
+  - `envConfig` en `useStudioStore` con `updateEnvConfig()`
+- **Build:** ✅ TypeScript + Vite build exitosos
+- **Próximo paso:** Phase 7.6 (Long-Running Workflows) o commit
+
 ---
 
 ## Próximos pasos (pendientes para siguiente sesión)
 
-### Conectores: Input vs Output
-Los conectores deben tener una propiedad `mode` que indica si son de entrada o salida:
+### Pendientes de Phase 7:
+- 7.6 Long-Running Workflows
+- 7.7 Security (sanitization, WASM sanitizers)
+- 7.8 Mocks
+- 7.9 WASM/Plugins
 
-| Modo | Handle visible | Uso |
-|------|----------------|-----|
-| `input` (source) | Solo derecha (→) | Origen de datos (REST server, GraphQL server, Queue consumer) |
-| `output` (destination) | Solo izquierda (←) | Destino de datos (Database, REST client, Queue producer) |
-| `bidirectional` | Ambos | Cache, algunos DBs |
-
-**Cambios visuales:**
-- ConnectorNode debe mostrar/ocultar handles según `mode`
-- Al arrastrar desde Palette, preguntar o inferir el modo
-
-**Cambios en Flow Properties:**
-- FROM: mostrar operaciones del conector de entrada conectado
-- TO: mostrar opciones del conector de salida conectado
-- Configuración contextual según tipo de conector
-
-### Flow: configuración interna pendiente
-Dentro del flow falta UI para configurar:
-- Cache block (storage, key, ttl)
-- Transform block (CEL expressions)
-- Validate block (type reference)
-- Enrich block (connector, operation, params)
-- Lock/Semaphore blocks
-- Error handling
+### Pendientes de Phase 8-9:
+- Phase 8: UX Polish (undo/redo, copy/paste, shortcuts, templates)
+- Phase 9: Monaco IDE Enhancement (syntax highlighting, autocompletion, validation)
 
 ### 2026-01-06 - Revisión de documentación Mycel actualizada
 - **Estado:** ✅ Completado

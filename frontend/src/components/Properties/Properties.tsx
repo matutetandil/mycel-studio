@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react'
 import { GripVertical, Plus, Trash2 } from 'lucide-react'
 import { useStudioStore } from '../../stores/useStudioStore'
-import type { ConnectorNodeData, FlowNodeData, FlowTo, ConnectorDirection, RestOperation, GraphQLOperation, ConnectorOperation, TypeNodeData, TypeFieldDefinition, ValidatorNodeData, TransformNodeData, AspectNodeData, SagaNodeData, SagaStep, SagaAction, StateMachineNodeData, StateMachineState, StateMachineTransition } from '../../types'
+import type { ConnectorNodeData, FlowNodeData, FlowTo, ConnectorDirection, RestOperation, GraphQLOperation, ConnectorOperation, TypeNodeData, TypeFieldDefinition, ValidatorNodeData, TransformNodeData, AspectNodeData, SagaNodeData, SagaStep, SagaAction, StateMachineNodeData, StateMachineState, StateMachineTransition, AuthConfig, AuthPreset, JwtAlgorithm, MfaRequirement, MfaMethod, AuthSocialProvider, EnvVariable, EnvironmentOverlay } from '../../types'
 import OperationsEditor from './OperationsEditor'
 import GraphQLOperationsEditor from './GraphQLOperationsEditor'
 import { getConnector, type FieldDefinition } from '../../connectors'
@@ -1447,6 +1447,878 @@ function StateMachineProperties({ data, onChange }: { data: StateMachineNodeData
   )
 }
 
+// =============================================================================
+// Auth Properties
+// =============================================================================
+
+const presetDescriptions: Record<AuthPreset, string> = {
+  strict: 'Access: 15m, Refresh: 1d, MFA required, Strong passwords (12+)',
+  standard: 'Access: 1h, Refresh: 7d, MFA optional, Moderate passwords (8+)',
+  relaxed: 'Access: 24h, Refresh: 30d, MFA off, Basic passwords (6+)',
+  development: 'Access: 24h, Refresh: 90d, No restrictions',
+}
+
+const presetDefaults: Record<AuthPreset, Partial<AuthConfig>> = {
+  strict: {
+    jwt: { algorithm: 'RS256', accessLifetime: '15m', refreshLifetime: '1d', rotation: true },
+    password: { minLength: 12, requireUpper: true, requireLower: true, requireNumber: true, requireSpecial: true },
+    mfa: { required: 'required', methods: ['totp', 'webauthn'] },
+    sessions: { maxActive: 3, idleTimeout: '30m', absoluteTimeout: '8h', onMaxReached: 'deny' },
+    security: { bruteForce: true, bruteForceMaxAttempts: 3, bruteForceWindow: '15m', bruteForceLockout: '1h', replayProtection: true },
+  },
+  standard: {
+    jwt: { algorithm: 'HS256', accessLifetime: '1h', refreshLifetime: '7d' },
+    password: { minLength: 8, requireUpper: true, requireLower: true, requireNumber: true, requireSpecial: false },
+    mfa: { required: 'optional', methods: ['totp'] },
+    sessions: { maxActive: 5, idleTimeout: '1h', onMaxReached: 'revoke_oldest' },
+    security: { bruteForce: true, bruteForceMaxAttempts: 5, bruteForceWindow: '15m', bruteForceLockout: '30m' },
+  },
+  relaxed: {
+    jwt: { algorithm: 'HS256', accessLifetime: '24h', refreshLifetime: '30d' },
+    password: { minLength: 6, requireUpper: false, requireLower: false, requireNumber: false, requireSpecial: false },
+    mfa: { required: 'off', methods: [] },
+    sessions: { maxActive: 10, idleTimeout: '24h', onMaxReached: 'revoke_oldest' },
+    security: {},
+  },
+  development: {
+    jwt: { algorithm: 'HS256', accessLifetime: '24h', refreshLifetime: '90d' },
+    password: { minLength: 1, requireUpper: false, requireLower: false, requireNumber: false, requireSpecial: false },
+    mfa: { required: 'off', methods: [] },
+    sessions: { maxActive: 100, idleTimeout: '24h', onMaxReached: 'revoke_oldest' },
+    security: {},
+  },
+}
+
+const mfaMethodLabels: Record<MfaMethod, string> = {
+  totp: 'TOTP (Authenticator)',
+  webauthn: 'WebAuthn/Passkeys',
+  sms: 'SMS',
+  email: 'Email',
+  push: 'Push Notification',
+}
+
+const socialProviderOptions = ['google', 'github', 'apple'] as const
+
+function AuthProperties() {
+  const { authConfig, updateAuthConfig, nodes } = useStudioStore()
+  const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set(['preset']))
+
+  const inputClass = "w-full px-3 py-2 text-sm bg-neutral-800 border border-neutral-700 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-white placeholder-neutral-500"
+  const selectClass = inputClass
+
+  const toggleSection = (section: string) => {
+    const next = new Set(expandedSections)
+    if (next.has(section)) next.delete(section)
+    else next.add(section)
+    setExpandedSections(next)
+  }
+
+  const connectorNodes = nodes.filter(n => n.type === 'connector')
+
+  const applyPreset = (preset: AuthPreset) => {
+    const defaults = presetDefaults[preset]
+    updateAuthConfig({
+      preset,
+      ...defaults,
+    } as Partial<AuthConfig>)
+  }
+
+  const updateJwt = (fields: Partial<AuthConfig['jwt']>) => {
+    updateAuthConfig({ jwt: { ...authConfig.jwt, ...fields } })
+  }
+
+  const updatePassword = (fields: Partial<AuthConfig['password']>) => {
+    updateAuthConfig({ password: { ...authConfig.password, ...fields } })
+  }
+
+  const updateMfa = (fields: Partial<AuthConfig['mfa']>) => {
+    updateAuthConfig({ mfa: { ...authConfig.mfa, ...fields } })
+  }
+
+  const updateSessions = (fields: Partial<AuthConfig['sessions']>) => {
+    updateAuthConfig({ sessions: { ...authConfig.sessions, ...fields } })
+  }
+
+  const updateSecurity = (fields: Partial<AuthConfig['security']>) => {
+    updateAuthConfig({ security: { ...authConfig.security, ...fields } })
+  }
+
+  const updateStorage = (fields: Partial<AuthConfig['storage']>) => {
+    updateAuthConfig({ storage: { ...authConfig.storage, ...fields } })
+  }
+
+  const toggleMfaMethod = (method: MfaMethod) => {
+    const methods = authConfig.mfa.methods.includes(method)
+      ? authConfig.mfa.methods.filter(m => m !== method)
+      : [...authConfig.mfa.methods, method]
+    updateMfa({ methods })
+  }
+
+  const addSocialProvider = (provider: string) => {
+    if (authConfig.socialProviders.some(p => p.provider === provider)) return
+    updateAuthConfig({
+      socialProviders: [...authConfig.socialProviders, { provider, scopes: [] }],
+    })
+  }
+
+  const removeSocialProvider = (provider: string) => {
+    updateAuthConfig({
+      socialProviders: authConfig.socialProviders.filter(p => p.provider !== provider),
+    })
+  }
+
+  const updateSocialProvider = (provider: string, fields: Partial<AuthSocialProvider>) => {
+    updateAuthConfig({
+      socialProviders: authConfig.socialProviders.map(p =>
+        p.provider === provider ? { ...p, ...fields } : p
+      ),
+    })
+  }
+
+  const SectionHeader = ({ id, label }: { id: string; label: string }) => (
+    <button
+      onClick={() => toggleSection(id)}
+      className="w-full flex items-center justify-between py-1.5 text-xs font-medium text-neutral-400 hover:text-neutral-300"
+    >
+      <span>{label}</span>
+      <span className="text-neutral-600">{expandedSections.has(id) ? '−' : '+'}</span>
+    </button>
+  )
+
+  if (!authConfig.enabled) {
+    return (
+      <div className="space-y-3 pt-3 border-t border-neutral-800">
+        <div className="flex items-center justify-between">
+          <h3 className="text-xs font-semibold text-neutral-400 uppercase tracking-wider">Auth</h3>
+        </div>
+        <p className="text-xs text-neutral-500">Authentication is not configured for this service.</p>
+        <button
+          onClick={() => updateAuthConfig({ enabled: true })}
+          className="w-full px-3 py-2 text-sm bg-indigo-600 hover:bg-indigo-500 text-white rounded-md transition-colors"
+        >
+          Enable Authentication
+        </button>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-3 pt-3 border-t border-neutral-800">
+      <div className="flex items-center justify-between">
+        <h3 className="text-xs font-semibold text-neutral-400 uppercase tracking-wider">Auth</h3>
+        <button
+          onClick={() => updateAuthConfig({ enabled: false })}
+          className="text-xs text-red-500 hover:text-red-400"
+        >
+          Disable
+        </button>
+      </div>
+
+      {/* Preset */}
+      <div>
+        <SectionHeader id="preset" label="Preset" />
+        {expandedSections.has('preset') && (
+          <div className="space-y-2 pl-1">
+            <select
+              value={authConfig.preset}
+              onChange={(e) => applyPreset(e.target.value as AuthPreset)}
+              className={selectClass}
+            >
+              <option value="strict">Strict</option>
+              <option value="standard">Standard</option>
+              <option value="relaxed">Relaxed</option>
+              <option value="development">Development</option>
+            </select>
+            <p className="text-xs text-neutral-500">{presetDescriptions[authConfig.preset]}</p>
+          </div>
+        )}
+      </div>
+
+      {/* JWT */}
+      <div>
+        <SectionHeader id="jwt" label="JWT" />
+        {expandedSections.has('jwt') && (
+          <div className="space-y-2 pl-1">
+            <div>
+              <label className="block text-xs text-neutral-500 mb-1">Algorithm</label>
+              <select
+                value={authConfig.jwt.algorithm}
+                onChange={(e) => updateJwt({ algorithm: e.target.value as JwtAlgorithm })}
+                className={selectClass}
+              >
+                <option value="HS256">HS256 (HMAC)</option>
+                <option value="HS384">HS384 (HMAC)</option>
+                <option value="HS512">HS512 (HMAC)</option>
+                <option value="RS256">RS256 (RSA)</option>
+                <option value="RS384">RS384 (RSA)</option>
+                <option value="RS512">RS512 (RSA)</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs text-neutral-500 mb-1">Secret / Key</label>
+              <input
+                type="password"
+                value={authConfig.jwt.secret || ''}
+                onChange={(e) => updateJwt({ secret: e.target.value || undefined })}
+                placeholder='env("JWT_SECRET")'
+                className={inputClass}
+              />
+              <p className="text-xs text-neutral-600 mt-0.5">Use env() for production</p>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="block text-xs text-neutral-500 mb-1">Access TTL</label>
+                <input
+                  type="text"
+                  value={authConfig.jwt.accessLifetime}
+                  onChange={(e) => updateJwt({ accessLifetime: e.target.value })}
+                  placeholder="1h"
+                  className={inputClass}
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-neutral-500 mb-1">Refresh TTL</label>
+                <input
+                  type="text"
+                  value={authConfig.jwt.refreshLifetime}
+                  onChange={(e) => updateJwt({ refreshLifetime: e.target.value })}
+                  placeholder="7d"
+                  className={inputClass}
+                />
+              </div>
+            </div>
+            <div>
+              <label className="block text-xs text-neutral-500 mb-1">Issuer</label>
+              <input
+                type="text"
+                value={authConfig.jwt.issuer || ''}
+                onChange={(e) => updateJwt({ issuer: e.target.value || undefined })}
+                placeholder="my-service"
+                className={inputClass}
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="jwt-rotation"
+                checked={authConfig.jwt.rotation || false}
+                onChange={(e) => updateJwt({ rotation: e.target.checked || undefined })}
+                className="w-4 h-4 text-indigo-600 bg-neutral-800 border-neutral-600 rounded"
+              />
+              <label htmlFor="jwt-rotation" className="text-xs text-neutral-300">Refresh token rotation</label>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Password Policy */}
+      <div>
+        <SectionHeader id="password" label="Password Policy" />
+        {expandedSections.has('password') && (
+          <div className="space-y-2 pl-1">
+            <div>
+              <label className="block text-xs text-neutral-500 mb-1">Min Length</label>
+              <input
+                type="number"
+                value={authConfig.password.minLength}
+                onChange={(e) => updatePassword({ minLength: parseInt(e.target.value) || 1 })}
+                min={1}
+                max={128}
+                className={inputClass}
+              />
+            </div>
+            {[
+              { key: 'requireUpper' as const, label: 'Require uppercase' },
+              { key: 'requireLower' as const, label: 'Require lowercase' },
+              { key: 'requireNumber' as const, label: 'Require number' },
+              { key: 'requireSpecial' as const, label: 'Require special character' },
+            ].map(({ key, label }) => (
+              <div key={key} className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id={`pw-${key}`}
+                  checked={authConfig.password[key]}
+                  onChange={(e) => updatePassword({ [key]: e.target.checked })}
+                  className="w-4 h-4 text-indigo-600 bg-neutral-800 border-neutral-600 rounded"
+                />
+                <label htmlFor={`pw-${key}`} className="text-xs text-neutral-300">{label}</label>
+              </div>
+            ))}
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="pw-breach"
+                checked={authConfig.password.breachCheck || false}
+                onChange={(e) => updatePassword({ breachCheck: e.target.checked || undefined })}
+                className="w-4 h-4 text-indigo-600 bg-neutral-800 border-neutral-600 rounded"
+              />
+              <label htmlFor="pw-breach" className="text-xs text-neutral-300">Breach check (haveibeenpwned)</label>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* MFA */}
+      <div>
+        <SectionHeader id="mfa" label="Multi-Factor Authentication" />
+        {expandedSections.has('mfa') && (
+          <div className="space-y-2 pl-1">
+            <div>
+              <label className="block text-xs text-neutral-500 mb-1">Requirement</label>
+              <select
+                value={authConfig.mfa.required}
+                onChange={(e) => updateMfa({ required: e.target.value as MfaRequirement })}
+                className={selectClass}
+              >
+                <option value="required">Required</option>
+                <option value="optional">Optional</option>
+                <option value="off">Off</option>
+              </select>
+            </div>
+            {authConfig.mfa.required !== 'off' && (
+              <div>
+                <label className="block text-xs text-neutral-500 mb-1">Methods</label>
+                {(Object.entries(mfaMethodLabels) as [MfaMethod, string][]).map(([method, label]) => (
+                  <div key={method} className="flex items-center gap-2 py-0.5">
+                    <input
+                      type="checkbox"
+                      id={`mfa-${method}`}
+                      checked={authConfig.mfa.methods.includes(method)}
+                      onChange={() => toggleMfaMethod(method)}
+                      className="w-4 h-4 text-indigo-600 bg-neutral-800 border-neutral-600 rounded"
+                    />
+                    <label htmlFor={`mfa-${method}`} className="text-xs text-neutral-300">{label}</label>
+                  </div>
+                ))}
+              </div>
+            )}
+            {authConfig.mfa.required !== 'off' && authConfig.mfa.methods.includes('totp') && (
+              <div>
+                <label className="block text-xs text-neutral-500 mb-1">TOTP Issuer</label>
+                <input
+                  type="text"
+                  value={authConfig.mfa.totpIssuer || ''}
+                  onChange={(e) => updateMfa({ totpIssuer: e.target.value || undefined })}
+                  placeholder="My App"
+                  className={inputClass}
+                />
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Sessions */}
+      <div>
+        <SectionHeader id="sessions" label="Sessions" />
+        {expandedSections.has('sessions') && (
+          <div className="space-y-2 pl-1">
+            <div>
+              <label className="block text-xs text-neutral-500 mb-1">Max Active</label>
+              <input
+                type="number"
+                value={authConfig.sessions.maxActive}
+                onChange={(e) => updateSessions({ maxActive: parseInt(e.target.value) || 1 })}
+                min={1}
+                max={100}
+                className={inputClass}
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-neutral-500 mb-1">Idle Timeout</label>
+              <input
+                type="text"
+                value={authConfig.sessions.idleTimeout}
+                onChange={(e) => updateSessions({ idleTimeout: e.target.value })}
+                placeholder="1h"
+                className={inputClass}
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-neutral-500 mb-1">On Max Reached</label>
+              <select
+                value={authConfig.sessions.onMaxReached}
+                onChange={(e) => updateSessions({ onMaxReached: e.target.value as 'deny' | 'revoke_oldest' | 'revoke_all' })}
+                className={selectClass}
+              >
+                <option value="revoke_oldest">Revoke Oldest</option>
+                <option value="deny">Deny New</option>
+                <option value="revoke_all">Revoke All</option>
+              </select>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Security */}
+      <div>
+        <SectionHeader id="security" label="Security" />
+        {expandedSections.has('security') && (
+          <div className="space-y-2 pl-1">
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="sec-brute"
+                checked={authConfig.security.bruteForce || false}
+                onChange={(e) => updateSecurity({ bruteForce: e.target.checked || undefined })}
+                className="w-4 h-4 text-indigo-600 bg-neutral-800 border-neutral-600 rounded"
+              />
+              <label htmlFor="sec-brute" className="text-xs text-neutral-300">Brute force protection</label>
+            </div>
+            {authConfig.security.bruteForce && (
+              <>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-xs text-neutral-500 mb-1">Max Attempts</label>
+                    <input
+                      type="number"
+                      value={authConfig.security.bruteForceMaxAttempts || 5}
+                      onChange={(e) => updateSecurity({ bruteForceMaxAttempts: parseInt(e.target.value) || 5 })}
+                      min={1}
+                      className={inputClass}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-neutral-500 mb-1">Lockout</label>
+                    <input
+                      type="text"
+                      value={authConfig.security.bruteForceLockout || '30m'}
+                      onChange={(e) => updateSecurity({ bruteForceLockout: e.target.value })}
+                      placeholder="30m"
+                      className={inputClass}
+                    />
+                  </div>
+                </div>
+              </>
+            )}
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="sec-replay"
+                checked={authConfig.security.replayProtection || false}
+                onChange={(e) => updateSecurity({ replayProtection: e.target.checked || undefined })}
+                className="w-4 h-4 text-indigo-600 bg-neutral-800 border-neutral-600 rounded"
+              />
+              <label htmlFor="sec-replay" className="text-xs text-neutral-300">Replay protection</label>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Storage */}
+      <div>
+        <SectionHeader id="storage" label="Storage" />
+        {expandedSections.has('storage') && (
+          <div className="space-y-2 pl-1">
+            <div>
+              <label className="block text-xs text-neutral-500 mb-1">Users Connector</label>
+              <select
+                value={authConfig.storage.usersConnector || ''}
+                onChange={(e) => updateStorage({ usersConnector: e.target.value || undefined })}
+                className={selectClass}
+              >
+                <option value="">None (default)</option>
+                {connectorNodes.map(n => {
+                  const d = n.data as ConnectorNodeData
+                  return <option key={n.id} value={d.label.toLowerCase().replace(/\s+/g, '_')}>{d.label}</option>
+                })}
+              </select>
+            </div>
+            {authConfig.storage.usersConnector && (
+              <div>
+                <label className="block text-xs text-neutral-500 mb-1">Users Table</label>
+                <input
+                  type="text"
+                  value={authConfig.storage.usersTable || ''}
+                  onChange={(e) => updateStorage({ usersTable: e.target.value || undefined })}
+                  placeholder="users"
+                  className={inputClass}
+                />
+              </div>
+            )}
+            <div>
+              <label className="block text-xs text-neutral-500 mb-1">Token Storage</label>
+              <select
+                value={authConfig.storage.tokenDriver}
+                onChange={(e) => updateStorage({ tokenDriver: e.target.value as 'memory' | 'redis' })}
+                className={selectClass}
+              >
+                <option value="memory">Memory (dev only)</option>
+                <option value="redis">Redis</option>
+              </select>
+            </div>
+            {authConfig.storage.tokenDriver === 'redis' && (
+              <div>
+                <label className="block text-xs text-neutral-500 mb-1">Redis Address</label>
+                <input
+                  type="text"
+                  value={authConfig.storage.tokenAddress || ''}
+                  onChange={(e) => updateStorage({ tokenAddress: e.target.value || undefined })}
+                  placeholder="localhost:6379"
+                  className={inputClass}
+                />
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Social Providers */}
+      <div>
+        <SectionHeader id="social" label="Social Login" />
+        {expandedSections.has('social') && (
+          <div className="space-y-2 pl-1">
+            {authConfig.socialProviders.map(sp => (
+              <div key={sp.provider} className="p-2 bg-neutral-800 rounded-md space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-medium text-neutral-300 capitalize">{sp.provider}</span>
+                  <button
+                    onClick={() => removeSocialProvider(sp.provider)}
+                    className="text-red-500 hover:text-red-400"
+                  >
+                    <Trash2 className="w-3 h-3" />
+                  </button>
+                </div>
+                <div>
+                  <label className="block text-xs text-neutral-500 mb-0.5">Client ID</label>
+                  <input
+                    type="text"
+                    value={sp.clientId || ''}
+                    onChange={(e) => updateSocialProvider(sp.provider, { clientId: e.target.value || undefined })}
+                    placeholder={`env("${sp.provider.toUpperCase()}_CLIENT_ID")`}
+                    className={inputClass}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-neutral-500 mb-0.5">Client Secret</label>
+                  <input
+                    type="password"
+                    value={sp.clientSecret || ''}
+                    onChange={(e) => updateSocialProvider(sp.provider, { clientSecret: e.target.value || undefined })}
+                    placeholder={`env("${sp.provider.toUpperCase()}_CLIENT_SECRET")`}
+                    className={inputClass}
+                  />
+                </div>
+              </div>
+            ))}
+            {socialProviderOptions.filter(p => !authConfig.socialProviders.some(sp => sp.provider === p)).length > 0 && (
+              <div className="flex gap-1 flex-wrap">
+                {socialProviderOptions
+                  .filter(p => !authConfig.socialProviders.some(sp => sp.provider === p))
+                  .map(p => (
+                    <button
+                      key={p}
+                      onClick={() => addSocialProvider(p)}
+                      className="px-2 py-1 text-xs bg-neutral-800 hover:bg-neutral-700 text-neutral-400 hover:text-neutral-300 rounded capitalize"
+                    >
+                      + {p}
+                    </button>
+                  ))}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Endpoint Prefix */}
+      <div>
+        <label className="block text-xs text-neutral-500 mb-1">Endpoint Prefix</label>
+        <input
+          type="text"
+          value={authConfig.endpointPrefix || ''}
+          onChange={(e) => updateAuthConfig({ endpointPrefix: e.target.value || undefined })}
+          placeholder="/auth"
+          className={inputClass}
+        />
+        <p className="text-xs text-neutral-600 mt-0.5">Auto-generated endpoints: /login, /register, /me, etc.</p>
+      </div>
+    </div>
+  )
+}
+
+// =============================================================================
+// Environment Variables Properties
+// =============================================================================
+
+function scanEnvReferences(nodes: { data: Record<string, unknown> }[]): string[] {
+  const refs = new Set<string>()
+  const envPattern = /env\(\s*["']([^"']+)["']/g
+
+  function scanValue(val: unknown) {
+    if (typeof val === 'string') {
+      let match
+      while ((match = envPattern.exec(val)) !== null) {
+        refs.add(match[1])
+      }
+    } else if (val && typeof val === 'object') {
+      for (const v of Object.values(val as Record<string, unknown>)) {
+        scanValue(v)
+      }
+    }
+  }
+
+  for (const node of nodes) {
+    scanValue(node.data)
+  }
+  return Array.from(refs).sort()
+}
+
+function EnvProperties() {
+  const { envConfig, updateEnvConfig, nodes, authConfig } = useStudioStore()
+  const [activeTab, setActiveTab] = useState<'variables' | 'environments'>('variables')
+  const [selectedEnv, setSelectedEnv] = useState<string | null>(null)
+
+  const inputClass = "w-full px-3 py-2 text-sm bg-neutral-800 border border-neutral-700 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-white placeholder-neutral-500"
+
+  // Scan for env() references in the project
+  const allNodes = nodes.map(n => ({ data: n.data as Record<string, unknown> }))
+  // Also scan auth config
+  const authData = authConfig.enabled ? [{ data: authConfig as unknown as Record<string, unknown> }] : []
+  const envRefs = scanEnvReferences([...allNodes, ...authData])
+
+  // Find which refs are defined
+  const definedKeys = new Set(envConfig.variables.map(v => v.key))
+  const undefinedRefs = envRefs.filter(r => !definedKeys.has(r))
+
+  const addVariable = (key?: string) => {
+    const newVar: EnvVariable = { key: key || '', value: '', secret: false }
+    updateEnvConfig({ variables: [...envConfig.variables, newVar] })
+  }
+
+  const updateVariable = (index: number, fields: Partial<EnvVariable>) => {
+    const updated = envConfig.variables.map((v, i) =>
+      i === index ? { ...v, ...fields } : v
+    )
+    updateEnvConfig({ variables: updated })
+  }
+
+  const removeVariable = (index: number) => {
+    updateEnvConfig({ variables: envConfig.variables.filter((_, i) => i !== index) })
+  }
+
+  const addEnvironment = () => {
+    const name = envConfig.environments.length === 0 ? 'development'
+      : envConfig.environments.length === 1 ? 'staging'
+      : envConfig.environments.length === 2 ? 'production'
+      : `env_${envConfig.environments.length + 1}`
+    updateEnvConfig({
+      environments: [...envConfig.environments, { name, variables: [] }],
+    })
+    setSelectedEnv(name)
+  }
+
+  const removeEnvironment = (name: string) => {
+    updateEnvConfig({
+      environments: envConfig.environments.filter(e => e.name !== name),
+      activeEnvironment: envConfig.activeEnvironment === name ? undefined : envConfig.activeEnvironment,
+    })
+    if (selectedEnv === name) setSelectedEnv(null)
+  }
+
+  const updateEnvOverlay = (envName: string, variables: EnvVariable[]) => {
+    updateEnvConfig({
+      environments: envConfig.environments.map(e =>
+        e.name === envName ? { ...e, variables } : e
+      ),
+    })
+  }
+
+  const addEnvVariable = (envName: string, key?: string) => {
+    const env = envConfig.environments.find(e => e.name === envName)
+    if (!env) return
+    updateEnvOverlay(envName, [...env.variables, { key: key || '', value: '' }])
+  }
+
+  const updateEnvVariable = (envName: string, index: number, fields: Partial<EnvVariable>) => {
+    const env = envConfig.environments.find(e => e.name === envName)
+    if (!env) return
+    updateEnvOverlay(envName, env.variables.map((v, i) => i === index ? { ...v, ...fields } : v))
+  }
+
+  const removeEnvVariable = (envName: string, index: number) => {
+    const env = envConfig.environments.find(e => e.name === envName)
+    if (!env) return
+    updateEnvOverlay(envName, env.variables.filter((_, i) => i !== index))
+  }
+
+  return (
+    <div className="space-y-3 pt-3 border-t border-neutral-800">
+      <div className="flex items-center justify-between">
+        <h3 className="text-xs font-semibold text-neutral-400 uppercase tracking-wider">
+          Environment
+        </h3>
+      </div>
+
+      {/* Tabs */}
+      <div className="flex gap-1 bg-neutral-800 rounded-md p-0.5">
+        <button
+          onClick={() => setActiveTab('variables')}
+          className={`flex-1 px-2 py-1 text-xs rounded ${activeTab === 'variables' ? 'bg-neutral-700 text-white' : 'text-neutral-400 hover:text-neutral-300'}`}
+        >
+          Variables
+        </button>
+        <button
+          onClick={() => setActiveTab('environments')}
+          className={`flex-1 px-2 py-1 text-xs rounded ${activeTab === 'environments' ? 'bg-neutral-700 text-white' : 'text-neutral-400 hover:text-neutral-300'}`}
+        >
+          Environments
+        </button>
+      </div>
+
+      {activeTab === 'variables' && (
+        <div className="space-y-2">
+          {/* Undefined references warning */}
+          {undefinedRefs.length > 0 && (
+            <div className="p-2 bg-amber-900/20 border border-amber-700/30 rounded text-xs">
+              <p className="text-amber-400 font-medium mb-1">Referenced but not defined:</p>
+              <div className="flex flex-wrap gap-1">
+                {undefinedRefs.map(ref => (
+                  <button
+                    key={ref}
+                    onClick={() => addVariable(ref)}
+                    className="px-1.5 py-0.5 bg-amber-800/30 hover:bg-amber-800/50 text-amber-300 rounded text-xs"
+                    title="Click to add"
+                  >
+                    {ref}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Variable list */}
+          {envConfig.variables.map((v, i) => (
+            <div key={i} className="flex gap-1 items-start">
+              <div className="flex-1 space-y-1">
+                <input
+                  type="text"
+                  value={v.key}
+                  onChange={(e) => updateVariable(i, { key: e.target.value.toUpperCase().replace(/[^A-Z0-9_]/g, '') })}
+                  placeholder="VAR_NAME"
+                  className="w-full px-2 py-1 text-xs bg-neutral-800 border border-neutral-700 rounded text-white font-mono placeholder-neutral-600"
+                />
+                <input
+                  type={v.secret ? 'password' : 'text'}
+                  value={v.value}
+                  onChange={(e) => updateVariable(i, { value: e.target.value })}
+                  placeholder="value"
+                  className="w-full px-2 py-1 text-xs bg-neutral-800 border border-neutral-700 rounded text-white placeholder-neutral-600"
+                />
+              </div>
+              <div className="flex flex-col gap-0.5 pt-0.5">
+                <button
+                  onClick={() => updateVariable(i, { secret: !v.secret })}
+                  className={`px-1 py-0.5 text-xs rounded ${v.secret ? 'text-amber-400 bg-amber-900/30' : 'text-neutral-500 hover:text-neutral-400'}`}
+                  title={v.secret ? 'Secret (hidden in .env.example)' : 'Mark as secret'}
+                >
+                  {v.secret ? 'S' : 's'}
+                </button>
+                <button
+                  onClick={() => removeVariable(i)}
+                  className="text-red-500 hover:text-red-400"
+                >
+                  <Trash2 className="w-3 h-3" />
+                </button>
+              </div>
+            </div>
+          ))}
+
+          <button
+            onClick={() => addVariable()}
+            className="w-full flex items-center justify-center gap-1 px-2 py-1.5 text-xs text-neutral-500 hover:text-neutral-300 border border-dashed border-neutral-700 hover:border-neutral-600 rounded"
+          >
+            <Plus className="w-3 h-3" />
+            Add Variable
+          </button>
+
+          {envConfig.variables.length > 0 && (
+            <p className="text-xs text-neutral-600">
+              Use as: env("{envConfig.variables[0]?.key || 'VAR_NAME'}")
+            </p>
+          )}
+        </div>
+      )}
+
+      {activeTab === 'environments' && (
+        <div className="space-y-2">
+          <p className="text-xs text-neutral-500">
+            Override variables per environment. Files go in environments/ directory.
+          </p>
+
+          {/* Environment list */}
+          {envConfig.environments.map(env => (
+            <div key={env.name} className="border border-neutral-700 rounded">
+              <div className="flex items-center justify-between px-2 py-1.5 bg-neutral-800 rounded-t">
+                <button
+                  onClick={() => setSelectedEnv(selectedEnv === env.name ? null : env.name)}
+                  className="flex-1 text-left text-xs font-medium text-neutral-300"
+                >
+                  {env.name}
+                  <span className="text-neutral-500 ml-1">({env.variables.length} vars)</span>
+                </button>
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => updateEnvConfig({ activeEnvironment: env.name })}
+                    className={`px-1.5 py-0.5 text-xs rounded ${envConfig.activeEnvironment === env.name ? 'bg-green-800/50 text-green-400' : 'text-neutral-500 hover:text-neutral-400'}`}
+                  >
+                    {envConfig.activeEnvironment === env.name ? 'Active' : 'Set'}
+                  </button>
+                  <button
+                    onClick={() => removeEnvironment(env.name)}
+                    className="text-red-500 hover:text-red-400"
+                  >
+                    <Trash2 className="w-3 h-3" />
+                  </button>
+                </div>
+              </div>
+
+              {selectedEnv === env.name && (
+                <div className="p-2 space-y-1.5">
+                  {env.variables.map((v, i) => (
+                    <div key={i} className="flex gap-1 items-center">
+                      <input
+                        type="text"
+                        value={v.key}
+                        onChange={(e) => updateEnvVariable(env.name, i, { key: e.target.value.toUpperCase().replace(/[^A-Z0-9_]/g, '') })}
+                        placeholder="VAR_NAME"
+                        className="flex-1 px-2 py-1 text-xs bg-neutral-900 border border-neutral-700 rounded text-white font-mono placeholder-neutral-600"
+                      />
+                      <input
+                        type="text"
+                        value={v.value}
+                        onChange={(e) => updateEnvVariable(env.name, i, { value: e.target.value })}
+                        placeholder="value"
+                        className="flex-1 px-2 py-1 text-xs bg-neutral-900 border border-neutral-700 rounded text-white placeholder-neutral-600"
+                      />
+                      <button onClick={() => removeEnvVariable(env.name, i)} className="text-red-500 hover:text-red-400">
+                        <Trash2 className="w-3 h-3" />
+                      </button>
+                    </div>
+                  ))}
+                  <button
+                    onClick={() => addEnvVariable(env.name)}
+                    className="w-full flex items-center justify-center gap-1 px-2 py-1 text-xs text-neutral-500 hover:text-neutral-300 border border-dashed border-neutral-700 rounded"
+                  >
+                    <Plus className="w-3 h-3" /> Add Override
+                  </button>
+                </div>
+              )}
+            </div>
+          ))}
+
+          <button
+            onClick={addEnvironment}
+            className="w-full flex items-center justify-center gap-1 px-2 py-1.5 text-xs text-neutral-500 hover:text-neutral-300 border border-dashed border-neutral-700 hover:border-neutral-600 rounded"
+          >
+            <Plus className="w-3 h-3" />
+            Add Environment
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
 function ServiceProperties() {
   const { serviceConfig, updateServiceConfig } = useStudioStore()
 
@@ -1476,6 +2348,10 @@ function ServiceProperties() {
           className="w-full px-3 py-2 text-sm bg-neutral-800 border border-neutral-700 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-white placeholder-neutral-500"
         />
       </div>
+      <AuthProperties />
+
+      <EnvProperties />
+
       <div className="pt-2 border-t border-neutral-800">
         <p className="text-xs text-neutral-500">Select a node to edit its properties</p>
       </div>

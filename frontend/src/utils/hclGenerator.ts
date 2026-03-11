@@ -1,5 +1,5 @@
 import type { Node, Edge } from '@xyflow/react'
-import type { ConnectorNodeData, FlowNodeData, FlowTo, ServiceConfig, TypeNodeData, TypeFieldDefinition, ValidatorNodeData, TransformNodeData, AspectNodeData, SagaNodeData, SagaAction, StateMachineNodeData } from '../types'
+import type { ConnectorNodeData, FlowNodeData, FlowTo, ServiceConfig, TypeNodeData, TypeFieldDefinition, ValidatorNodeData, TransformNodeData, AspectNodeData, SagaNodeData, SagaAction, StateMachineNodeData, AuthConfig, EnvironmentConfig } from '../types'
 import { getConnector, getConnectorMode } from '../connectors'
 import { getSimpleFlowBlocks } from '../flow-blocks'
 
@@ -721,6 +721,156 @@ function generateStateMachineHCL(node: StudioNode): string {
   return lines.join('\n')
 }
 
+function generateAuthHCL(auth: AuthConfig): string {
+  const lines: string[] = []
+
+  lines.push('# Authentication configuration')
+  lines.push('auth {')
+  lines.push(`  preset = "${auth.preset}"`)
+
+  // JWT
+  lines.push('')
+  lines.push('  jwt {')
+  if (auth.jwt.secret) {
+    lines.push(`    secret           = ${auth.jwt.secret.startsWith('env(') ? auth.jwt.secret : `"${auth.jwt.secret}"`}`)
+  }
+  lines.push(`    algorithm        = "${auth.jwt.algorithm}"`)
+  lines.push(`    access_lifetime  = "${auth.jwt.accessLifetime}"`)
+  lines.push(`    refresh_lifetime = "${auth.jwt.refreshLifetime}"`)
+  if (auth.jwt.issuer) lines.push(`    issuer           = "${auth.jwt.issuer}"`)
+  if (auth.jwt.audience && auth.jwt.audience.length > 0) {
+    lines.push(`    audience         = [${auth.jwt.audience.map(a => `"${a}"`).join(', ')}]`)
+  }
+  if (auth.jwt.rotation) lines.push('    rotation         = true')
+  lines.push('  }')
+
+  // Password
+  lines.push('')
+  lines.push('  password {')
+  lines.push(`    min_length      = ${auth.password.minLength}`)
+  if (auth.password.maxLength) lines.push(`    max_length      = ${auth.password.maxLength}`)
+  lines.push(`    require_upper   = ${auth.password.requireUpper}`)
+  lines.push(`    require_lower   = ${auth.password.requireLower}`)
+  lines.push(`    require_number  = ${auth.password.requireNumber}`)
+  lines.push(`    require_special = ${auth.password.requireSpecial}`)
+  if (auth.password.history) lines.push(`    history         = ${auth.password.history}`)
+  if (auth.password.breachCheck) lines.push('    breach_check    = true')
+  lines.push('  }')
+
+  // MFA
+  if (auth.mfa.required !== 'off') {
+    lines.push('')
+    lines.push('  mfa {')
+    lines.push(`    required = "${auth.mfa.required}"`)
+    if (auth.mfa.methods.length > 0) {
+      lines.push(`    methods  = [${auth.mfa.methods.map(m => `"${m}"`).join(', ')}]`)
+    }
+    if (auth.mfa.methods.includes('totp') && auth.mfa.totpIssuer) {
+      lines.push('')
+      lines.push('    totp {')
+      lines.push(`      issuer = "${auth.mfa.totpIssuer}"`)
+      lines.push('    }')
+    }
+    if (auth.mfa.recoveryCodes !== false) {
+      lines.push('')
+      lines.push('    recovery_codes {')
+      lines.push('      enabled = true')
+      if (auth.mfa.recoveryCount) lines.push(`      count   = ${auth.mfa.recoveryCount}`)
+      lines.push('    }')
+    }
+    lines.push('  }')
+  }
+
+  // Sessions
+  lines.push('')
+  lines.push('  sessions {')
+  lines.push(`    max_active     = ${auth.sessions.maxActive}`)
+  lines.push(`    idle_timeout   = "${auth.sessions.idleTimeout}"`)
+  if (auth.sessions.absoluteTimeout) {
+    lines.push(`    absolute_timeout = "${auth.sessions.absoluteTimeout}"`)
+  }
+  lines.push(`    on_max_reached = "${auth.sessions.onMaxReached}"`)
+  lines.push('  }')
+
+  // Security
+  if (auth.security.bruteForce || auth.security.replayProtection) {
+    lines.push('')
+    lines.push('  security {')
+    if (auth.security.bruteForce) {
+      lines.push('    brute_force {')
+      lines.push('      enabled      = true')
+      if (auth.security.bruteForceMaxAttempts) {
+        lines.push(`      max_attempts = ${auth.security.bruteForceMaxAttempts}`)
+      }
+      if (auth.security.bruteForceWindow) {
+        lines.push(`      window       = "${auth.security.bruteForceWindow}"`)
+      }
+      if (auth.security.bruteForceLockout) {
+        lines.push(`      lockout_time = "${auth.security.bruteForceLockout}"`)
+      }
+      lines.push('    }')
+    }
+    if (auth.security.replayProtection) {
+      if (auth.security.bruteForce) lines.push('')
+      lines.push('    replay_protection {')
+      lines.push('      enabled = true')
+      lines.push('    }')
+    }
+    lines.push('  }')
+  }
+
+  // Social providers
+  if (auth.socialProviders.length > 0) {
+    lines.push('')
+    lines.push('  social {')
+    for (const sp of auth.socialProviders) {
+      lines.push(`    ${sp.provider} {`)
+      if (sp.clientId) {
+        lines.push(`      client_id     = ${sp.clientId.startsWith('env(') ? sp.clientId : `"${sp.clientId}"`}`)
+      }
+      if (sp.clientSecret) {
+        lines.push(`      client_secret = ${sp.clientSecret.startsWith('env(') ? sp.clientSecret : `"${sp.clientSecret}"`}`)
+      }
+      if (sp.scopes && sp.scopes.length > 0) {
+        lines.push(`      scopes        = [${sp.scopes.map(s => `"${s}"`).join(', ')}]`)
+      }
+      lines.push('    }')
+    }
+    lines.push('  }')
+  }
+
+  // Storage
+  lines.push('')
+  lines.push('  storage {')
+  lines.push(`    driver = "${auth.storage.tokenDriver}"`)
+  if (auth.storage.tokenDriver === 'redis' && auth.storage.tokenAddress) {
+    lines.push(`    address = "${auth.storage.tokenAddress}"`)
+  }
+  lines.push('  }')
+
+  // Users storage
+  if (auth.storage.usersConnector) {
+    lines.push('')
+    lines.push('  users {')
+    lines.push(`    connector = "${auth.storage.usersConnector}"`)
+    if (auth.storage.usersTable) {
+      lines.push(`    table     = "${auth.storage.usersTable}"`)
+    }
+    lines.push('  }')
+  }
+
+  // Endpoints
+  if (auth.endpointPrefix && auth.endpointPrefix !== '/auth') {
+    lines.push('')
+    lines.push('  endpoints {')
+    lines.push(`    prefix = "${auth.endpointPrefix}"`)
+    lines.push('  }')
+  }
+
+  lines.push('}')
+  return lines.join('\n')
+}
+
 // Validate project - returns array of error messages
 export function validateProject(nodes: StudioNode[]): string[] {
   const errors: string[] = []
@@ -783,7 +933,7 @@ export function validateProject(nodes: StudioNode[]): string[] {
 }
 
 // Generate project with multiple files
-export function generateProject(nodes: StudioNode[], edges: Edge[], serviceConfig?: ServiceConfig): GeneratedProject {
+export function generateProject(nodes: StudioNode[], edges: Edge[], serviceConfig?: ServiceConfig, authConfig?: AuthConfig, envConfig?: EnvironmentConfig): GeneratedProject {
   const nodesMap = new Map(nodes.map((n) => [n.id, n]))
   const files: GeneratedFile[] = []
   const errors = validateProject(nodes)
@@ -806,6 +956,50 @@ export function generateProject(nodes: StudioNode[], edges: Edge[], serviceConfi
     name: 'config.hcl',
     content: `# Service configuration\nservice {\n  name    = "${name}"\n  version = "${version}"\n}\n`
   })
+
+  // Generate auth file
+  if (authConfig?.enabled) {
+    files.push({
+      path: 'auth/auth.hcl',
+      name: 'auth.hcl',
+      content: generateAuthHCL(authConfig) + '\n'
+    })
+  }
+
+  // Generate .env file
+  if (envConfig && envConfig.variables.length > 0) {
+    const envLines = envConfig.variables.map(v =>
+      `${v.key}=${v.value}`
+    )
+    files.push({
+      path: '.env',
+      name: '.env',
+      content: envLines.join('\n') + '\n'
+    })
+
+    // .env.example (secrets blanked out)
+    const exampleLines = envConfig.variables.map(v =>
+      v.secret ? `${v.key}=` : `${v.key}=${v.value}`
+    )
+    files.push({
+      path: '.env.example',
+      name: '.env.example',
+      content: exampleLines.join('\n') + '\n'
+    })
+  }
+
+  // Generate environment overlay files
+  if (envConfig?.environments) {
+    for (const env of envConfig.environments) {
+      if (env.variables.length === 0) continue
+      const lines = env.variables.map(v => `${v.key}=${v.value}`)
+      files.push({
+        path: `environments/${env.name}.env`,
+        name: `${env.name}.env`,
+        content: lines.join('\n') + '\n'
+      })
+    }
+  }
 
   // Generate connector files (one per connector)
   for (const node of connectorNodes) {
@@ -922,7 +1116,7 @@ export function generateProject(nodes: StudioNode[], edges: Edge[], serviceConfi
 }
 
 // Legacy function for backward compatibility - generates single HCL string
-export function generateHCL(nodes: StudioNode[], edges: Edge[], serviceConfig?: ServiceConfig): string {
-  const project = generateProject(nodes, edges, serviceConfig)
+export function generateHCL(nodes: StudioNode[], edges: Edge[], serviceConfig?: ServiceConfig, authConfig?: AuthConfig, envConfig?: EnvironmentConfig): string {
+  const project = generateProject(nodes, edges, serviceConfig, authConfig, envConfig)
   return project.files.map(f => `# === ${f.path} ===\n${f.content}`).join('\n')
 }

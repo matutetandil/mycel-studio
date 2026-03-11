@@ -9,7 +9,7 @@ import {
   type EdgeChange,
   type Connection,
 } from '@xyflow/react'
-import type { ConnectorNodeData, FlowNodeData, ServiceConfig } from '../types'
+import type { ConnectorNodeData, FlowNodeData, ServiceConfig, AuthConfig, EnvironmentConfig } from '../types'
 
 type StudioNode = Node<ConnectorNodeData | FlowNodeData>
 
@@ -18,6 +18,8 @@ interface StudioState {
   edges: Edge[]
   selectedNodeId: string | null
   serviceConfig: ServiceConfig
+  authConfig: AuthConfig
+  envConfig: EnvironmentConfig
   setNodes: (nodes: StudioNode[]) => void
   setEdges: (edges: Edge[]) => void
   addNode: (node: StudioNode) => void
@@ -25,6 +27,8 @@ interface StudioState {
   removeNode: (id: string) => void
   selectNode: (id: string | null) => void
   updateServiceConfig: (config: Partial<ServiceConfig>) => void
+  updateAuthConfig: (config: Partial<AuthConfig>) => void
+  updateEnvConfig: (config: Partial<EnvironmentConfig>) => void
   onNodesChange: (changes: NodeChange<StudioNode>[]) => void
   onEdgesChange: (changes: EdgeChange<Edge>[]) => void
   onConnect: (connection: Connection) => void
@@ -35,6 +39,40 @@ export const useStudioStore = create<StudioState>((set) => ({
   edges: [],
   selectedNodeId: null,
   serviceConfig: { name: 'my-service', version: '1.0.0' },
+  authConfig: {
+    enabled: false,
+    preset: 'standard',
+    jwt: {
+      algorithm: 'HS256',
+      accessLifetime: '1h',
+      refreshLifetime: '7d',
+    },
+    password: {
+      minLength: 8,
+      requireUpper: true,
+      requireLower: true,
+      requireNumber: true,
+      requireSpecial: false,
+    },
+    mfa: {
+      required: 'optional',
+      methods: ['totp'],
+    },
+    sessions: {
+      maxActive: 5,
+      idleTimeout: '1h',
+      onMaxReached: 'revoke_oldest',
+    },
+    security: {},
+    storage: {
+      tokenDriver: 'memory',
+    },
+    socialProviders: [],
+  },
+  envConfig: {
+    variables: [],
+    environments: [],
+  },
 
   setNodes: (nodes) => set({ nodes }),
   setEdges: (edges) => set({ edges }),
@@ -60,6 +98,16 @@ export const useStudioStore = create<StudioState>((set) => ({
   updateServiceConfig: (config) =>
     set((state) => ({
       serviceConfig: { ...state.serviceConfig, ...config },
+    })),
+
+  updateAuthConfig: (config) =>
+    set((state) => ({
+      authConfig: { ...state.authConfig, ...config },
+    })),
+
+  updateEnvConfig: (config) =>
+    set((state) => ({
+      envConfig: { ...state.envConfig, ...config },
     })),
 
   onNodesChange: (changes) =>

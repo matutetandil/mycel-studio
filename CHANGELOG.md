@@ -2,6 +2,69 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.0] - Phase 7: Enterprise Features
+
+### Added
+
+- **Batch Processing (7.1):**
+  - `BatchEditor.tsx` — Custom editor for batch/ETL flows
+  - Source connector, SQL query, chunk size, on_error (stop/continue)
+  - Per-item transform and target connector configuration
+  - HCL preview, visual indicator on flow nodes
+  - `batch` flow block definition
+
+- **Sagas (7.2) — Distributed Transactions:**
+  - `SagaNode.tsx` — Top-level node with step preview (action/delay/await icons)
+  - `SagaProperties` — Step editor with action/compensate pairs, delay, await
+  - On_complete/on_failure callbacks, per-step timeout and on_error
+  - HCL generation: `saga "name" { from, step "name" { action {}, compensate {} }, on_complete, on_failure }`
+  - Output to `sagas/sagas.hcl`
+
+- **State Machines (7.3) — Entity Lifecycle:**
+  - `StateMachineNode.tsx` — Top-level node with state visualization
+  - `StateMachineProperties` — State editor with transitions (event → target + guard + action)
+  - Initial state selector, final state marking
+  - HCL generation: `state_machine "name" { initial, state "name" { on "event" { transition_to, guard, action } } }`
+  - Output to `machines/machines.hcl`
+
+- **Environment Variables (7.5):**
+  - `EnvProperties` — Variables panel with two tabs (Variables / Environments)
+  - Auto-scan of env() references across all nodes and auth config
+  - Warning panel showing undefined references with click-to-add
+  - Secret marking (hidden in `.env.example`)
+  - Per-environment overlays (dev/staging/production) with variable overrides
+  - Active environment selector
+  - File generation: `.env`, `.env.example`, `environments/{name}.env`
+  - `EnvironmentConfig`, `EnvVariable`, `EnvironmentOverlay` types
+
+- **Auth UI (7.4) — Authentication Configuration:**
+  - `AuthProperties` — Full auth configuration panel in Properties sidebar
+  - Preset selector (strict/standard/relaxed/development) with auto-apply defaults
+  - JWT: algorithm (HS256-RS512), secret, access/refresh TTL, issuer, rotation
+  - Password policy: min length, require upper/lower/number/special, breach check
+  - MFA: required/optional/off, methods (TOTP, WebAuthn, SMS, email, push), TOTP issuer
+  - Sessions: max active, idle timeout, on_max_reached policy
+  - Security: brute force protection (max attempts, lockout), replay protection
+  - Storage: users connector reference, token driver (memory/redis)
+  - Social login: Google, GitHub, Apple with client ID/secret
+  - Endpoint prefix customization
+  - Enable/disable toggle for the entire auth system
+  - HCL generation: `auth { preset, jwt {}, password {}, mfa {}, sessions {}, security {}, social {}, storage {}, users {} }`
+  - Output to `auth/auth.hcl`
+  - `AuthConfig` type with full sub-type hierarchy (JWT, Password, MFA, Sessions, Security, Storage, Social)
+
+### Changed
+
+- **useStudioStore:** Added `authConfig` + `envConfig` state with update methods
+- **Properties.tsx:** AuthProperties panel shown below ServiceProperties when no node selected
+- **hclGenerator.ts:** `generateProject()` and `generateHCL()` accept optional `authConfig` and `envConfig` parameters
+- **FileTree.tsx:** Passes `authConfig` + `envConfig` to `generateProject()`, expanded dirs include `auth`, `environments`
+- **Preview.tsx:** Passes `authConfig` + `envConfig` to `generateProject()`
+- **Palette.tsx:** Saga and State Machine in Logic category
+- **Nodes/index.ts:** Registered SagaNode and StateMachineNode
+
+---
+
 ## [0.8.1] - Mycel v1.12.0 Compatibility
 
 ### Changed
