@@ -247,6 +247,39 @@ function generateFlowHCL(
     lines.push('  }')
   }
 
+  // Batch block
+  if (data.batch) {
+    const b = data.batch
+    lines.push('')
+    lines.push('  batch {')
+    lines.push(`    source     = "${b.source}"`)
+    lines.push(`    query      = "${b.query}"`)
+    if (b.chunkSize && b.chunkSize !== 100) {
+      lines.push(`    chunk_size = ${b.chunkSize}`)
+    }
+    if (b.onError && b.onError !== 'stop') {
+      lines.push(`    on_error   = "${b.onError}"`)
+    }
+    if (b.params && Object.keys(b.params).length > 0) {
+      lines.push(`    params     = { ${Object.entries(b.params).map(([k, v]) => `${k} = "${v}"`).join(', ')} }`)
+    }
+    if (b.transform && Object.keys(b.transform).length > 0) {
+      lines.push('')
+      lines.push('    transform {')
+      for (const [key, value] of Object.entries(b.transform)) {
+        lines.push(`      ${key} = "${value}"`)
+      }
+      lines.push('    }')
+    }
+    lines.push('')
+    lines.push('    to {')
+    lines.push(`      connector = "${b.to.connector}"`)
+    if (b.to.target) lines.push(`      target    = "${b.to.target}"`)
+    if (b.to.operation) lines.push(`      operation = "${b.to.operation}"`)
+    lines.push('    }')
+    lines.push('  }')
+  }
+
   // To blocks (multi-to support)
   const toTargets: FlowTo[] = data.to
     ? Array.isArray(data.to)

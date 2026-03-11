@@ -20,9 +20,10 @@ import {
   TransformEditor,
   StepEditor,
   ResponseEditor,
+  BatchEditor,
   ErrorHandlingEditor,
 } from '../FlowConfig'
-import type { ConnectorNodeData, FlowNodeData, FlowTransform, FlowStep, FlowResponse, FlowErrorHandling } from '../../types'
+import type { ConnectorNodeData, FlowNodeData, FlowTransform, FlowStep, FlowResponse, FlowBatch, FlowErrorHandling } from '../../types'
 
 type StudioNode = Node<ConnectorNodeData | FlowNodeData>
 
@@ -272,6 +273,14 @@ export default function Canvas() {
         response={selectedFlowNode?.data.response}
         isEchoFlow={selectedFlowNode ? !edges.some(e => e.source === selectedFlowNode.id) : false}
         onSave={(response: FlowResponse | undefined) => updateFlowData({ response })}
+        onClose={closeEditor}
+      />
+
+      <BatchEditor
+        isOpen={activeEditor === 'batch'}
+        batch={selectedFlowNode?.data.batch}
+        availableConnectors={availableConnectors}
+        onSave={(batch: FlowBatch | undefined) => updateFlowData({ batch })}
         onClose={closeEditor}
       />
 

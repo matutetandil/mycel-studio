@@ -1,3 +1,4 @@
+export { batch } from './batch'
 export { cache } from './cache'
 export { dedupe } from './dedupe'
 export { lock } from './lock'

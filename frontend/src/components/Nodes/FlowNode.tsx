@@ -103,6 +103,15 @@ function FlowNode({ data, selected }: FlowNodeProps) {
         </div>
       )}
 
+      {data.batch && (
+        <div className="mt-2 px-2 py-1 bg-orange-900/30 border border-orange-700/50 rounded text-xs">
+          <span className="font-medium text-orange-400">Batch</span>
+          <span className="text-orange-500 ml-1">
+            ({data.batch.source} → {data.batch.to?.connector}{data.batch.chunkSize ? `, ${data.batch.chunkSize}/chunk` : ''})
+          </span>
+        </div>
+      )}
+
       {(hasEnrich && !hasSteps) && (
         <div className="mt-2 px-2 py-1 bg-purple-900/30 border border-purple-700/50 rounded text-xs">
           <span className="font-medium text-purple-400">Enrich</span>

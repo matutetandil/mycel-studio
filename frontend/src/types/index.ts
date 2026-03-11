@@ -375,6 +375,16 @@ export interface FlowResponse {
   grpcStatusCode?: string
 }
 
+export interface FlowBatch {
+  source: string
+  query: string
+  chunkSize?: number
+  params?: Record<string, string>
+  onError?: 'stop' | 'continue'
+  transform?: Record<string, string>
+  to: FlowTo
+}
+
 export interface FlowDedupe {
   storage: string
   key: string
@@ -547,6 +557,7 @@ export interface FlowNodeData extends Record<string, unknown> {
   semaphore?: FlowSemaphore
   coordinate?: FlowCoordinate
   require?: FlowRequire
+  batch?: FlowBatch
   errorHandling?: FlowErrorHandling
   when?: string
 }
