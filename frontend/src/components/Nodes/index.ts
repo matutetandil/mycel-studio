@@ -6,6 +6,7 @@ import ValidatorNode from './ValidatorNode'
 import TransformNode from './TransformNode'
 import AspectNode from './AspectNode'
 import SagaNode from './SagaNode'
+import StateMachineNode from './StateMachineNode'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const nodeTypes: Record<string, ComponentType<any>> = {
@@ -16,6 +17,7 @@ export const nodeTypes: Record<string, ComponentType<any>> = {
   transform: TransformNode,
   aspect: AspectNode,
   saga: SagaNode,
+  state_machine: StateMachineNode,
 }
 
-export { ConnectorNode, FlowNode, TypeNode, ValidatorNode, TransformNode, AspectNode, SagaNode }
+export { ConnectorNode, FlowNode, TypeNode, ValidatorNode, TransformNode, AspectNode, SagaNode, StateMachineNode }

@@ -652,10 +652,33 @@ export interface SagaNodeData extends Record<string, unknown> {
 }
 
 // =============================================================================
+// State Machine Types
+// =============================================================================
+
+export interface StateMachineTransition {
+  event: string
+  transitionTo: string
+  guard?: string
+  action?: SagaAction
+}
+
+export interface StateMachineState {
+  name: string
+  final?: boolean
+  transitions: StateMachineTransition[]
+}
+
+export interface StateMachineNodeData extends Record<string, unknown> {
+  label: string
+  initial: string
+  states: StateMachineState[]
+}
+
+// =============================================================================
 // React Flow Node Types
 // =============================================================================
 
-export type NodeType = 'connector' | 'flow' | 'type' | 'transform' | 'validator' | 'aspect' | 'saga'
+export type NodeType = 'connector' | 'flow' | 'type' | 'transform' | 'validator' | 'aspect' | 'saga' | 'state_machine'
 
 export type ConnectorNode = Node<ConnectorNodeData, 'connector'>
 export type FlowNode = Node<FlowNodeData, 'flow'>
@@ -664,6 +687,7 @@ export type TransformNode = Node<TransformNodeData, 'transform'>
 export type ValidatorNode = Node<ValidatorNodeData, 'validator'>
 export type AspectNode = Node<AspectNodeData, 'aspect'>
 export type SagaNode = Node<SagaNodeData, 'saga'>
+export type StateMachineNode = Node<StateMachineNodeData, 'state_machine'>
 
 export type StudioNode = Node<
   | ConnectorNodeData
@@ -673,6 +697,7 @@ export type StudioNode = Node<
   | ValidatorNodeData
   | AspectNodeData
   | SagaNodeData
+  | StateMachineNodeData
 >
 
 export type StudioEdge = Edge

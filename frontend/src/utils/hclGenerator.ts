@@ -1,9 +1,9 @@
 import type { Node, Edge } from '@xyflow/react'
-import type { ConnectorNodeData, FlowNodeData, FlowTo, ServiceConfig, TypeNodeData, TypeFieldDefinition, ValidatorNodeData, TransformNodeData, AspectNodeData, SagaNodeData, SagaAction } from '../types'
+import type { ConnectorNodeData, FlowNodeData, FlowTo, ServiceConfig, TypeNodeData, TypeFieldDefinition, ValidatorNodeData, TransformNodeData, AspectNodeData, SagaNodeData, SagaAction, StateMachineNodeData } from '../types'
 import { getConnector, getConnectorMode } from '../connectors'
 import { getSimpleFlowBlocks } from '../flow-blocks'
 
-type StudioNode = Node<ConnectorNodeData | FlowNodeData | TypeNodeData | ValidatorNodeData | TransformNodeData | AspectNodeData | SagaNodeData>
+type StudioNode = Node<ConnectorNodeData | FlowNodeData | TypeNodeData | ValidatorNodeData | TransformNodeData | AspectNodeData | SagaNodeData | StateMachineNodeData>
 
 export interface GeneratedFile {
   path: string
@@ -681,6 +681,46 @@ function generateSagaHCL(node: StudioNode): string {
   return lines.join('\n')
 }
 
+function generateStateMachineHCL(node: StudioNode): string {
+  const data = node.data as StateMachineNodeData
+  const name = toIdentifier(data.label)
+  const lines: string[] = []
+
+  lines.push(`# ${data.label} state machine`)
+  lines.push(`state_machine "${name}" {`)
+  lines.push(`  initial = "${data.initial}"`)
+
+  for (const state of data.states || []) {
+    lines.push('')
+    lines.push(`  state "${state.name}" {`)
+
+    if (state.final) {
+      lines.push('    final = true')
+    }
+
+    for (const trans of state.transitions || []) {
+      lines.push('')
+      lines.push(`    on "${trans.event}" {`)
+      lines.push(`      transition_to = "${trans.transitionTo}"`)
+      if (trans.guard) {
+        lines.push(`      guard         = "${trans.guard}"`)
+      }
+      if (trans.action) {
+        lines.push('')
+        lines.push('      action {')
+        lines.push(...generateSagaActionHCL(trans.action, '        '))
+        lines.push('      }')
+      }
+      lines.push('    }')
+    }
+
+    lines.push('  }')
+  }
+
+  lines.push('}')
+  return lines.join('\n')
+}
+
 // Validate project - returns array of error messages
 export function validateProject(nodes: StudioNode[]): string[] {
   const errors: string[] = []
@@ -755,6 +795,7 @@ export function generateProject(nodes: StudioNode[], edges: Edge[], serviceConfi
   const transformNodes = nodes.filter((n) => n.type === 'transform')
   const aspectNodes = nodes.filter((n) => n.type === 'aspect')
   const sagaNodes = nodes.filter((n) => n.type === 'saga')
+  const stateMachineNodes = nodes.filter((n) => n.type === 'state_machine')
 
   const name = serviceConfig?.name || 'my-service'
   const version = serviceConfig?.version || '1.0.0'
@@ -844,6 +885,20 @@ export function generateProject(nodes: StudioNode[], edges: Edge[], serviceConfi
       path: 'sagas/sagas.hcl',
       name: 'sagas.hcl',
       content: sagasContent.join('\n')
+    })
+  }
+
+  // Generate state machines file
+  if (stateMachineNodes.length > 0) {
+    const smContent: string[] = ['# State machines', '']
+    for (const node of stateMachineNodes) {
+      smContent.push(generateStateMachineHCL(node))
+      smContent.push('')
+    }
+    files.push({
+      path: 'machines/machines.hcl',
+      name: 'machines.hcl',
+      content: smContent.join('\n')
     })
   }
 

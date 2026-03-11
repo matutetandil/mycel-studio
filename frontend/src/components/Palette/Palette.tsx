@@ -8,12 +8,13 @@ import {
   RefreshCw,
   Eye,
   GitBranch,
+  CircleDot,
 } from 'lucide-react'
 import { type ConnectorType, DEFAULT_CONNECTOR_DIRECTIONS } from '../../types'
 import { getConnectorsByCategory, type ConnectorDefinition } from '../../connectors'
 
 interface PaletteItem {
-  type: 'connector' | 'flow' | 'type' | 'validator' | 'transform' | 'aspect' | 'saga'
+  type: 'connector' | 'flow' | 'type' | 'validator' | 'transform' | 'aspect' | 'saga' | 'state_machine'
   connectorType?: ConnectorType
   label: string
   icon: React.ElementType
@@ -43,6 +44,8 @@ function PaletteItemView({ item }: { item: PaletteItem }) {
       nodeData = { label: `New ${item.label}`, on: [], when: 'after' }
     } else if (item.type === 'saga') {
       nodeData = { label: `New ${item.label}`, steps: [] }
+    } else if (item.type === 'state_machine') {
+      nodeData = { label: `New ${item.label}`, initial: '', states: [] }
     } else {
       nodeData = { label: `New ${item.label}` }
     }
@@ -119,6 +122,7 @@ function buildCategories(): Array<{ name: string; items: PaletteItem[] }> {
     items: [
       { type: 'flow', label: 'Flow', icon: ArrowRight, color: 'bg-indigo-500' },
       { type: 'saga', label: 'Saga', icon: GitBranch, color: 'bg-rose-600' },
+      { type: 'state_machine', label: 'State Machine', icon: CircleDot, color: 'bg-teal-600' },
     ],
   })
 
