@@ -13,6 +13,10 @@ export const lock: FlowBlockDefinition = {
   accentColor: 'yellow',
   group: 'concurrency',
   isActive: (data) => !!data.lock,
+  nodeIndicator: {
+    title: 'Has lock/semaphore',
+    isVisible: (data) => !!data.lock || !!data.semaphore,
+  },
 
   fields: [
     {

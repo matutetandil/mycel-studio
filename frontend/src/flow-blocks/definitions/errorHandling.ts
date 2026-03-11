@@ -14,4 +14,5 @@ export const errorHandling: FlowBlockDefinition = {
   group: 'output',
   customEditor: true,
   isActive: (data) => !!data.errorHandling,
+  nodeIndicator: { title: 'Error handling' },
 }

@@ -13,6 +13,7 @@ export const cache: FlowBlockDefinition = {
   accentColor: 'cyan',
   group: 'data',
   isActive: (data) => !!data.cache,
+  nodeIndicator: { title: 'Cached' },
 
   fields: [
     {

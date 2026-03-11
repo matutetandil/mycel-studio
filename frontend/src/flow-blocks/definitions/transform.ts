@@ -14,4 +14,6 @@ export const transform: FlowBlockDefinition = {
   group: 'data',
   customEditor: true,
   isActive: (data) => !!(data.transform?.fields && Object.keys(data.transform.fields).length > 0),
+  // Transform has a custom badge in FlowNode, not just an icon
+  showInNode: false,
 }

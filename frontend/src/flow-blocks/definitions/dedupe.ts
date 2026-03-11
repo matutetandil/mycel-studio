@@ -13,6 +13,7 @@ export const dedupe: FlowBlockDefinition = {
   accentColor: 'teal',
   group: 'data',
   isActive: (data) => !!data.dedupe,
+  nodeIndicator: { title: 'Deduplication' },
 
   fields: [
     {

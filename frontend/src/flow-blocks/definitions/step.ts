@@ -14,4 +14,7 @@ export const step: FlowBlockDefinition = {
   group: 'data',
   customEditor: true,
   isActive: (data) => !!(data.steps && data.steps.length > 0),
+  nodeIndicator: { title: 'Has steps' },
+  // Steps also has a custom badge in FlowNode, but still shows icon
+
 }

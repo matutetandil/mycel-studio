@@ -14,4 +14,5 @@ export const response: FlowBlockDefinition = {
   group: 'output',
   customEditor: true,
   isActive: (data) => !!data.response,
+  nodeIndicator: { title: 'Custom response' },
 }

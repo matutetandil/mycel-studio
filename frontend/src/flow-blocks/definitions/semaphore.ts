@@ -13,6 +13,7 @@ export const semaphore: FlowBlockDefinition = {
   accentColor: 'orange',
   group: 'concurrency',
   isActive: (data) => !!data.semaphore,
+  showInNode: false,  // Lock indicator covers both lock and semaphore
 
   fields: [
     {

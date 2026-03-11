@@ -1,6 +1,7 @@
 import { memo } from 'react'
 import { Handle, Position } from '@xyflow/react'
-import { ArrowRight, Clock, Lock, Shield, Database as CacheIcon, Layers, AlertTriangle, MessageSquare, Copy } from 'lucide-react'
+import { ArrowRight, Clock, Shield } from 'lucide-react'
+import { getNodeIndicators } from '../../flow-blocks'
 import type { FlowNodeData } from '../../types'
 
 interface FlowNodeProps {
@@ -8,17 +9,15 @@ interface FlowNodeProps {
   selected?: boolean
 }
 
+const indicators = getNodeIndicators()
+
 function FlowNode({ data, selected }: FlowNodeProps) {
   const hasTransform = data.transform && data.transform.fields && Object.keys(data.transform.fields).length > 0
   const hasSchedule = !!data.when
-  const hasLock = !!data.lock || !!data.semaphore
-  const hasCache = !!data.cache
   const hasRequire = !!data.require
   const hasSteps = data.steps && data.steps.length > 0
   const hasEnrich = data.enrich && data.enrich.length > 0
-  const hasErrorHandling = !!data.errorHandling
-  const hasResponse = !!data.response
-  const hasDedupe = !!data.dedupe
+  const hasCache = !!data.cache
   const hasFilter = !!(data.from?.filter)
 
   // Support both old format (fromOperation/toTarget) and new format (from/to objects)
@@ -44,12 +43,19 @@ function FlowNode({ data, selected }: FlowNodeProps) {
         <span className="font-semibold text-neutral-100">{data.label}</span>
         <div className="flex items-center gap-1 ml-auto">
           {hasSchedule && <span title="Scheduled"><Clock className="w-3.5 h-3.5 text-orange-400" /></span>}
-          {hasLock && <span title="Has lock/semaphore"><Lock className="w-3.5 h-3.5 text-yellow-400" /></span>}
-          {hasCache && <span title="Cached"><CacheIcon className="w-3.5 h-3.5 text-cyan-400" /></span>}
-          {hasSteps && <span title="Has steps"><Layers className="w-3.5 h-3.5 text-blue-400" /></span>}
-          {hasDedupe && <span title="Deduplication"><Copy className="w-3.5 h-3.5 text-teal-400" /></span>}
-          {hasResponse && <span title="Custom response"><MessageSquare className="w-3.5 h-3.5 text-green-400" /></span>}
-          {hasErrorHandling && <span title="Error handling"><AlertTriangle className="w-3.5 h-3.5 text-red-400" /></span>}
+          {/* Registry-driven block indicators */}
+          {indicators.map(block => {
+            const isVisible = block.nodeIndicator!.isVisible
+              ? block.nodeIndicator!.isVisible(data)
+              : block.isActive(data)
+            if (!isVisible) return null
+            const Icon = block.icon
+            return (
+              <span key={block.key} title={block.nodeIndicator!.title}>
+                <Icon className={`w-3.5 h-3.5 ${block.color}`} />
+              </span>
+            )
+          })}
           {hasRequire && <span title="Requires auth"><Shield className="w-3.5 h-3.5 text-green-400" /></span>}
         </div>
       </div>

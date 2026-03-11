@@ -12,6 +12,7 @@ export {
   getFlowBlocksByGroup,
   getSimpleFlowBlocks,
   getCustomFlowBlocks,
+  getNodeIndicators,
 } from './registry'
 
 export { default as GenericBlockEditor } from './GenericBlockEditor'

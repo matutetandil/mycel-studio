@@ -63,4 +63,13 @@ export interface FlowBlockDefinition {
 
   // Check if block is configured on a flow node
   isActive: (data: FlowNodeData) => boolean
+
+  // Node indicator icon (shown in FlowNode header)
+  nodeIndicator?: {
+    title: string
+    // Override isActive for node display (e.g., lock shows for lock OR semaphore)
+    isVisible?: (data: FlowNodeData) => boolean
+  }
+  // Set to false to hide from node indicators (e.g., semaphore hidden because lock covers it)
+  showInNode?: boolean
 }

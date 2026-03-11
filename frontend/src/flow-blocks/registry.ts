@@ -39,3 +39,7 @@ export function getSimpleFlowBlocks(): FlowBlockDefinition[] {
 export function getCustomFlowBlocks(): FlowBlockDefinition[] {
   return Array.from(registry.values()).filter(def => def.customEditor)
 }
+
+export function getNodeIndicators(): FlowBlockDefinition[] {
+  return Array.from(registry.values()).filter(def => def.showInNode !== false && def.nodeIndicator)
+}
