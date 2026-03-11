@@ -7,12 +7,13 @@ import {
   ShieldCheck,
   RefreshCw,
   Eye,
+  GitBranch,
 } from 'lucide-react'
 import { type ConnectorType, DEFAULT_CONNECTOR_DIRECTIONS } from '../../types'
 import { getConnectorsByCategory, type ConnectorDefinition } from '../../connectors'
 
 interface PaletteItem {
-  type: 'connector' | 'flow' | 'type' | 'validator' | 'transform' | 'aspect'
+  type: 'connector' | 'flow' | 'type' | 'validator' | 'transform' | 'aspect' | 'saga'
   connectorType?: ConnectorType
   label: string
   icon: React.ElementType
@@ -40,6 +41,8 @@ function PaletteItemView({ item }: { item: PaletteItem }) {
       nodeData = { label: `New ${item.label}`, fields: {} }
     } else if (item.type === 'aspect') {
       nodeData = { label: `New ${item.label}`, on: [], when: 'after' }
+    } else if (item.type === 'saga') {
+      nodeData = { label: `New ${item.label}`, steps: [] }
     } else {
       nodeData = { label: `New ${item.label}` }
     }
@@ -115,6 +118,7 @@ function buildCategories(): Array<{ name: string; items: PaletteItem[] }> {
     name: 'Logic',
     items: [
       { type: 'flow', label: 'Flow', icon: ArrowRight, color: 'bg-indigo-500' },
+      { type: 'saga', label: 'Saga', icon: GitBranch, color: 'bg-rose-600' },
     ],
   })
 

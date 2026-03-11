@@ -130,6 +130,7 @@ export default function FileTree() {
           validator: 'validators/validators.hcl',
           transform: 'transforms/transforms.hcl',
           aspect: 'aspects/aspects.hcl',
+          saga: 'sagas/sagas.hcl',
         }
         const filePath = filePathMap[selectedNode.type || '']
         if (filePath) {
@@ -252,7 +253,7 @@ interface VirtualProjectTreeProps {
 
 function VirtualProjectTree({ project, activeFile, onFileClick, onOpenProject, openLabel }: VirtualProjectTreeProps) {
   const [isExpanded, setIsExpanded] = useState(true)
-  const [expandedDirs, setExpandedDirs] = useState<Set<string>>(new Set(['connectors', 'flows', 'types', 'validators', 'transforms', 'aspects']))
+  const [expandedDirs, setExpandedDirs] = useState<Set<string>>(new Set(['connectors', 'flows', 'types', 'validators', 'transforms', 'aspects', 'sagas']))
 
   const toggleDir = (dir: string) => {
     const next = new Set(expandedDirs)

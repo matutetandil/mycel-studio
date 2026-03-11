@@ -618,10 +618,44 @@ export interface AspectNodeData extends Record<string, unknown> {
 }
 
 // =============================================================================
+// Saga Types
+// =============================================================================
+
+export interface SagaAction {
+  connector: string
+  operation?: string
+  target?: string
+  query?: string
+  body?: Record<string, string>
+  data?: Record<string, string>
+  set?: Record<string, string>
+  where?: Record<string, string>
+}
+
+export interface SagaStep {
+  name: string
+  action?: SagaAction
+  compensate?: SagaAction
+  onError?: 'fail' | 'skip'
+  timeout?: string
+  delay?: string
+  await?: string
+}
+
+export interface SagaNodeData extends Record<string, unknown> {
+  label: string
+  from?: FlowFrom
+  steps: SagaStep[]
+  onComplete?: SagaAction
+  onFailure?: SagaAction
+  timeout?: string
+}
+
+// =============================================================================
 // React Flow Node Types
 // =============================================================================
 
-export type NodeType = 'connector' | 'flow' | 'type' | 'transform' | 'validator' | 'aspect'
+export type NodeType = 'connector' | 'flow' | 'type' | 'transform' | 'validator' | 'aspect' | 'saga'
 
 export type ConnectorNode = Node<ConnectorNodeData, 'connector'>
 export type FlowNode = Node<FlowNodeData, 'flow'>
@@ -629,6 +663,7 @@ export type TypeNode = Node<TypeNodeData, 'type'>
 export type TransformNode = Node<TransformNodeData, 'transform'>
 export type ValidatorNode = Node<ValidatorNodeData, 'validator'>
 export type AspectNode = Node<AspectNodeData, 'aspect'>
+export type SagaNode = Node<SagaNodeData, 'saga'>
 
 export type StudioNode = Node<
   | ConnectorNodeData
@@ -637,6 +672,7 @@ export type StudioNode = Node<
   | TransformNodeData
   | ValidatorNodeData
   | AspectNodeData
+  | SagaNodeData
 >
 
 export type StudioEdge = Edge

@@ -1,9 +1,9 @@
 import type { Node, Edge } from '@xyflow/react'
-import type { ConnectorNodeData, FlowNodeData, FlowTo, ServiceConfig, TypeNodeData, TypeFieldDefinition, ValidatorNodeData, TransformNodeData, AspectNodeData } from '../types'
+import type { ConnectorNodeData, FlowNodeData, FlowTo, ServiceConfig, TypeNodeData, TypeFieldDefinition, ValidatorNodeData, TransformNodeData, AspectNodeData, SagaNodeData, SagaAction } from '../types'
 import { getConnector, getConnectorMode } from '../connectors'
 import { getSimpleFlowBlocks } from '../flow-blocks'
 
-type StudioNode = Node<ConnectorNodeData | FlowNodeData | TypeNodeData | ValidatorNodeData | TransformNodeData | AspectNodeData>
+type StudioNode = Node<ConnectorNodeData | FlowNodeData | TypeNodeData | ValidatorNodeData | TransformNodeData | AspectNodeData | SagaNodeData>
 
 export interface GeneratedFile {
   path: string
@@ -568,6 +568,119 @@ function generateAspectHCL(node: StudioNode): string {
   return lines.join('\n')
 }
 
+function generateSagaActionHCL(action: SagaAction, indent: string): string[] {
+  const lines: string[] = []
+  lines.push(`${indent}connector = "${action.connector}"`)
+  if (action.operation) lines.push(`${indent}operation = "${action.operation}"`)
+  if (action.target) lines.push(`${indent}target    = "${action.target}"`)
+  if (action.query) lines.push(`${indent}query     = "${action.query}"`)
+  if (action.body && Object.keys(action.body).length > 0) {
+    lines.push(`${indent}body = {`)
+    for (const [key, value] of Object.entries(action.body)) {
+      lines.push(`${indent}  ${key} = "${value}"`)
+    }
+    lines.push(`${indent}}`)
+  }
+  if (action.data && Object.keys(action.data).length > 0) {
+    lines.push(`${indent}data = {`)
+    for (const [key, value] of Object.entries(action.data)) {
+      lines.push(`${indent}  ${key} = "${value}"`)
+    }
+    lines.push(`${indent}}`)
+  }
+  if (action.set && Object.keys(action.set).length > 0) {
+    lines.push(`${indent}set = {`)
+    for (const [key, value] of Object.entries(action.set)) {
+      lines.push(`${indent}  ${key} = "${value}"`)
+    }
+    lines.push(`${indent}}`)
+  }
+  if (action.where && Object.keys(action.where).length > 0) {
+    lines.push(`${indent}where = {`)
+    for (const [key, value] of Object.entries(action.where)) {
+      lines.push(`${indent}  ${key} = "${value}"`)
+    }
+    lines.push(`${indent}}`)
+  }
+  return lines
+}
+
+function generateSagaHCL(node: StudioNode): string {
+  const data = node.data as SagaNodeData
+  const name = toIdentifier(data.label)
+  const lines: string[] = []
+
+  lines.push(`# ${data.label} saga`)
+  lines.push(`saga "${name}" {`)
+
+  if (data.timeout) {
+    lines.push(`  timeout = "${data.timeout}"`)
+  }
+
+  // From block
+  if (data.from) {
+    lines.push('')
+    lines.push('  from {')
+    lines.push(`    connector = "${data.from.connector}"`)
+    if (data.from.operation) lines.push(`    operation = "${data.from.operation}"`)
+    lines.push('  }')
+  }
+
+  // Steps
+  for (const step of data.steps || []) {
+    lines.push('')
+    lines.push(`  step "${step.name}" {`)
+
+    if (step.delay) {
+      lines.push(`    delay = "${step.delay}"`)
+    } else if (step.await) {
+      lines.push(`    await = "${step.await}"`)
+    } else {
+      // Action
+      if (step.action) {
+        lines.push('    action {')
+        lines.push(...generateSagaActionHCL(step.action, '      '))
+        lines.push('    }')
+      }
+      // Compensate
+      if (step.compensate) {
+        lines.push('')
+        lines.push('    compensate {')
+        lines.push(...generateSagaActionHCL(step.compensate, '      '))
+        lines.push('    }')
+      }
+    }
+
+    if (step.onError && step.onError !== 'fail') {
+      lines.push(`    on_error = "${step.onError}"`)
+    }
+    if (step.timeout) {
+      lines.push(`    timeout  = "${step.timeout}"`)
+    }
+
+    lines.push('  }')
+  }
+
+  // on_complete
+  if (data.onComplete) {
+    lines.push('')
+    lines.push('  on_complete {')
+    lines.push(...generateSagaActionHCL(data.onComplete, '    '))
+    lines.push('  }')
+  }
+
+  // on_failure
+  if (data.onFailure) {
+    lines.push('')
+    lines.push('  on_failure {')
+    lines.push(...generateSagaActionHCL(data.onFailure, '    '))
+    lines.push('  }')
+  }
+
+  lines.push('}')
+  return lines.join('\n')
+}
+
 // Validate project - returns array of error messages
 export function validateProject(nodes: StudioNode[]): string[] {
   const errors: string[] = []
@@ -641,6 +754,7 @@ export function generateProject(nodes: StudioNode[], edges: Edge[], serviceConfi
   const validatorNodes = nodes.filter((n) => n.type === 'validator')
   const transformNodes = nodes.filter((n) => n.type === 'transform')
   const aspectNodes = nodes.filter((n) => n.type === 'aspect')
+  const sagaNodes = nodes.filter((n) => n.type === 'saga')
 
   const name = serviceConfig?.name || 'my-service'
   const version = serviceConfig?.version || '1.0.0'
@@ -716,6 +830,20 @@ export function generateProject(nodes: StudioNode[], edges: Edge[], serviceConfi
       path: 'aspects/aspects.hcl',
       name: 'aspects.hcl',
       content: aspectsContent.join('\n')
+    })
+  }
+
+  // Generate sagas file
+  if (sagaNodes.length > 0) {
+    const sagasContent: string[] = ['# Sagas (distributed transactions)', '']
+    for (const node of sagaNodes) {
+      sagasContent.push(generateSagaHCL(node))
+      sagasContent.push('')
+    }
+    files.push({
+      path: 'sagas/sagas.hcl',
+      name: 'sagas.hcl',
+      content: sagasContent.join('\n')
     })
   }
 

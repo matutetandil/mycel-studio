@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react'
 import { GripVertical, Plus, Trash2 } from 'lucide-react'
 import { useStudioStore } from '../../stores/useStudioStore'
-import type { ConnectorNodeData, FlowNodeData, FlowTo, ConnectorDirection, RestOperation, GraphQLOperation, ConnectorOperation, TypeNodeData, TypeFieldDefinition, ValidatorNodeData, TransformNodeData, AspectNodeData } from '../../types'
+import type { ConnectorNodeData, FlowNodeData, FlowTo, ConnectorDirection, RestOperation, GraphQLOperation, ConnectorOperation, TypeNodeData, TypeFieldDefinition, ValidatorNodeData, TransformNodeData, AspectNodeData, SagaNodeData, SagaStep, SagaAction } from '../../types'
 import OperationsEditor from './OperationsEditor'
 import GraphQLOperationsEditor from './GraphQLOperationsEditor'
 import { getConnector, type FieldDefinition } from '../../connectors'
@@ -1170,6 +1170,132 @@ function AspectProperties({
   )
 }
 
+function SagaActionEditor({ action, onChange, label }: { action?: SagaAction; onChange: (a: SagaAction | undefined) => void; label: string }) {
+  const inputClass = "w-full px-2 py-1.5 text-xs bg-neutral-800 border border-neutral-700 rounded-md focus:ring-2 focus:ring-rose-500 focus:border-transparent text-white placeholder-neutral-500"
+
+  if (!action) {
+    return (
+      <button onClick={() => onChange({ connector: '' })} className="text-xs text-rose-400 hover:text-rose-300">
+        + Add {label}
+      </button>
+    )
+  }
+
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-center justify-between">
+        <label className="text-xs font-medium text-neutral-500">{label}</label>
+        <button onClick={() => onChange(undefined)} className="text-xs text-red-400 hover:text-red-300">Remove</button>
+      </div>
+      <input type="text" value={action.connector} onChange={(e) => onChange({ ...action, connector: e.target.value })} placeholder="connector" className={inputClass} />
+      <div className="grid grid-cols-2 gap-1.5">
+        <input type="text" value={action.operation || ''} onChange={(e) => onChange({ ...action, operation: e.target.value || undefined })} placeholder="operation" className={inputClass} />
+        <input type="text" value={action.target || ''} onChange={(e) => onChange({ ...action, target: e.target.value || undefined })} placeholder="target" className={inputClass} />
+      </div>
+    </div>
+  )
+}
+
+function SagaProperties({ data, onChange }: { data: SagaNodeData; onChange: (updates: Partial<SagaNodeData>) => void }) {
+  const inputClass = "w-full px-3 py-2 text-sm bg-neutral-800 border border-neutral-700 rounded-md focus:ring-2 focus:ring-rose-500 focus:border-transparent text-white placeholder-neutral-500"
+
+  const updateStep = (index: number, updates: Partial<SagaStep>) => {
+    const steps = [...(data.steps || [])]
+    steps[index] = { ...steps[index], ...updates }
+    onChange({ steps })
+  }
+
+  const addStep = () => {
+    const steps = [...(data.steps || []), { name: `step_${(data.steps?.length || 0) + 1}` }]
+    onChange({ steps })
+  }
+
+  const removeStep = (index: number) => {
+    const steps = (data.steps || []).filter((_, i) => i !== index)
+    onChange({ steps })
+  }
+
+  return (
+    <div className="space-y-4">
+      <h2 className="text-xs font-semibold text-neutral-400 uppercase tracking-wider">Saga</h2>
+
+      {/* Name */}
+      <div>
+        <label className="block text-xs font-medium text-neutral-400 mb-1">Name</label>
+        <input type="text" value={data.label} onChange={(e) => onChange({ label: e.target.value })} placeholder="create_order" className={inputClass} />
+      </div>
+
+      {/* Timeout */}
+      <div>
+        <label className="block text-xs font-medium text-neutral-400 mb-1">Timeout (optional)</label>
+        <input type="text" value={data.timeout || ''} onChange={(e) => onChange({ timeout: e.target.value || undefined })} placeholder="e.g. 30m, 7d" className={inputClass + ' font-mono'} />
+      </div>
+
+      {/* Steps */}
+      <div>
+        <div className="flex items-center justify-between mb-2">
+          <label className="text-xs font-semibold text-neutral-400 uppercase tracking-wider">Steps</label>
+          <button onClick={addStep} className="flex items-center gap-1 text-xs text-rose-400 hover:text-rose-300">
+            <Plus className="w-3 h-3" /> Add Step
+          </button>
+        </div>
+
+        {(data.steps || []).map((step, i) => (
+          <div key={i} className="mb-3 p-3 bg-neutral-800/50 rounded-md space-y-2 border border-neutral-700/50">
+            <div className="flex items-center gap-2">
+              <GripVertical className="w-3 h-3 text-neutral-600" />
+              <span className="text-xs text-neutral-500 font-mono">#{i + 1}</span>
+              <input
+                type="text"
+                value={step.name}
+                onChange={(e) => updateStep(i, { name: e.target.value })}
+                placeholder="step_name"
+                className="flex-1 px-2 py-1 text-xs bg-neutral-700 border border-neutral-600 rounded text-white placeholder-neutral-500 focus:outline-none focus:ring-1 focus:ring-rose-500"
+              />
+              <button onClick={() => removeStep(i)} className="text-neutral-500 hover:text-red-400">
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+            </div>
+
+            {/* Step type: action, delay, or await */}
+            <div className="grid grid-cols-2 gap-1.5">
+              <input type="text" value={step.delay || ''} onChange={(e) => updateStep(i, { delay: e.target.value || undefined })} placeholder="delay (e.g. 24h)" className="px-2 py-1 text-xs bg-neutral-700 border border-neutral-600 rounded text-white placeholder-neutral-500 font-mono focus:outline-none focus:ring-1 focus:ring-rose-500" />
+              <input type="text" value={step.await || ''} onChange={(e) => updateStep(i, { await: e.target.value || undefined })} placeholder="await (event)" className="px-2 py-1 text-xs bg-neutral-700 border border-neutral-600 rounded text-white placeholder-neutral-500 font-mono focus:outline-none focus:ring-1 focus:ring-rose-500" />
+            </div>
+
+            {/* Action & Compensate */}
+            {!step.delay && !step.await && (
+              <div className="space-y-2">
+                <SagaActionEditor action={step.action} onChange={(a) => updateStep(i, { action: a })} label="Action" />
+                <SagaActionEditor action={step.compensate} onChange={(a) => updateStep(i, { compensate: a })} label="Compensate" />
+              </div>
+            )}
+
+            {/* on_error + timeout */}
+            <div className="grid grid-cols-2 gap-1.5">
+              <select value={step.onError || 'fail'} onChange={(e) => updateStep(i, { onError: e.target.value as 'fail' | 'skip' })} className="px-2 py-1 text-xs bg-neutral-700 border border-neutral-600 rounded text-white focus:outline-none focus:ring-1 focus:ring-rose-500">
+                <option value="fail">on_error: fail</option>
+                <option value="skip">on_error: skip</option>
+              </select>
+              <input type="text" value={step.timeout || ''} onChange={(e) => updateStep(i, { timeout: e.target.value || undefined })} placeholder="timeout (e.g. 30s)" className="px-2 py-1 text-xs bg-neutral-700 border border-neutral-600 rounded text-white placeholder-neutral-500 font-mono focus:outline-none focus:ring-1 focus:ring-rose-500" />
+            </div>
+          </div>
+        ))}
+
+        {(data.steps || []).length === 0 && (
+          <p className="text-xs text-neutral-500 text-center py-2">No steps — add one above</p>
+        )}
+      </div>
+
+      {/* on_complete / on_failure */}
+      <div className="space-y-3 pt-2 border-t border-neutral-700">
+        <SagaActionEditor action={data.onComplete} onChange={(a) => onChange({ onComplete: a })} label="On Complete" />
+        <SagaActionEditor action={data.onFailure} onChange={(a) => onChange({ onFailure: a })} label="On Failure" />
+      </div>
+    </div>
+  )
+}
+
 function ServiceProperties() {
   const { serviceConfig, updateServiceConfig } = useStudioStore()
 
@@ -1312,6 +1438,12 @@ export default function Properties() {
       {selectedNode.type === 'aspect' && (
         <AspectProperties
           data={selectedNode.data as AspectNodeData}
+          onChange={handleChange}
+        />
+      )}
+      {selectedNode.type === 'saga' && (
+        <SagaProperties
+          data={selectedNode.data as SagaNodeData}
           onChange={handleChange}
         />
       )}
