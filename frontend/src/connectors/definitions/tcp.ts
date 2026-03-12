@@ -8,7 +8,6 @@ export const tcp: ConnectorDefinition = {
   color: 'bg-cyan-600',
   category: 'API & Web',
   defaultDirection: 'input',
-  modeMapping: { input: 'server', output: 'client' },
   fields: [
     { key: 'port', label: 'Port', type: 'number', placeholder: '9000' },
     {

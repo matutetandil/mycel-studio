@@ -8,7 +8,6 @@ export const queue: ConnectorDefinition = {
   color: 'bg-orange-500',
   category: 'Messaging',
   defaultDirection: 'input',
-  modeMapping: { input: 'consumer', output: 'producer' },
   fields: [],
   drivers: [
     {

@@ -713,6 +713,32 @@ En vez de escribir HCL manualmente, el usuario:
   - Skip logic para sub-fields que pertenecen a bloques
 - **Build:** ✅ TypeScript + Go + Docker build exitosos
 
+### 2026-03-12 - UX Improvements & Connector Cleanup — v0.14.0
+- **Estado:** ✅ Completado
+- **UX Mejoras:**
+  - Tab-to-canvas sync: clicking editor tab selects corresponding canvas node
+  - Canvas visual selection sync via React Flow `onNodesChange` with select-type changes
+  - Per-flow HCL file selector in FlowProperties
+  - Tab rename on connector label change (no more tab proliferation)
+  - Scroll to specific flow/block line when selecting in shared file (Monaco `revealLineInCenter`)
+  - Generic block line finder works for all types: flow, type, validator, transform, aspect, saga, state_machine
+- **Env Variables UX:**
+  - `env()` expression detection with `isHclExpression()` regex
+  - EnvToggle on string/number/password fields (free text ↔ env var)
+  - Centered modal popup via `createPortal` for editing variables
+  - IntelliJ watch-style inline add input (always visible at top)
+- **MQ Connector Rewrite:**
+  - RabbitMQ: full config with consumer/publisher/exchange/DLQ sub-blocks
+  - Kafka: full config with consumer/producer/SASL/schema_registry sub-blocks
+  - Redis: fixed field names (port instead of address)
+  - HCL generator: proper sub-block generation for all MQ types
+- **Mode field removed:**
+  - Deleted `modeMapping` from ConnectorDefinition interface
+  - Removed `getConnectorMode()` from registry
+  - Removed `mode` line from HCL generation
+  - Cleaned 8 connector definitions
+- **Build:** ✅ TypeScript + Vite build exitosos
+
 ---
 
 ## Próximos pasos (pendientes para siguiente sesión)
@@ -721,5 +747,4 @@ En vez de escribir HCL manualmente, el usuario:
 
 ### Pendientes menores:
 - Phase 9.5: Full LSP via Backend (monaco-languageclient + WebSocket)
-- RabbitMQ/Kafka: consumer, producer, DLQ, exchange, SASL, Schema Registry sub-blocks
 - CDC: tables field

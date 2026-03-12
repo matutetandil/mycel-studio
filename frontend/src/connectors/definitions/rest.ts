@@ -8,7 +8,6 @@ export const rest: ConnectorDefinition = {
   color: 'bg-blue-500',
   category: 'API & Web',
   defaultDirection: 'input',
-  modeMapping: { input: 'server', output: 'client' },
   hasOperationsEditor: true,
   fields: [
     { key: 'port', label: 'Port', type: 'number', placeholder: '3000' },

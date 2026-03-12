@@ -8,7 +8,6 @@ export const graphql: ConnectorDefinition = {
   color: 'bg-pink-500',
   category: 'API & Web',
   defaultDirection: 'input',
-  modeMapping: { input: 'server', output: 'client' },
   hasOperationsEditor: true,
   fields: [
     { key: 'port', label: 'Port', type: 'number', placeholder: '4000' },

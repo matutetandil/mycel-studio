@@ -56,13 +56,6 @@ export function getDefaultDirection(type: string): ConnectorDirection {
   return registry.get(type)?.defaultDirection || 'bidirectional'
 }
 
-// Get the HCL mode string for a connector type + direction
-export function getConnectorMode(type: string, direction: ConnectorDirection | undefined): string | null {
-  const def = registry.get(type)
-  if (!def?.modeMapping || !direction) return null
-  return def.modeMapping[direction as 'input' | 'output'] ?? null
-}
-
 // Get driver options for a connector type
 export function getDriverOptions(type: string): string[] {
   const def = registry.get(type)

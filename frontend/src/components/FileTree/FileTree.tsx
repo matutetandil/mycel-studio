@@ -70,12 +70,17 @@ function FileItem({ file, isActive, onClick, isGenerated }: FileItemProps) {
   )
 }
 
-function openFileInEditor(filePath: string) {
+function openFileInEditor(filePath: string, revealLine?: number) {
   const fileName = filePath.split('/').pop() || filePath
   useEditorPanelStore.getState().openFile(filePath, fileName)
   // Auto-expand editor if collapsed
   const { isCollapsed, toggleCollapse } = useEditorPanelStore.getState()
   if (isCollapsed) toggleCollapse()
+  // Scroll to specific line if provided
+  if (revealLine) {
+    // Small delay to let the editor mount/switch tab first
+    setTimeout(() => useEditorPanelStore.getState().setRevealLine(revealLine), 50)
+  }
 }
 
 export default function FileTree() {
@@ -89,6 +94,20 @@ export default function FileTree() {
 
   // Track the previously opened file per node, so we can rename tabs on label change
   const prevNodeFileRef = useRef<Record<string, string>>({})
+
+  // Compute the line number where a named block starts in its generated file
+  const getBlockLineInFile = (blockType: string, blockName: string, filePath: string): number | undefined => {
+    const file = generatedProject.files.find(f => f.path === filePath)
+    if (!file) return undefined
+    const lines = file.content.split('\n')
+    const pattern = `${blockType} "${blockName}" {`
+    for (let i = 0; i < lines.length; i++) {
+      if (lines[i].trimStart().startsWith(pattern)) {
+        return i + 1 // 1-based line numbers
+      }
+    }
+    return undefined
+  }
 
   // Auto-select file when component is selected
   useEffect(() => {
@@ -112,13 +131,31 @@ export default function FileTree() {
         if (filePath) {
           const prevPath = prevNodeFileRef.current[selectedNodeId]
 
+          // Compute line to reveal for blocks sharing a file
+          let revealLine: number | undefined
+          const hclBlockType: Record<string, string> = {
+            flow: 'flow', type: 'type', validator: 'validator',
+            transform: 'transform', aspect: 'aspect', saga: 'saga',
+            state_machine: 'state_machine',
+          }
+          const bt = hclBlockType[selectedNode.type || '']
+          if (bt) {
+            revealLine = getBlockLineInFile(bt, name, filePath)
+          }
+
           if (prevPath && prevPath !== filePath) {
             // Label changed — rename existing tab instead of opening new one
             const fileName = filePath.split('/').pop() || filePath
             useEditorPanelStore.getState().renameTab(prevPath, filePath, fileName)
+            if (revealLine) {
+              setTimeout(() => useEditorPanelStore.getState().setRevealLine(revealLine!), 50)
+            }
           } else if (!prevPath) {
             // First time selecting — open file
-            openFileInEditor(filePath)
+            openFileInEditor(filePath, revealLine)
+          } else if (revealLine) {
+            // Same file, just scroll to the flow
+            setTimeout(() => useEditorPanelStore.getState().setRevealLine(revealLine!), 50)
           }
 
           prevNodeFileRef.current[selectedNodeId] = filePath
@@ -129,7 +166,7 @@ export default function FileTree() {
         }
       }
     }
-  }, [selectedNodeId, nodes, projectName, setActiveFile])
+  }, [selectedNodeId, nodes, projectName, setActiveFile, generatedProject])
 
   const handleNewFile = () => {
     const fileName = prompt('Enter file name (e.g., flows/users.hcl):')

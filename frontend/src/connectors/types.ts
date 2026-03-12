@@ -49,11 +49,6 @@ export interface ConnectorDefinition {
   fields: FieldDefinition[]
   // Driver-specific field sets
   drivers?: DriverDefinition[]
-  // Mode mapping for HCL generation (direction → mode string)
-  modeMapping?: {
-    input?: string
-    output?: string
-  }
   // Whether this connector type has an operations editor (REST, GraphQL, etc.)
   hasOperationsEditor?: boolean
 }

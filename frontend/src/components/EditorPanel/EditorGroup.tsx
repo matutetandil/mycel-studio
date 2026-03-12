@@ -1,5 +1,6 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useRef, useEffect } from 'react'
 import MonacoEditor from '@monaco-editor/react'
+import type { editor } from 'monaco-editor'
 import { FileCode } from 'lucide-react'
 import { setupMonaco } from '../../monaco'
 import { useEditorPanelStore } from '../../stores/useEditorPanelStore'
@@ -17,12 +18,24 @@ export default function EditorGroupView({ groupId, isSecondary }: EditorGroupPro
   const group = useEditorPanelStore(s => s.groups.find(g => g.id === groupId))
   const setActiveGroup = useEditorPanelStore(s => s.setActiveGroup)
   const { nodes, edges, serviceConfig, authConfig, envConfig, securityConfig, pluginConfig } = useStudioStore()
+  const revealLine = useEditorPanelStore(s => s.revealLine)
+  const setRevealLine = useEditorPanelStore(s => s.setRevealLine)
+  const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null)
   const [copied, setCopied] = useState(false)
 
   const project = useMemo(
     () => generateProject(nodes, edges, serviceConfig, authConfig, envConfig, securityConfig, pluginConfig),
     [nodes, edges, serviceConfig, authConfig, envConfig, securityConfig, pluginConfig]
   )
+
+  // Scroll to specific line when revealLine changes
+  useEffect(() => {
+    if (revealLine && editorRef.current) {
+      editorRef.current.revealLineInCenter(revealLine)
+      editorRef.current.setPosition({ lineNumber: revealLine, column: 1 })
+      setRevealLine(null)
+    }
+  }, [revealLine, setRevealLine])
 
   if (!group) return null
 
@@ -77,6 +90,7 @@ export default function EditorGroupView({ groupId, isSecondary }: EditorGroupPro
             value={activeFile.content}
             theme="mycel-dark"
             beforeMount={setupMonaco}
+            onMount={(editor) => { editorRef.current = editor }}
             options={{
               readOnly: true,
               minimap: { enabled: false },

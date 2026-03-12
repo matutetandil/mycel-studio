@@ -1,6 +1,6 @@
 import type { Node, Edge } from '@xyflow/react'
 import type { ConnectorNodeData, FlowNodeData, FlowTo, ServiceConfig, TypeNodeData, TypeFieldDefinition, ValidatorNodeData, TransformNodeData, AspectNodeData, SagaNodeData, SagaAction, StateMachineNodeData, AuthConfig, EnvironmentConfig, SecurityConfig, PluginConfig } from '../types'
-import { getConnector, getConnectorMode } from '../connectors'
+import { getConnector } from '../connectors'
 import { getSimpleFlowBlocks } from '../flow-blocks'
 
 type StudioNode = Node<ConnectorNodeData | FlowNodeData | TypeNodeData | ValidatorNodeData | TransformNodeData | AspectNodeData | SagaNodeData | StateMachineNodeData>
@@ -42,15 +42,9 @@ function generateConnectorHCL(node: StudioNode): string {
   const config = data.config || {}
   const def = getConnector(data.connectorType)
 
-  const mode = getConnectorMode(data.connectorType, data.direction)
-
   lines.push(`# ${data.label} connector`)
   lines.push(`connector "${name}" {`)
   lines.push(`  type = "${data.connectorType}"`)
-
-  if (mode) {
-    lines.push(`  mode = "${mode}"`)
-  }
 
   // Output driver if present
   if (config.driver) {

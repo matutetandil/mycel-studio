@@ -8,7 +8,6 @@ export const soap: ConnectorDefinition = {
   color: 'bg-rose-600',
   category: 'API & Web',
   defaultDirection: 'bidirectional',
-  modeMapping: { input: 'server', output: 'client' },
   fields: [
     {
       key: 'soap_version', label: 'SOAP Version', type: 'select',

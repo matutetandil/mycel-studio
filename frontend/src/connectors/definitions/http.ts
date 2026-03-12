@@ -8,7 +8,6 @@ export const http: ConnectorDefinition = {
   color: 'bg-blue-400',
   category: 'API & Web',
   defaultDirection: 'output',
-  modeMapping: undefined,
   fields: [
     { key: 'base_url', label: 'Base URL', type: 'string', placeholder: 'https://api.example.com', required: true },
     { key: 'timeout', label: 'Timeout', type: 'string', placeholder: '30s' },

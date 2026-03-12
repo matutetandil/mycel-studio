@@ -8,7 +8,6 @@ export const websocket: ConnectorDefinition = {
   color: 'bg-violet-500',
   category: 'Real-time',
   defaultDirection: 'bidirectional',
-  modeMapping: { input: 'server', output: 'client' },
   fields: [
     { key: 'port', label: 'Port', type: 'number', placeholder: '8080' },
     { key: 'host', label: 'Host', type: 'string', placeholder: '0.0.0.0' },

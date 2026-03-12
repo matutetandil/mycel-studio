@@ -8,7 +8,6 @@ export const grpc: ConnectorDefinition = {
   color: 'bg-purple-500',
   category: 'API & Web',
   defaultDirection: 'input',
-  modeMapping: { input: 'server', output: 'client' },
   fields: [
     { key: 'port', label: 'Port', type: 'number', placeholder: '50051' },
     { key: 'proto_path', label: 'Proto Path', type: 'string', placeholder: './proto' },

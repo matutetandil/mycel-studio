@@ -21,9 +21,11 @@ interface EditorPanelState {
   activeGroupId: string
   splitDirection: SplitDirection
   splitRatio: number
+  revealLine: number | null  // Line to scroll to in active editor
 
   openFile: (filePath: string, fileName: string, groupId?: string) => void
   renameTab: (oldFilePath: string, newFilePath: string, newFileName: string) => void
+  setRevealLine: (line: number | null) => void
   closeTab: (groupId: string, tabId: string) => void
   setActiveTab: (groupId: string, tabId: string) => void
   reorderTab: (groupId: string, fromIndex: number, toIndex: number) => void
@@ -42,6 +44,7 @@ export const useEditorPanelStore = create<EditorPanelState>((set, get) => ({
   activeGroupId: 'main',
   splitDirection: null,
   splitRatio: 0.5,
+  revealLine: null,
 
   openFile: (filePath, fileName, groupId?) => {
     const state = get()
@@ -230,5 +233,9 @@ export const useEditorPanelStore = create<EditorPanelState>((set, get) => ({
 
   setActiveGroup: (groupId) => {
     set({ activeGroupId: groupId })
+  },
+
+  setRevealLine: (line) => {
+    set({ revealLine: line })
   },
 }))

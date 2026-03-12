@@ -2,6 +2,30 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.14.0] - UX Improvements & Connector Cleanup
+
+### Added
+
+- **Per-flow HCL file selection** — Flow properties now include a file selector to choose which `.hcl` file the flow belongs to (or create a new one)
+- **Scroll to flow in shared files** — When selecting a flow in the canvas, the editor scrolls to the exact line where that flow starts (works for all block types: flows, types, validators, etc.)
+- **Tab-to-canvas sync** — Clicking an editor tab now selects the corresponding node in the canvas (connectors, flows, types, etc.) with visual highlighting
+- **Canvas-to-editor sync** — Selecting a node in the canvas programmatically highlights it in React Flow
+- **Env var toggle on fields** — String/number/password fields now have a toggle to switch between free text and env variable selection (auto-generates `env("VAR_NAME")`)
+- **Env var centered popup** — Edit/add variable dialog is now a real centered modal via `createPortal`
+- **IntelliJ-style add variable** — Always-visible inline input at top of env panel (no scroll needed)
+- **RabbitMQ full config** — Host, port, username, password, vhost, URL override, heartbeat, reconnect, TLS, consumer block (queue, prefetch, auto_ack, workers, tag, exclusive), DLQ, publisher (exchange, routing_key, confirms), exchange declaration
+- **Kafka full config** — Brokers, client_id, TLS, SASL (PLAIN/SCRAM), consumer (group_id, topics, offset, auto_commit, concurrency), producer (topic, acks, batch_size, compression), schema registry
+- **MQ HCL sub-blocks** — Generates proper `consumer {}`, `publisher {}`, `producer {}`, `exchange {}`, `dlq {}`, `sasl {}`, `schema_registry {}` blocks
+
+### Fixed
+
+- **`env()` expression escaping** — Values like `env("DB_HOST")` now generate `host = env("DB_HOST")` unquoted
+- **Queue type renamed to `mq`** — Aligns with Mycel runtime
+- **Removed non-existent `mode` field** — `mode` was being generated in HCL but doesn't exist in Mycel
+- **Tab proliferation on rename** — Renaming a connector no longer creates new tabs per keystroke; tabs are renamed in-place
+- **gRPC client field naming** — Renamed `address` to `target`
+- **SSE heartbeat naming** — Renamed `heartbeat_interval` to `heartbeat`
+
 ## [0.13.0] - Connector Alignment with Mycel Runtime
 
 ### Fixed

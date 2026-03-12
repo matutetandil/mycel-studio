@@ -12,6 +12,5 @@ export {
   getAllConnectorTypes,
   getConnectorsByCategory,
   getDefaultDirection,
-  getConnectorMode,
   getDriverOptions,
 } from './registry'
