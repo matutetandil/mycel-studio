@@ -20,6 +20,45 @@ interface PaletteItem {
   label: string
   icon: React.ElementType
   color: string
+  tooltip?: string
+}
+
+const CONNECTOR_TOOLTIPS: Record<string, string> = {
+  rest: 'Expose HTTP endpoints (server) or call external REST APIs (client)',
+  http: 'Call external REST APIs with auth, retries, and timeout',
+  database: 'Connect to PostgreSQL, MySQL, SQLite, or MongoDB',
+  queue: 'Produce and consume messages with RabbitMQ, Kafka, or Redis Pub/Sub',
+  cache: 'In-memory (LRU) or Redis caching for frequently accessed data',
+  grpc: 'Expose gRPC services (server) or call external gRPC endpoints (client)',
+  graphql: 'Expose a GraphQL schema (server) or query external GraphQL APIs (client)',
+  tcp: 'Raw TCP server and client with pluggable codecs',
+  file: 'Read and write local files with format auto-detection',
+  s3: 'AWS S3 and S3-compatible object storage (MinIO, DigitalOcean Spaces)',
+  exec: 'Execute shell commands locally or over SSH',
+  websocket: 'Bidirectional real-time communication with broadcast and rooms',
+  sse: 'Server-to-client push over standard HTTP (Server-Sent Events)',
+  cdc: 'Stream database changes in real time via PostgreSQL logical replication',
+  elasticsearch: 'Full-text search and analytics via Elasticsearch',
+  oauth: 'Social login: Google, GitHub, Apple, or custom OIDC providers',
+  mqtt: 'Lightweight pub/sub messaging for IoT and real-time telemetry',
+  ftp: 'Read and write files on remote FTP and SFTP servers',
+  soap: 'Call or expose SOAP web services (SOAP 1.1 and 1.2)',
+  email: 'Send emails via SMTP, SendGrid, or AWS SES',
+  slack: 'Post messages to Slack channels via webhook or token',
+  discord: 'Post messages to Discord channels via webhook or bot token',
+  sms: 'Send SMS messages via Twilio or AWS SNS',
+  push: 'Send push notifications via FCM or Apple Push (APNs)',
+  webhook: 'Send or receive webhooks to/from external systems',
+}
+
+const LOGIC_TOOLTIPS: Record<string, string> = {
+  flow: 'Unit of work: wires connectors together with transforms, validation, and error handling',
+  saga: 'Distributed transaction with automatic compensation (rollback) on failure',
+  state_machine: 'Entity lifecycle management with states, transitions, guards, and actions',
+  type: 'Schema definition for input/output validation with field constraints',
+  validator: 'Custom validation rule using regex, CEL expression, or WASM',
+  transform: 'Named reusable CEL transformation that reshapes data between connectors',
+  aspect: 'Cross-cutting concern (logging, caching, auth) applied via glob patterns',
 }
 
 function PaletteItemView({ item }: { item: PaletteItem }) {
@@ -60,6 +99,7 @@ function PaletteItemView({ item }: { item: PaletteItem }) {
     <div
       draggable
       onDragStart={onDragStart}
+      title={item.tooltip}
       className="flex items-center gap-2 px-2 py-1.5 rounded cursor-grab hover:bg-neutral-800 active:cursor-grabbing transition-colors"
     >
       <div className={`p-1 rounded ${item.color}`}>
@@ -105,6 +145,7 @@ function connectorToItem(def: ConnectorDefinition): PaletteItem {
     label: def.label,
     icon: def.icon,
     color: def.color,
+    tooltip: CONNECTOR_TOOLTIPS[def.type] || def.label,
   }
 }
 
@@ -121,19 +162,19 @@ function buildCategories(): Array<{ name: string; items: PaletteItem[] }> {
   categories.push({
     name: 'Logic',
     items: [
-      { type: 'flow', label: 'Flow', icon: ArrowRight, color: 'bg-indigo-500' },
-      { type: 'saga', label: 'Saga', icon: GitBranch, color: 'bg-rose-600' },
-      { type: 'state_machine', label: 'State Machine', icon: CircleDot, color: 'bg-teal-600' },
+      { type: 'flow', label: 'Flow', icon: ArrowRight, color: 'bg-indigo-500', tooltip: LOGIC_TOOLTIPS.flow },
+      { type: 'saga', label: 'Saga', icon: GitBranch, color: 'bg-rose-600', tooltip: LOGIC_TOOLTIPS.saga },
+      { type: 'state_machine', label: 'State Machine', icon: CircleDot, color: 'bg-teal-600', tooltip: LOGIC_TOOLTIPS.state_machine },
     ],
   })
 
   categories.push({
     name: 'Schema',
     items: [
-      { type: 'type', label: 'Type', icon: FileCode, color: 'bg-cyan-600' },
-      { type: 'validator', label: 'Validator', icon: ShieldCheck, color: 'bg-purple-500' },
-      { type: 'transform', label: 'Transform', icon: RefreshCw, color: 'bg-amber-600' },
-      { type: 'aspect', label: 'Aspect', icon: Eye, color: 'bg-indigo-600' },
+      { type: 'type', label: 'Type', icon: FileCode, color: 'bg-cyan-600', tooltip: LOGIC_TOOLTIPS.type },
+      { type: 'validator', label: 'Validator', icon: ShieldCheck, color: 'bg-purple-500', tooltip: LOGIC_TOOLTIPS.validator },
+      { type: 'transform', label: 'Transform', icon: RefreshCw, color: 'bg-amber-600', tooltip: LOGIC_TOOLTIPS.transform },
+      { type: 'aspect', label: 'Aspect', icon: Eye, color: 'bg-indigo-600', tooltip: LOGIC_TOOLTIPS.aspect },
     ],
   })
 

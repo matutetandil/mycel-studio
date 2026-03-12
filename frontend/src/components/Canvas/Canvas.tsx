@@ -4,6 +4,7 @@ import {
   Background,
   Controls,
   MiniMap,
+  useReactFlow,
   type Node,
   type OnSelectionChangeFunc,
   type NodeMouseHandler,
@@ -46,6 +47,7 @@ export default function Canvas() {
   } = useStudioStore()
 
   const { activeFile } = useProjectStore()
+  const { screenToFlowPosition } = useReactFlow()
   const { syncToHCL } = useSync()
   const prevNodesRef = useRef<string>('')
 
@@ -150,10 +152,10 @@ export default function Canvas() {
       if (!type || !dataStr) return
 
       const data = JSON.parse(dataStr)
-      const position = {
-        x: event.clientX - 250,
-        y: event.clientY - 100,
-      }
+      const position = screenToFlowPosition({
+        x: event.clientX,
+        y: event.clientY,
+      })
 
       const newNode: StudioNode = {
         id: `${type}-${Date.now()}`,
@@ -163,7 +165,7 @@ export default function Canvas() {
       }
       addNode(newNode)
     },
-    [addNode]
+    [addNode, screenToFlowPosition]
   )
 
   const onNodeContextMenu: NodeMouseHandler = useCallback(
