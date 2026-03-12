@@ -1478,20 +1478,25 @@ export function generateProject(nodes: StudioNode[], edges: Edge[], serviceConfi
     })
   }
 
-  // Generate flows file (all flows together)
+  // Generate flow files — group by hclFile (default: 'flows/flows.hcl')
   if (flowNodes.length > 0) {
-    const flowsContent: string[] = ['# Flow definitions', '']
-
+    const flowsByFile = new Map<string, StudioNode[]>()
     for (const node of flowNodes) {
-      flowsContent.push(generateFlowHCL(node, edges, nodesMap))
-      flowsContent.push('')
+      const data = node.data as FlowNodeData
+      const filePath = data.hclFile || 'flows/flows.hcl'
+      if (!flowsByFile.has(filePath)) flowsByFile.set(filePath, [])
+      flowsByFile.get(filePath)!.push(node)
     }
 
-    files.push({
-      path: 'flows/flows.hcl',
-      name: 'flows.hcl',
-      content: flowsContent.join('\n')
-    })
+    for (const [filePath, nodes] of flowsByFile) {
+      const content: string[] = ['# Flow definitions', '']
+      for (const node of nodes) {
+        content.push(generateFlowHCL(node, edges, nodesMap))
+        content.push('')
+      }
+      const fileName = filePath.split('/').pop() || filePath
+      files.push({ path: filePath, name: fileName, content: content.join('\n') })
+    }
   }
 
   return { files, errors }

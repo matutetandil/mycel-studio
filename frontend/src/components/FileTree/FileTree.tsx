@@ -9,7 +9,7 @@ import {
   Package,
   AlertTriangle,
 } from 'lucide-react'
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
 import { useProjectStore, type ProjectFile } from '../../stores/useProjectStore'
 import { useStudioStore } from '../../stores/useStudioStore'
 import { useEditorPanelStore } from '../../stores/useEditorPanelStore'
@@ -87,6 +87,9 @@ export default function FileTree() {
   // Generate project from canvas
   const generatedProject = useMemo(() => generateProject(nodes, edges, serviceConfig, authConfig, envConfig, securityConfig, pluginConfig), [nodes, edges, serviceConfig, authConfig, envConfig, securityConfig, pluginConfig])
 
+  // Track the previously opened file per node, so we can rename tabs on label change
+  const prevNodeFileRef = useRef<Record<string, string>>({})
+
   // Auto-select file when component is selected
   useEffect(() => {
     if (selectedNodeId && nodes.length > 0) {
@@ -97,7 +100,7 @@ export default function FileTree() {
 
         const filePathMap: Record<string, string> = {
           connector: `connectors/${name}.hcl`,
-          flow: 'flows/flows.hcl',
+          flow: (data as FlowNodeData).hclFile || 'flows/flows.hcl',
           type: 'types/types.hcl',
           validator: 'validators/validators.hcl',
           transform: 'transforms/transforms.hcl',
@@ -107,10 +110,22 @@ export default function FileTree() {
         }
         const filePath = filePathMap[selectedNode.type || '']
         if (filePath) {
+          const prevPath = prevNodeFileRef.current[selectedNodeId]
+
+          if (prevPath && prevPath !== filePath) {
+            // Label changed — rename existing tab instead of opening new one
+            const fileName = filePath.split('/').pop() || filePath
+            useEditorPanelStore.getState().renameTab(prevPath, filePath, fileName)
+          } else if (!prevPath) {
+            // First time selecting — open file
+            openFileInEditor(filePath)
+          }
+
+          prevNodeFileRef.current[selectedNodeId] = filePath
+
           if (projectName) {
             setActiveFile(filePath)
           }
-          openFileInEditor(filePath)
         }
       }
     }

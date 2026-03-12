@@ -23,6 +23,7 @@ interface EditorPanelState {
   splitRatio: number
 
   openFile: (filePath: string, fileName: string, groupId?: string) => void
+  renameTab: (oldFilePath: string, newFilePath: string, newFileName: string) => void
   closeTab: (groupId: string, tabId: string) => void
   setActiveTab: (groupId: string, tabId: string) => void
   reorderTab: (groupId: string, fromIndex: number, toIndex: number) => void
@@ -70,6 +71,20 @@ export const useEditorPanelStore = create<EditorPanelState>((set, get) => ({
       ),
       activeGroupId: targetGroupId,
     })
+  },
+
+  renameTab: (oldFilePath, newFilePath, newFileName) => {
+    set(state => ({
+      groups: state.groups.map(g => ({
+        ...g,
+        tabs: g.tabs.map(t =>
+          t.filePath === oldFilePath
+            ? { id: newFilePath, filePath: newFilePath, fileName: newFileName }
+            : t
+        ),
+        activeTabId: g.activeTabId === oldFilePath ? newFilePath : g.activeTabId,
+      })),
+    }))
   },
 
   closeTab: (groupId, tabId) => {

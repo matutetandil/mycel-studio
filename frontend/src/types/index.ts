@@ -576,6 +576,7 @@ export interface FlowNodeData extends Record<string, unknown> {
   batch?: FlowBatch
   errorHandling?: FlowErrorHandling
   when?: string
+  hclFile?: string // Custom file path, e.g. 'flows/users.hcl'. Default: 'flows/flows.hcl'
 }
 
 export interface TypeNodeData extends Record<string, unknown> {

@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect } from 'react'
+import { useState, useCallback, useRef, useEffect, useMemo } from 'react'
 import { createPortal } from 'react-dom'
 import { ChevronLeft, ChevronRight as ChevronRightIcon, GripVertical, Plus, Trash2, ChevronDown, ChevronRight, Variable, Type, Pencil, X, Check, Lock } from 'lucide-react'
 import { useStudioStore } from '../../stores/useStudioStore'
@@ -575,6 +575,21 @@ function FlowProperties({
     onChange({ to: newTargets.length === 1 ? newTargets[0] : newTargets.length === 0 ? undefined : newTargets })
   }
 
+  // Collect existing flow file paths for the selector
+  const existingFlowFiles = useMemo(() => {
+    const paths = new Set<string>()
+    paths.add('flows/flows.hcl')
+    for (const n of nodes) {
+      if (n.type === 'flow') {
+        const fd = n.data as FlowNodeData
+        if (fd.hclFile) paths.add(fd.hclFile)
+      }
+    }
+    return Array.from(paths).sort()
+  }, [nodes])
+
+  const [showCustomFile, setShowCustomFile] = useState(false)
+
   return (
     <div className="space-y-4">
       <div>
@@ -585,6 +600,59 @@ function FlowProperties({
           onChange={(e) => onChange({ label: e.target.value })}
           className="w-full px-3 py-2 text-sm bg-neutral-800 border border-neutral-700 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-white"
         />
+      </div>
+
+      {/* HCL File selector */}
+      <div>
+        <label className="block text-xs font-medium text-neutral-400 mb-1">File</label>
+        <select
+          value={data.hclFile || 'flows/flows.hcl'}
+          onChange={(e) => {
+            if (e.target.value === '__custom__') {
+              setShowCustomFile(true)
+            } else {
+              onChange({ hclFile: e.target.value === 'flows/flows.hcl' ? undefined : e.target.value })
+              setShowCustomFile(false)
+            }
+          }}
+          className="w-full px-3 py-2 text-sm bg-neutral-800 border border-neutral-700 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-white"
+        >
+          {existingFlowFiles.map(f => (
+            <option key={f} value={f}>{f}</option>
+          ))}
+          <option value="__custom__">New file...</option>
+        </select>
+        {showCustomFile && (
+          <input
+            type="text"
+            autoFocus
+            placeholder="flows/users.hcl"
+            className="w-full mt-1 px-3 py-2 text-sm bg-neutral-800 border border-neutral-700 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-white placeholder-neutral-500"
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                const val = (e.target as HTMLInputElement).value.trim()
+                if (val) {
+                  const path = val.endsWith('.hcl') ? val : `${val}.hcl`
+                  const normalized = path.startsWith('flows/') ? path : `flows/${path}`
+                  onChange({ hclFile: normalized })
+                }
+                setShowCustomFile(false)
+              } else if (e.key === 'Escape') {
+                setShowCustomFile(false)
+              }
+            }}
+            onBlur={(e) => {
+              const val = e.target.value.trim()
+              if (val) {
+                const path = val.endsWith('.hcl') ? val : `${val}.hcl`
+                const normalized = path.startsWith('flows/') ? path : `flows/${path}`
+                onChange({ hclFile: normalized })
+              }
+              setShowCustomFile(false)
+            }}
+          />
+        )}
+        <p className="text-xs text-neutral-500 mt-1">HCL file where this flow is generated</p>
       </div>
 
       {/* Source (From) */}
