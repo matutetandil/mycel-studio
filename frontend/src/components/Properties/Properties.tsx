@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react'
 import { GripVertical, Plus, Trash2 } from 'lucide-react'
 import { useStudioStore } from '../../stores/useStudioStore'
-import type { ConnectorNodeData, FlowNodeData, FlowTo, ConnectorDirection, RestOperation, GraphQLOperation, ConnectorOperation, TypeNodeData, TypeFieldDefinition, ValidatorNodeData, TransformNodeData, AspectNodeData, SagaNodeData, SagaStep, SagaAction, StateMachineNodeData, StateMachineState, StateMachineTransition, AuthConfig, AuthPreset, JwtAlgorithm, MfaRequirement, MfaMethod, AuthSocialProvider, EnvVariable, EnvironmentOverlay, SecuritySanitizer, PluginDefinition } from '../../types'
+import type { ConnectorNodeData, FlowNodeData, FlowTo, ConnectorDirection, RestOperation, GraphQLOperation, ConnectorOperation, TypeNodeData, TypeFieldDefinition, ValidatorNodeData, TransformNodeData, AspectNodeData, SagaNodeData, SagaStep, SagaAction, StateMachineNodeData, StateMachineState, StateMachineTransition, AuthConfig, AuthPreset, JwtAlgorithm, MfaRequirement, MfaMethod, AuthSocialProvider, EnvVariable, SecuritySanitizer, PluginDefinition } from '../../types'
 import OperationsEditor from './OperationsEditor'
 import GraphQLOperationsEditor from './GraphQLOperationsEditor'
 import { getConnector, type FieldDefinition } from '../../connectors'
@@ -2358,8 +2358,6 @@ function EnvProperties() {
   const { envConfig, updateEnvConfig, nodes, authConfig } = useStudioStore()
   const [activeTab, setActiveTab] = useState<'variables' | 'environments'>('variables')
   const [selectedEnv, setSelectedEnv] = useState<string | null>(null)
-
-  const inputClass = "w-full px-3 py-2 text-sm bg-neutral-800 border border-neutral-700 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-white placeholder-neutral-500"
 
   // Scan for env() references in the project
   const allNodes = nodes.map(n => ({ data: n.data as Record<string, unknown> }))

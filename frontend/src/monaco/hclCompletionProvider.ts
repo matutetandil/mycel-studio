@@ -1,6 +1,6 @@
 import type { languages, editor, Position, IRange } from 'monaco-editor'
 import { BLOCK_DOCS, CEL_FUNCTION_DOCS, VARIABLE_DOCS, CONNECTOR_TYPE_DOCS } from './hclDocs'
-import { getAllConnectorTypes, getConnector } from '../connectors/registry'
+import { getAllConnectorTypes } from '../connectors/registry'
 import { getAllFlowBlocks } from '../flow-blocks/registry'
 import { useStudioStore } from '../stores/useStudioStore'
 
@@ -68,7 +68,6 @@ export function createCompletionProvider(monaco: typeof import('monaco-editor'))
       const ctx = getBlockContext(model, position)
       const suggestions: languages.CompletionItem[] = []
       const currentBlock = ctx.blockStack[ctx.blockStack.length - 1]
-      const parentBlock = ctx.blockStack[ctx.blockStack.length - 2]
 
       // --- Value position completions ---
       if (ctx.isValuePosition) {

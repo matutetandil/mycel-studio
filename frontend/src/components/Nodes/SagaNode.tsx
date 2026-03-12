@@ -48,7 +48,7 @@ function SagaNode({ data, selected }: SagaNodeProps) {
               )}
               <span className="text-neutral-300 truncate flex-1">{step.name}</span>
               {step.compensate && (
-                <Undo2 className="w-3 h-3 text-amber-500 shrink-0" title="Has compensation" />
+                <span title="Has compensation"><Undo2 className="w-3 h-3 text-amber-500 shrink-0" /></span>
               )}
               {step.onError === 'skip' && (
                 <span className="text-neutral-500 text-[10px]">skip</span>

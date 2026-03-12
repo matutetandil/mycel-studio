@@ -9,10 +9,10 @@ import {
   type EdgeChange,
   type Connection,
 } from '@xyflow/react'
-import type { ConnectorNodeData, FlowNodeData, ServiceConfig, AuthConfig, EnvironmentConfig, SecurityConfig, PluginConfig } from '../types'
+import type { ConnectorNodeData, FlowNodeData, ServiceConfig, AuthConfig, EnvironmentConfig, SecurityConfig, PluginConfig, TypeNodeData, TransformNodeData, ValidatorNodeData, AspectNodeData, SagaNodeData, StateMachineNodeData } from '../types'
 import { useHistoryStore } from './useHistoryStore'
 
-type StudioNode = Node<ConnectorNodeData | FlowNodeData>
+type StudioNode = Node<ConnectorNodeData | FlowNodeData | TypeNodeData | TransformNodeData | ValidatorNodeData | AspectNodeData | SagaNodeData | StateMachineNodeData>
 
 // Clipboard for copy/paste
 interface ClipboardEntry {
@@ -122,7 +122,7 @@ export const useStudioStore = create<StudioState>((set, get) => ({
     saveToHistory(state)
     set({
       nodes: state.nodes.map((node) =>
-        node.id === id ? { ...node, data: { ...node.data, ...data } } : node
+        node.id === id ? { ...node, data: { ...node.data, ...data } } as StudioNode : node
       ),
     })
   },

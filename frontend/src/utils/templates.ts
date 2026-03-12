@@ -1,7 +1,7 @@
 import type { Node, Edge } from '@xyflow/react'
-import type { ConnectorNodeData, FlowNodeData } from '../types'
+import type { ConnectorNodeData, FlowNodeData, SagaNodeData } from '../types'
 
-type StudioNode = Node<ConnectorNodeData | FlowNodeData>
+type StudioNode = Node<ConnectorNodeData | FlowNodeData | SagaNodeData>
 
 export interface ProjectTemplate {
   id: string

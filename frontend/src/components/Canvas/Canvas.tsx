@@ -7,7 +7,6 @@ import {
   type Node,
   type OnSelectionChangeFunc,
   type NodeMouseHandler,
-  type NodeDragHandler,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 
@@ -151,7 +150,7 @@ export default function Canvas() {
   )
 
   // Save snapshot before drag starts (for undo of position changes)
-  const onNodeDragStart: NodeDragHandler = useCallback(() => {
+  const onNodeDragStart: NodeMouseHandler = useCallback(() => {
     saveSnapshot()
   }, [saveSnapshot])
 
