@@ -6,7 +6,7 @@ import MenuBar from './components/MenuBar/MenuBar'
 import Sidebar from './components/Sidebar/Sidebar'
 import Canvas from './components/Canvas/Canvas'
 import Properties from './components/Properties/Properties'
-import Preview from './components/Preview/Preview'
+import EditorPanel from './components/EditorPanel'
 import ShortcutsDialog from './components/ShortcutsDialog'
 import TemplateGallery from './components/TemplateGallery'
 
@@ -41,8 +41,8 @@ function App() {
               <Canvas />
             </div>
 
-            {/* Preview area - shows generated HCL */}
-            <Preview />
+            {/* Editor panel with tabs, split, resize */}
+            <EditorPanel />
           </div>
 
           {/* Right sidebar - Properties */}

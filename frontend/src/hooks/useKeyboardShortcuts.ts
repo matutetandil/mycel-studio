@@ -1,6 +1,7 @@
 import { useEffect, useCallback, useState } from 'react'
 import { useStudioStore } from '../stores/useStudioStore'
 import { useProjectStore } from '../stores/useProjectStore'
+import { useEditorPanelStore } from '../stores/useEditorPanelStore'
 
 export function useKeyboardShortcuts() {
   const { undo, redo, copyNode, pasteNode, duplicateNode, selectedNodeId, removeNode } = useStudioStore()
@@ -89,6 +90,13 @@ export function useKeyboardShortcuts() {
       if (mod && e.key === 'n') {
         e.preventDefault()
         setShowTemplates(prev => !prev)
+        return
+      }
+
+      // Toggle editor panel: Ctrl/Cmd+J
+      if (mod && e.key === 'j') {
+        e.preventDefault()
+        useEditorPanelStore.getState().toggleCollapse()
         return
       }
 

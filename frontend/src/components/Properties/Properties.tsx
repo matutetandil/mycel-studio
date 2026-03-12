@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react'
-import { GripVertical, Plus, Trash2, ChevronDown, ChevronRight } from 'lucide-react'
+import { ChevronLeft, ChevronRight as ChevronRightIcon, GripVertical, Plus, Trash2, ChevronDown, ChevronRight } from 'lucide-react'
 import { useStudioStore } from '../../stores/useStudioStore'
 import type { ConnectorNodeData, FlowNodeData, FlowTo, ConnectorDirection, RestOperation, GraphQLOperation, ConnectorOperation, TypeNodeData, TypeFieldDefinition, ValidatorNodeData, TransformNodeData, AspectNodeData, SagaNodeData, SagaStep, SagaAction, StateMachineNodeData, StateMachineState, StateMachineTransition, AuthConfig, AuthPreset, JwtAlgorithm, MfaRequirement, MfaMethod, AuthSocialProvider, EnvVariable, SecuritySanitizer, PluginDefinition } from '../../types'
 import OperationsEditor from './OperationsEditor'
@@ -3025,7 +3025,8 @@ function ServiceProperties() {
 export default function Properties() {
   const { nodes, selectedNodeId, updateNode, removeNode } = useStudioStore()
   const selectedNode = nodes.find((n) => n.id === selectedNodeId)
-  const [width, setWidth] = useState(280)
+  const [width, setWidth] = useState(400)
+  const [collapsed, setCollapsed] = useState(false)
   const [isResizing, setIsResizing] = useState(false)
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
@@ -3037,7 +3038,7 @@ export default function Properties() {
 
     const handleMouseMove = (e: MouseEvent) => {
       const newWidth = startWidth - (e.clientX - startX)
-      setWidth(Math.max(200, Math.min(500, newWidth)))
+      setWidth(Math.max(280, Math.min(600, newWidth)))
     }
 
     const handleMouseUp = () => {
@@ -3050,97 +3051,82 @@ export default function Properties() {
     document.addEventListener('mouseup', handleMouseUp)
   }, [width])
 
-  if (!selectedNode) {
+  const handleChange = selectedNode
+    ? (data: Partial<ConnectorNodeData | FlowNodeData>) => { updateNode(selectedNode.id, data) }
+    : undefined
+
+  const renderContent = () => {
+    if (!selectedNode) return <ServiceProperties />
     return (
-      <div style={{ width }} className="bg-neutral-900 border-l border-neutral-800 p-4 relative">
-        {/* Resize handle */}
-        <div
-          className="absolute left-0 top-0 bottom-0 w-1 cursor-ew-resize hover:bg-indigo-500/50 transition-colors flex items-center"
-          onMouseDown={handleMouseDown}
-        >
-          <GripVertical className="w-3 h-3 text-neutral-600 -ml-1" />
+      <>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-xs font-semibold text-neutral-400 uppercase tracking-wider">
+            Properties
+          </h2>
+          <button
+            onClick={() => removeNode(selectedNode.id)}
+            className="text-xs text-red-500 hover:text-red-400"
+          >
+            Delete
+          </button>
         </div>
-        <ServiceProperties />
-      </div>
+
+        {selectedNode.type === 'connector' && (
+          <ConnectorProperties data={selectedNode.data as ConnectorNodeData} onChange={handleChange!} />
+        )}
+        {selectedNode.type === 'flow' && (
+          <FlowProperties data={selectedNode.data as FlowNodeData} nodeId={selectedNode.id} onChange={handleChange!} />
+        )}
+        {selectedNode.type === 'type' && (
+          <TypeProperties data={selectedNode.data as TypeNodeData} onChange={handleChange!} />
+        )}
+        {selectedNode.type === 'validator' && (
+          <ValidatorProperties data={selectedNode.data as ValidatorNodeData} onChange={handleChange!} />
+        )}
+        {selectedNode.type === 'transform' && (
+          <TransformProperties data={selectedNode.data as TransformNodeData} onChange={handleChange!} />
+        )}
+        {selectedNode.type === 'aspect' && (
+          <AspectProperties data={selectedNode.data as AspectNodeData} onChange={handleChange!} />
+        )}
+        {selectedNode.type === 'saga' && (
+          <SagaProperties data={selectedNode.data as SagaNodeData} onChange={handleChange!} />
+        )}
+        {selectedNode.type === 'state_machine' && (
+          <StateMachineProperties data={selectedNode.data as StateMachineNodeData} onChange={handleChange!} />
+        )}
+      </>
     )
   }
 
-  const handleChange = (data: Partial<ConnectorNodeData | FlowNodeData>) => {
-    updateNode(selectedNode.id, data)
-  }
-
   return (
-    <div
-      style={{ width }}
-      className={`bg-neutral-900 border-l border-neutral-800 p-4 overflow-y-auto relative ${isResizing ? 'select-none' : ''}`}
-    >
-      {/* Resize handle */}
-      <div
-        className="absolute left-0 top-0 bottom-0 w-1 cursor-ew-resize hover:bg-indigo-500/50 transition-colors flex items-center"
-        onMouseDown={handleMouseDown}
+    <div className="relative flex-shrink-0 h-full">
+      {/* Collapse toggle button */}
+      <button
+        onClick={() => setCollapsed(!collapsed)}
+        className={`absolute top-5 z-20 flex items-center justify-center bg-neutral-800 border border-neutral-700 hover:bg-indigo-600 hover:border-indigo-500 transition-all shadow-lg ${
+          collapsed
+            ? 'right-0 w-5 h-8 rounded-l-md border-r-0'
+            : '-left-3 w-6 h-6 rounded-full'
+        }`}
       >
-        <GripVertical className="w-3 h-3 text-neutral-600 -ml-1" />
+        {collapsed ? <ChevronLeft className="w-3 h-3 text-neutral-300" /> : <ChevronRightIcon className="w-3 h-3 text-neutral-300" />}
+      </button>
+
+      <div
+        style={{ width: collapsed ? 0 : width }}
+        className={`bg-neutral-900 border-l border-neutral-800 overflow-hidden h-full transition-[width] duration-200 ease-in-out ${isResizing ? 'select-none transition-none' : ''}`}
+      >
+        <div style={{ width }} className="p-4 overflow-y-auto h-full">
+          {renderContent()}
+        </div>
       </div>
 
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-xs font-semibold text-neutral-400 uppercase tracking-wider">
-          Properties
-        </h2>
-        <button
-          onClick={() => removeNode(selectedNode.id)}
-          className="text-xs text-red-500 hover:text-red-400"
-        >
-          Delete
-        </button>
-      </div>
-
-      {selectedNode.type === 'connector' && (
-        <ConnectorProperties
-          data={selectedNode.data as ConnectorNodeData}
-          onChange={handleChange}
-        />
-      )}
-      {selectedNode.type === 'flow' && (
-        <FlowProperties
-          data={selectedNode.data as FlowNodeData}
-          nodeId={selectedNode.id}
-          onChange={handleChange}
-        />
-      )}
-      {selectedNode.type === 'type' && (
-        <TypeProperties
-          data={selectedNode.data as TypeNodeData}
-          onChange={handleChange}
-        />
-      )}
-      {selectedNode.type === 'validator' && (
-        <ValidatorProperties
-          data={selectedNode.data as ValidatorNodeData}
-          onChange={handleChange}
-        />
-      )}
-      {selectedNode.type === 'transform' && (
-        <TransformProperties
-          data={selectedNode.data as TransformNodeData}
-          onChange={handleChange}
-        />
-      )}
-      {selectedNode.type === 'aspect' && (
-        <AspectProperties
-          data={selectedNode.data as AspectNodeData}
-          onChange={handleChange}
-        />
-      )}
-      {selectedNode.type === 'saga' && (
-        <SagaProperties
-          data={selectedNode.data as SagaNodeData}
-          onChange={handleChange}
-        />
-      )}
-      {selectedNode.type === 'state_machine' && (
-        <StateMachineProperties
-          data={selectedNode.data as StateMachineNodeData}
-          onChange={handleChange}
+      {/* Resize handle (hidden when collapsed) */}
+      {!collapsed && (
+        <div
+          className="absolute left-0 top-0 bottom-0 w-1 cursor-ew-resize hover:bg-indigo-500/50 transition-colors"
+          onMouseDown={handleMouseDown}
         />
       )}
     </div>

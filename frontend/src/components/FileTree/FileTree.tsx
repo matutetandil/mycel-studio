@@ -12,6 +12,7 @@ import {
 import { useState, useMemo, useEffect } from 'react'
 import { useProjectStore, type ProjectFile } from '../../stores/useProjectStore'
 import { useStudioStore } from '../../stores/useStudioStore'
+import { useEditorPanelStore } from '../../stores/useEditorPanelStore'
 import { generateProject, toIdentifier, type GeneratedFile } from '../../utils/hclGenerator'
 import type { ConnectorNodeData, FlowNodeData } from '../../types'
 
@@ -69,47 +70,18 @@ function FileItem({ file, isActive, onClick, isGenerated }: FileItemProps) {
   )
 }
 
-// Store for virtual project state
-interface VirtualProjectState {
-  activeFile: string | null
-  setActiveFile: (path: string | null) => void
-}
-
-// Simple state for virtual project - using module-level state
-let virtualActiveFile: string | null = 'config.hcl'
-const virtualActiveFileListeners: Set<(path: string | null) => void> = new Set()
-
-function useVirtualProjectState(): VirtualProjectState {
-  const [activeFile, setActiveFileState] = useState(virtualActiveFile)
-
-  useEffect(() => {
-    const listener = (path: string | null) => setActiveFileState(path)
-    virtualActiveFileListeners.add(listener)
-    return () => { virtualActiveFileListeners.delete(listener) }
-  }, [])
-
-  const setActiveFile = (path: string | null) => {
-    virtualActiveFile = path
-    virtualActiveFileListeners.forEach(l => l(path))
-  }
-
-  return { activeFile, setActiveFile }
-}
-
-// Export for use in Preview
-export function getVirtualActiveFile(): string | null {
-  return virtualActiveFile
-}
-
-export function setVirtualActiveFile(path: string | null) {
-  virtualActiveFile = path
-  virtualActiveFileListeners.forEach(l => l(path))
+function openFileInEditor(filePath: string) {
+  const fileName = filePath.split('/').pop() || filePath
+  useEditorPanelStore.getState().openFile(filePath, fileName)
+  // Auto-expand editor if collapsed
+  const { isCollapsed, toggleCollapse } = useEditorPanelStore.getState()
+  if (isCollapsed) toggleCollapse()
 }
 
 export default function FileTree() {
   const { projectName, files, activeFile, setActiveFile, openProject, createFile, capabilities } = useProjectStore()
   const { nodes, edges, selectedNodeId, serviceConfig, authConfig, envConfig, securityConfig, pluginConfig } = useStudioStore()
-  const virtualState = useVirtualProjectState()
+  const editorActiveTabId = useEditorPanelStore(s => s.groups.find(g => g.id === s.activeGroupId)?.activeTabId || null)
   const [isExpanded, setIsExpanded] = useState(true)
 
   // Generate project from canvas
@@ -137,9 +109,8 @@ export default function FileTree() {
         if (filePath) {
           if (projectName) {
             setActiveFile(filePath)
-          } else {
-            setVirtualActiveFile(filePath)
           }
+          openFileInEditor(filePath)
         }
       }
     }
@@ -185,8 +156,8 @@ export default function FileTree() {
     return (
       <VirtualProjectTree
         project={generatedProject}
-        activeFile={virtualState.activeFile}
-        onFileClick={virtualState.setActiveFile}
+        activeFile={editorActiveTabId}
+        onFileClick={openFileInEditor}
         onOpenProject={() => openProject()}
         openLabel={getOpenLabel()}
       />
