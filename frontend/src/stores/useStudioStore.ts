@@ -265,6 +265,49 @@ export const useStudioStore = create<StudioState>((set, get) => ({
 
   onConnect: (connection) => {
     const state = get()
+    const sourceNode = state.nodes.find(n => n.id === connection.source)
+    const targetNode = state.nodes.find(n => n.id === connection.target)
+
+    // If both ends are connectors, auto-create a Flow node in between
+    if (sourceNode?.type === 'connector' && targetNode?.type === 'connector') {
+      saveToHistory(state)
+      const sourceData = sourceNode.data as ConnectorNodeData
+      const targetData = targetNode.data as ConnectorNodeData
+      const flowId = `flow-${Date.now()}`
+
+      // Position the flow between the two connectors
+      const flowNode: StudioNode = {
+        id: flowId,
+        type: 'flow',
+        position: {
+          x: (sourceNode.position.x + targetNode.position.x) / 2,
+          y: (sourceNode.position.y + targetNode.position.y) / 2,
+        },
+        data: {
+          label: `${sourceData.label} to ${targetData.label}`,
+        } as FlowNodeData,
+      }
+
+      // Create two edges: source → flow, flow → target
+      const edge1 = {
+        id: `e-${sourceNode.id}-${flowId}`,
+        source: sourceNode.id,
+        target: flowId,
+      }
+      const edge2 = {
+        id: `e-${flowId}-${targetNode.id}`,
+        source: flowId,
+        target: targetNode.id,
+      }
+
+      set({
+        nodes: [...state.nodes, flowNode],
+        edges: [...state.edges, edge1, edge2],
+        selectedNodeId: flowId,
+      })
+      return
+    }
+
     saveToHistory(state)
     set({ edges: addEdge(connection, state.edges) })
   },

@@ -83,12 +83,12 @@ export const hclMonarchTokens: languages.IMonarchLanguage = {
       [/\/\*/, 'comment', '@comment'],
 
       // Block declarations: `connector "name" {`
-      [/(@topLevelBlocks)(\s+)("(?:[^"\\]|\\.)*")/, ['keyword', 'white', 'string.block-name']],
-      [/(@topLevelBlocks)(\s+)([a-zA-Z_][\w]*)/, ['keyword', 'white', 'variable.block-name']],
-      [/(@topLevelBlocks)(?=\s*\{)/, 'keyword'],
+      [/(connector|flow|type|validator|transform|aspect|saga|state_machine|service|auth|security|environment|plugin|workflow|batch)(\s+)("(?:[^"\\]|\\.)*")/, ['keyword', 'white', 'string.block-name']],
+      [/(connector|flow|type|validator|transform|aspect|saga|state_machine|service|auth|security|environment|plugin|workflow|batch)(\s+)([a-zA-Z_][\w]*)/, ['keyword', 'white', 'variable.block-name']],
+      [/\b(connector|flow|type|validator|transform|aspect|saga|state_machine|service|auth|security|environment|plugin|workflow|batch)\b(?=\s*\{)/, 'keyword'],
 
       // Sub-block keywords
-      [/(@subBlocks)(?=\s*[\{=])/, 'keyword.sub'],
+      [/\b(from|to|step|response|error_handling|retry|fallback|error_response|cache|lock|semaphore|dedupe|filter|validate|require|when|action|compensate|transition|guard|on_complete|on_failure|body|jwt|password|mfa|sessions|brute_force|replay_protection|social|storage|input_limits|sanitizer)\b(?=\s*[\{=])/, 'keyword.sub'],
 
       // Boolean literals
       [/\b(true|false)\b/, 'constant.boolean'],
@@ -107,7 +107,7 @@ export const hclMonarchTokens: languages.IMonarchLanguage = {
       [/<<-?\s*(\w+)/, { token: 'string.heredoc.delimiter', next: '@heredoc.$1' }],
 
       // Function calls
-      [/(@builtinFunctions)(?=\s*\()/, 'function.builtin'],
+      [/\b(env|uuid|now|lower|upper|len|map|filter|sort_by|contains|starts_with|ends_with|int|float|string|base64_encode|base64_decode|json_encode|json_decode|trim|split|join|replace|substr|format|coalesce)\b(?=\s*\()/, 'function.builtin'],
       [/[a-zA-Z_][\w]*(?=\s*\()/, 'function'],
 
       // Attribute name (identifier followed by =)
@@ -117,7 +117,7 @@ export const hclMonarchTokens: languages.IMonarchLanguage = {
       [/\b(input|output|step|error|enriched|context|flow)\b(?=\.)/, 'variable.context'],
 
       // Type keywords
-      [/(@typeKeywords)\b/, 'type'],
+      [/\b(string|number|integer|boolean|array|object|date|email)\b/, 'type'],
 
       // Regular identifiers
       [/[a-zA-Z_][\w]*/, 'identifier'],

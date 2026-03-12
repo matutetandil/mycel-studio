@@ -124,11 +124,56 @@ function generateFlowHCL(
   const name = toIdentifier(data.label)
   const lines: string[] = []
 
-  // Find connected nodes
-  const incomingEdge = edges.find((e) => e.target === node.id)
-  const outgoingEdges = edges.filter((e) => e.source === node.id)
+  // Find all connected connector nodes (regardless of edge direction)
+  const connectedEdges = edges.filter((e) => e.source === node.id || e.target === node.id)
+  const connectedConnectors: StudioNode[] = []
+  for (const edge of connectedEdges) {
+    const otherId = edge.source === node.id ? edge.target : edge.source
+    const other = nodesMap.get(otherId)
+    if (other && other.type === 'connector') {
+      connectedConnectors.push(other)
+    }
+  }
 
-  const fromNode = incomingEdge ? nodesMap.get(incomingEdge.source) : null
+  // Classify connectors by their direction: input connectors are "from", output are "to"
+  // For bidirectional, use edge direction as hint (incoming edge = from, outgoing = to)
+  let fromNode: StudioNode | null = null
+  const toNodes: StudioNode[] = []
+
+  for (const conn of connectedConnectors) {
+    const connData = conn.data as ConnectorNodeData
+    const dir = connData.direction || 'bidirectional'
+    if (!fromNode && (dir === 'input' || dir === 'bidirectional')) {
+      // Check if this is connected as a source (incoming to flow) or if it's an input connector
+      const edge = connectedEdges.find(e =>
+        (e.source === conn.id && e.target === node.id) ||
+        (e.target === conn.id && e.source === node.id)
+      )
+      if (dir === 'input') {
+        fromNode = conn
+      } else if (edge && edge.source === conn.id) {
+        // Bidirectional connected as source → treat as from
+        fromNode = conn
+      } else if (!toNodes.length) {
+        // Bidirectional connected as target → treat as to
+        toNodes.push(conn)
+      }
+    } else if (dir === 'output') {
+      toNodes.push(conn)
+    } else {
+      toNodes.push(conn)
+    }
+  }
+
+  // Legacy fallback: use edge direction if classification didn't work
+  if (!fromNode && connectedConnectors.length > 0) {
+    const incomingEdge = edges.find((e) => e.target === node.id)
+    if (incomingEdge) {
+      const n = nodesMap.get(incomingEdge.source)
+      if (n && n.type === 'connector') fromNode = n
+    }
+  }
+  const outgoingEdges = edges.filter((e) => e.source === node.id)
 
   lines.push(`# ${data.label}`)
   lines.push(`flow "${name}" {`)
@@ -305,17 +350,18 @@ function generateFlowHCL(
       }
     }
   } else {
-    // Fallback: use edges to find connected output nodes
-    for (const edge of outgoingEdges) {
-      const toNode = nodesMap.get(edge.target)
-      if (toNode && toNode.type === 'connector') {
-        const toData = toNode.data as ConnectorNodeData
-        const connectorName = toIdentifier(toData.label)
-        lines.push('')
-        lines.push('  to {')
-        lines.push(`    connector = "${connectorName}"`)
-        lines.push('  }')
-      }
+    // Fallback: use direction-classified toNodes, then edge-based detection
+    const fallbackToNodes = toNodes.length > 0 ? toNodes : outgoingEdges
+      .map(e => nodesMap.get(e.target))
+      .filter((n): n is StudioNode => !!n && n.type === 'connector')
+
+    for (const toNode of fallbackToNodes) {
+      const toData = toNode.data as ConnectorNodeData
+      const connectorName = toIdentifier(toData.label)
+      lines.push('')
+      lines.push('  to {')
+      lines.push(`    connector = "${connectorName}"`)
+      lines.push('  }')
     }
   }
 

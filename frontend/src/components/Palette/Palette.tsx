@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import {
   ArrowRight,
   ChevronRight,
@@ -9,6 +9,7 @@ import {
   Eye,
   GitBranch,
   CircleDot,
+  Search,
 } from 'lucide-react'
 import { type ConnectorType, DEFAULT_CONNECTOR_DIRECTIONS } from '../../types'
 import { getConnectorsByCategory, type ConnectorDefinition } from '../../connectors'
@@ -142,11 +143,37 @@ function buildCategories(): Array<{ name: string; items: PaletteItem[] }> {
 const categories = buildCategories()
 
 export default function Palette() {
+  const [search, setSearch] = useState('')
+
+  const filtered = useMemo(() => {
+    if (!search.trim()) return categories
+    const q = search.toLowerCase()
+    return categories
+      .map(cat => ({
+        ...cat,
+        items: cat.items.filter(item => item.label.toLowerCase().includes(q)),
+      }))
+      .filter(cat => cat.items.length > 0)
+  }, [search])
+
   return (
     <div className="px-2">
-      {categories.map((category) => (
+      <div className="relative mb-2">
+        <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-neutral-500" />
+        <input
+          type="text"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search components..."
+          className="w-full pl-7 pr-2 py-1.5 text-xs bg-neutral-800 border border-neutral-700 rounded text-white placeholder-neutral-500 focus:ring-1 focus:ring-indigo-500 focus:border-transparent"
+        />
+      </div>
+      {filtered.map((category) => (
         <CategorySection key={category.name} name={category.name} items={category.items} />
       ))}
+      {filtered.length === 0 && (
+        <div className="text-xs text-neutral-500 text-center py-4">No matches</div>
+      )}
     </div>
   )
 }
