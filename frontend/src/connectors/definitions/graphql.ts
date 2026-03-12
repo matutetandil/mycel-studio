@@ -20,6 +20,10 @@ export const graphql: ConnectorDefinition = {
       label: 'Server',
       fields: [
         { key: 'playground', label: 'Enable Playground', type: 'boolean' },
+        { key: 'playground_path', label: 'Playground Path', type: 'string', placeholder: '/playground' },
+        { key: 'introspection', label: 'Enable Introspection', type: 'boolean' },
+        { key: 'cors_origins', label: 'CORS Origins', type: 'string', placeholder: '*, http://localhost:3000' },
+        { key: 'cors_methods', label: 'CORS Methods', type: 'string', placeholder: 'GET, POST, OPTIONS' },
       ],
     },
     {

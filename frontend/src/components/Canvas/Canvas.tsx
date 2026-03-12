@@ -108,6 +108,31 @@ export default function Canvas() {
     [selectNode]
   )
 
+  // Sync external selectedNodeId changes (e.g., from editor tabs) to React Flow node selection
+  const selectedNodeId = useStudioStore(s => s.selectedNodeId)
+  const prevSelectedRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (selectedNodeId === prevSelectedRef.current) return
+    prevSelectedRef.current = selectedNodeId
+
+    // Check if React Flow already has the correct selection
+    const currentlySelected = nodes.filter(n => n.selected)
+    if (selectedNodeId === null && currentlySelected.length === 0) return
+    if (currentlySelected.length === 1 && currentlySelected[0].id === selectedNodeId) return
+
+    // Apply selection changes via onNodesChange
+    const changes = nodes
+      .filter(n => n.selected || n.id === selectedNodeId)
+      .map(n => ({
+        type: 'select' as const,
+        id: n.id,
+        selected: n.id === selectedNodeId,
+      }))
+    if (changes.length > 0) {
+      onNodesChange(changes)
+    }
+  }, [selectedNodeId, nodes, onNodesChange])
+
   const onDragOver = useCallback((event: React.DragEvent) => {
     event.preventDefault()
     event.dataTransfer.dropEffect = 'move'

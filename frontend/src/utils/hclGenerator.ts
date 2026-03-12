@@ -21,6 +21,20 @@ export function toIdentifier(label: string): string {
   return label.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '')
 }
 
+// Check if a value is an HCL expression (function call, variable ref) that should NOT be quoted
+function isHclExpression(value: string): boolean {
+  // Function calls: env("..."), uuid(), now(), lower(...), upper(...), etc.
+  if (/^[a-zA-Z_][a-zA-Z0-9_]*\(.*\)$/.test(value)) return true
+  // Variable references: input.field, output.field, var.name
+  if (/^[a-zA-Z_][a-zA-Z0-9_]*\.[a-zA-Z0-9_.]+$/.test(value)) return true
+  return false
+}
+
+// Format a value for HCL output — expressions are unquoted, strings are quoted
+function hclValue(value: string): string {
+  return isHclExpression(value) ? value : `"${value}"`
+}
+
 function generateConnectorHCL(node: StudioNode): string {
   const data = node.data as ConnectorNodeData
   const name = toIdentifier(data.label)
@@ -40,7 +54,7 @@ function generateConnectorHCL(node: StudioNode): string {
 
   // Output driver if present
   if (config.driver) {
-    lines.push(`  driver = "${config.driver}"`)
+    lines.push(`  driver = ${hclValue(String(config.driver))}`)
   }
 
   // Collect all field definitions (common + driver-specific)
@@ -60,17 +74,212 @@ function generateConnectorHCL(node: StudioNode): string {
     // Special handling for booleans
     if (field.type === 'boolean') {
       if (field.key === 'cors') {
-        // CORS is a complex object, not a simple boolean
-        lines.push('')
-        lines.push('  cors {')
-        lines.push('    origins = ["*"]')
-        lines.push('    methods = ["GET", "POST", "PUT", "DELETE", "OPTIONS"]')
-        lines.push('  }')
-      } else if (value) {
+        // CORS is a complex block — generate with sub-fields if enabled
+        if (value) {
+          const origins = config.cors_origins
+            ? String(config.cors_origins).split(',').map(s => `"${s.trim()}"`)
+            : ['"*"']
+          const methods = config.cors_methods
+            ? String(config.cors_methods).split(',').map(s => `"${s.trim()}"`)
+            : ['"GET"', '"POST"', '"PUT"', '"DELETE"', '"OPTIONS"']
+          const headers = config.cors_headers
+            ? String(config.cors_headers).split(',').map(s => `"${s.trim()}"`)
+            : ['"Content-Type"', '"Authorization"']
+          lines.push('')
+          lines.push('  cors {')
+          lines.push(`    origins = [${origins.join(', ')}]`)
+          lines.push(`    methods = [${methods.join(', ')}]`)
+          lines.push(`    headers = [${headers.join(', ')}]`)
+          lines.push('  }')
+        }
+        continue
+      }
+      // Skip cors sub-fields (handled above)
+      if (field.key === 'cors_origins' || field.key === 'cors_methods' || field.key === 'cors_headers') continue
+      if (field.key === 'tls_enabled') {
+        if (value) {
+          lines.push('')
+          lines.push('  tls {')
+          if (config.tls_cert_file) lines.push(`    cert_file = ${hclValue(String(config.tls_cert_file))}`)
+          if (config.tls_key_file) lines.push(`    key_file  = ${hclValue(String(config.tls_key_file))}`)
+          if (config.tls_cert) lines.push(`    cert = ${hclValue(String(config.tls_cert))}`)
+          if (config.tls_key) lines.push(`    key  = ${hclValue(String(config.tls_key))}`)
+          if (config.tls_ca) lines.push(`    ca   = ${hclValue(String(config.tls_ca))}`)
+          if (config.tls_ca_cert) lines.push(`    ca_cert = ${hclValue(String(config.tls_ca_cert))}`)
+          lines.push('  }')
+        }
+        continue
+      }
+      if (value) {
         lines.push(`  ${field.key} = true`)
       }
       continue
     }
+
+    // Skip cors sub-fields (handled in cors block above)
+    if (field.key === 'cors_origins' || field.key === 'cors_methods' || field.key === 'cors_headers') continue
+    // Skip TLS sub-fields (handled in tls block above)
+    if (field.key.startsWith('tls_') && field.key !== 'tls_enabled') continue
+
+    // Generate pool {} block for pool_max field
+    if (field.key === 'pool_max') {
+      const hasPool = config.pool_max || config.pool_min || config.pool_max_lifetime
+      if (hasPool) {
+        lines.push('')
+        lines.push('  pool {')
+        if (config.pool_max) lines.push(`    max          = ${config.pool_max}`)
+        if (config.pool_min) lines.push(`    min          = ${config.pool_min}`)
+        if (config.pool_max_lifetime) lines.push(`    max_lifetime = "${config.pool_max_lifetime}"`)
+        lines.push('  }')
+      }
+      continue
+    }
+    // Skip pool sub-fields (handled in pool block above)
+    if (field.key === 'pool_min' || field.key === 'pool_max_lifetime') continue
+
+    // Generate retry {} block for retry_count field
+    if (field.key === 'retry_count') {
+      const hasRetry = config.retry_count || config.retry_interval || config.retry_backoff || config.retry_delay
+      if (hasRetry) {
+        lines.push('')
+        lines.push('  retry {')
+        if (config.retry_count) lines.push(`    count    = ${config.retry_count}`)
+        if (config.retry_interval) lines.push(`    interval = "${config.retry_interval}"`)
+        if (config.retry_delay) lines.push(`    delay    = "${config.retry_delay}"`)
+        if (config.retry_backoff) lines.push(`    backoff  = "${config.retry_backoff}"`)
+        lines.push('  }')
+      }
+      continue
+    }
+    // Skip retry sub-fields (handled in retry block above)
+    if (field.key === 'retry_interval' || field.key === 'retry_backoff' || field.key === 'retry_delay') continue
+
+    // MQ sub-blocks: consumer, publisher, exchange, dlq, sasl, schema_registry
+    if (field.key === 'consumer_queue' || field.key === 'consumer_group_id') {
+      // Consumer block (RabbitMQ or Kafka)
+      const isRabbit = config.driver === 'rabbitmq'
+      const hasConsumer = isRabbit
+        ? (config.consumer_queue || config.consumer_prefetch || config.consumer_workers)
+        : (config.consumer_group_id || config.consumer_topics)
+      if (hasConsumer) {
+        lines.push('')
+        lines.push('  consumer {')
+        if (isRabbit) {
+          if (config.consumer_queue) lines.push(`    queue    = ${hclValue(String(config.consumer_queue))}`)
+          if (config.consumer_prefetch) lines.push(`    prefetch = ${config.consumer_prefetch}`)
+          if (config.consumer_auto_ack) lines.push(`    auto_ack = true`)
+          if (config.consumer_workers) lines.push(`    workers  = ${config.consumer_workers}`)
+          if (config.consumer_tag) lines.push(`    tag      = ${hclValue(String(config.consumer_tag))}`)
+          if (config.consumer_exclusive) lines.push(`    exclusive = true`)
+        } else {
+          // Kafka
+          if (config.consumer_group_id) lines.push(`    group_id           = ${hclValue(String(config.consumer_group_id))}`)
+          if (config.consumer_topics) {
+            const topics = String(config.consumer_topics).split(',').map(s => `"${s.trim()}"`)
+            lines.push(`    topics             = [${topics.join(', ')}]`)
+          }
+          if (config.consumer_auto_offset_reset) lines.push(`    auto_offset_reset  = "${config.consumer_auto_offset_reset}"`)
+          if (config.consumer_auto_commit) lines.push(`    auto_commit        = true`)
+          if (config.consumer_concurrency) lines.push(`    concurrency        = ${config.consumer_concurrency}`)
+          if (config.consumer_max_bytes) lines.push(`    max_bytes          = ${config.consumer_max_bytes}`)
+          if (config.consumer_max_wait_time) lines.push(`    max_wait_time      = "${config.consumer_max_wait_time}"`)
+        }
+        // DLQ (RabbitMQ only)
+        if (isRabbit && config.dlq_enabled) {
+          lines.push('')
+          lines.push('    dlq {')
+          lines.push('      enabled = true')
+          if (config.dlq_exchange) lines.push(`      exchange    = ${hclValue(String(config.dlq_exchange))}`)
+          if (config.dlq_queue) lines.push(`      queue       = ${hclValue(String(config.dlq_queue))}`)
+          if (config.dlq_max_retries) lines.push(`      max_retries = ${config.dlq_max_retries}`)
+          if (config.dlq_retry_delay) lines.push(`      retry_delay = "${config.dlq_retry_delay}"`)
+          lines.push('    }')
+        }
+        lines.push('  }')
+      }
+      continue
+    }
+    // Skip all consumer/dlq sub-fields
+    if (field.key.startsWith('consumer_') || field.key.startsWith('dlq_')) continue
+
+    // Publisher block (RabbitMQ)
+    if (field.key === 'publisher_exchange') {
+      const hasPub = config.publisher_exchange || config.publisher_routing_key || config.publisher_confirms
+      if (hasPub) {
+        lines.push('')
+        lines.push('  publisher {')
+        if (config.publisher_exchange) lines.push(`    exchange     = ${hclValue(String(config.publisher_exchange))}`)
+        if (config.publisher_routing_key) lines.push(`    routing_key  = ${hclValue(String(config.publisher_routing_key))}`)
+        if (config.publisher_mandatory) lines.push(`    mandatory    = true`)
+        if (config.publisher_persistent) lines.push(`    persistent   = true`)
+        if (config.publisher_content_type) lines.push(`    content_type = "${config.publisher_content_type}"`)
+        if (config.publisher_confirms) lines.push(`    confirms     = true`)
+        lines.push('  }')
+      }
+      continue
+    }
+    if (field.key.startsWith('publisher_')) continue
+
+    // Producer block (Kafka)
+    if (field.key === 'producer_topic') {
+      const hasProd = config.producer_topic || config.producer_acks || config.producer_compression
+      if (hasProd) {
+        lines.push('')
+        lines.push('  producer {')
+        if (config.producer_topic) lines.push(`    topic       = ${hclValue(String(config.producer_topic))}`)
+        if (config.producer_acks) lines.push(`    acks        = "${config.producer_acks}"`)
+        if (config.producer_retries) lines.push(`    retries     = ${config.producer_retries}`)
+        if (config.producer_batch_size) lines.push(`    batch_size  = ${config.producer_batch_size}`)
+        if (config.producer_linger_ms) lines.push(`    linger_ms   = ${config.producer_linger_ms}`)
+        if (config.producer_compression) lines.push(`    compression = "${config.producer_compression}"`)
+        lines.push('  }')
+      }
+      continue
+    }
+    if (field.key.startsWith('producer_')) continue
+
+    // Exchange block (RabbitMQ)
+    if (field.key === 'exchange_name') {
+      if (config.exchange_name) {
+        lines.push('')
+        lines.push('  exchange {')
+        lines.push(`    name    = ${hclValue(String(config.exchange_name))}`)
+        if (config.exchange_type) lines.push(`    type    = "${config.exchange_type}"`)
+        if (config.exchange_durable) lines.push(`    durable = true`)
+        lines.push('  }')
+      }
+      continue
+    }
+    if (field.key.startsWith('exchange_')) continue
+
+    // SASL block (Kafka)
+    if (field.key === 'sasl_mechanism') {
+      if (config.sasl_mechanism) {
+        lines.push('')
+        lines.push('  sasl {')
+        lines.push(`    mechanism = "${config.sasl_mechanism}"`)
+        if (config.sasl_username) lines.push(`    username  = ${hclValue(String(config.sasl_username))}`)
+        if (config.sasl_password) lines.push(`    password  = ${hclValue(String(config.sasl_password))}`)
+        lines.push('  }')
+      }
+      continue
+    }
+    if (field.key.startsWith('sasl_')) continue
+
+    // Schema Registry block (Kafka)
+    if (field.key === 'schema_registry_url') {
+      if (config.schema_registry_url) {
+        lines.push('')
+        lines.push('  schema_registry {')
+        lines.push(`    url = ${hclValue(String(config.schema_registry_url))}`)
+        if (config.schema_registry_username) lines.push(`    username = ${hclValue(String(config.schema_registry_username))}`)
+        if (config.schema_registry_password) lines.push(`    password = ${hclValue(String(config.schema_registry_password))}`)
+        if (config.schema_registry_format) lines.push(`    format   = "${config.schema_registry_format}"`)
+        lines.push('  }')
+      }
+      continue
+    }
+    if (field.key.startsWith('schema_registry_')) continue
 
     // Special handling for comma-separated lists that should become HCL arrays
     if (field.key === 'brokers' || field.key === 'channels' || field.key === 'patterns' || field.key === 'scopes') {
@@ -85,8 +294,8 @@ function generateConnectorHCL(node: StudioNode): string {
       continue
     }
 
-    // Strings (default)
-    lines.push(`  ${field.key} = "${value}"`)
+    // Strings (default) — detect expressions like env("...")
+    lines.push(`  ${field.key} = ${hclValue(String(value))}`)
   }
 
   // Profiles
@@ -112,7 +321,7 @@ function generateConnectorHCL(node: StudioNode): string {
         if (typeof v === 'number' || typeof v === 'boolean') {
           lines.push(`    ${k} = ${v}`)
         } else {
-          lines.push(`    ${k} = "${v}"`)
+          lines.push(`    ${k} = ${hclValue(String(v))}`)
         }
       }
       // Profile transform
@@ -876,7 +1085,7 @@ function generateAuthHCL(auth: AuthConfig): string {
   lines.push('')
   lines.push('  jwt {')
   if (auth.jwt.secret) {
-    lines.push(`    secret           = ${auth.jwt.secret.startsWith('env(') ? auth.jwt.secret : `"${auth.jwt.secret}"`}`)
+    lines.push(`    secret           = ${hclValue(auth.jwt.secret)}`)
   }
   lines.push(`    algorithm        = "${auth.jwt.algorithm}"`)
   lines.push(`    access_lifetime  = "${auth.jwt.accessLifetime}"`)
@@ -970,10 +1179,10 @@ function generateAuthHCL(auth: AuthConfig): string {
     for (const sp of auth.socialProviders) {
       lines.push(`    ${sp.provider} {`)
       if (sp.clientId) {
-        lines.push(`      client_id     = ${sp.clientId.startsWith('env(') ? sp.clientId : `"${sp.clientId}"`}`)
+        lines.push(`      client_id     = ${hclValue(sp.clientId)}`)
       }
       if (sp.clientSecret) {
-        lines.push(`      client_secret = ${sp.clientSecret.startsWith('env(') ? sp.clientSecret : `"${sp.clientSecret}"`}`)
+        lines.push(`      client_secret = ${hclValue(sp.clientSecret)}`)
       }
       if (sp.scopes && sp.scopes.length > 0) {
         lines.push(`      scopes        = [${sp.scopes.map(s => `"${s}"`).join(', ')}]`)

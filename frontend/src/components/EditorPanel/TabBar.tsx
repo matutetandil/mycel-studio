@@ -1,6 +1,9 @@
 import { useState, useRef } from 'react'
 import { X, FileCode, Columns2, Rows2, Copy, Check, Download, XCircle } from 'lucide-react'
 import { useEditorPanelStore, type EditorTab } from '../../stores/useEditorPanelStore'
+import { useStudioStore } from '../../stores/useStudioStore'
+import { toIdentifier } from '../../utils/hclGenerator'
+import type { ConnectorNodeData } from '../../types'
 
 interface TabBarProps {
   groupId: string
@@ -10,6 +13,43 @@ interface TabBarProps {
   onCopy: () => void
   onDownloadZip: () => void
   copied: boolean
+}
+
+// Map a file path to the corresponding canvas node
+function selectNodeForFile(filePath: string) {
+  const { nodes, selectNode } = useStudioStore.getState()
+
+  // connectors/{name}.hcl → find connector with that identifier
+  const connectorMatch = filePath.match(/^connectors\/(.+)\.hcl$/)
+  if (connectorMatch) {
+    const identifier = connectorMatch[1]
+    const node = nodes.find(n => {
+      if (n.type !== 'connector') return false
+      const data = n.data as ConnectorNodeData
+      return toIdentifier(data.label) === identifier
+    })
+    if (node) { selectNode(node.id); return }
+  }
+
+  // Shared files → select first node of that type
+  const typeMap: Record<string, string> = {
+    'flows/flows.hcl': 'flow',
+    'types/types.hcl': 'type',
+    'validators/validators.hcl': 'validator',
+    'transforms/transforms.hcl': 'transform',
+    'aspects/aspects.hcl': 'aspect',
+    'sagas/sagas.hcl': 'saga',
+    'machines/machines.hcl': 'state_machine',
+  }
+
+  const nodeType = typeMap[filePath]
+  if (nodeType) {
+    const node = nodes.find(n => n.type === nodeType)
+    if (node) { selectNode(node.id); return }
+  }
+
+  // config.hcl, auth, security, plugins, env files → deselect (show ServiceProperties)
+  selectNode(null)
 }
 
 export default function TabBar({ groupId, tabs, activeTabId, isSecondary, onCopy, onDownloadZip, copied }: TabBarProps) {
@@ -70,7 +110,7 @@ export default function TabBar({ groupId, tabs, activeTabId, isSecondary, onCopy
             onDragOver={(e) => handleDragOver(e, index)}
             onDragLeave={handleDragLeave}
             onDrop={(e) => handleDrop(e, index)}
-            onClick={() => setActiveTab(groupId, tab.id)}
+            onClick={() => { setActiveTab(groupId, tab.id); selectNodeForFile(tab.filePath) }}
             className={`
               group flex items-center gap-1.5 px-3 py-1.5 text-xs border-r border-neutral-800 cursor-pointer shrink-0 select-none
               ${activeTabId === tab.id

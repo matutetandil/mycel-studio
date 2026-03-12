@@ -13,6 +13,9 @@ export const rest: ConnectorDefinition = {
   fields: [
     { key: 'port', label: 'Port', type: 'number', placeholder: '3000' },
     { key: 'cors', label: 'Enable CORS', type: 'boolean' },
+    { key: 'cors_origins', label: 'Allowed Origins', type: 'string', placeholder: '*, http://localhost:3000', visibleWhen: { field: 'cors', value: 'true' } },
+    { key: 'cors_methods', label: 'Allowed Methods', type: 'string', placeholder: 'GET, POST, PUT, DELETE, OPTIONS', visibleWhen: { field: 'cors', value: 'true' } },
+    { key: 'cors_headers', label: 'Allowed Headers', type: 'string', placeholder: 'Content-Type, Authorization', visibleWhen: { field: 'cors', value: 'true' } },
   ],
   drivers: undefined,
 }

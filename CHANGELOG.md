@@ -2,6 +2,30 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.13.0] - Connector Alignment with Mycel Runtime
+
+### Fixed
+
+- **Queue type renamed to `mq`** — Aligns with Mycel runtime's `type = "mq"` (was incorrectly `"queue"`)
+- **`env()` expression escaping** — Values like `env("DB_HOST")` now generate `host = env("DB_HOST")` instead of `host = "env(\"DB_HOST\")"`
+- **gRPC client field naming** — Renamed `address` to `target` to match Mycel docs
+- **SSE heartbeat naming** — Renamed `heartbeat_interval` to `heartbeat` to match Mycel docs
+
+### Added
+
+- **Environment Variables panel** — Always-visible panel at bottom ~30% of Properties sidebar with resizable split divider
+- **REST CORS expansion** — Full CORS configuration: origins, methods, headers (was boolean-only)
+- **Database connection pooling** — `pool_max`, `pool_min`, `pool_max_lifetime` for Postgres/MySQL
+- **HTTP client retry** — Retry block with count, interval, backoff; added `oauth2` auth type
+- **gRPC TLS & limits** — TLS block, `proto_files`, `max_recv_mb`, `max_send_mb`
+- **MQTT TLS & timeouts** — TLS block, `connect_timeout`, `keep_alive`, `clean_session`, `max_reconnect_interval`
+- **GraphQL server options** — `playground_path`, `introspection`, CORS fields
+- **Cache Redis options** — `default_ttl`, connection pool fields
+- **File connector** — Added `binary` format, `create_dirs`, `permissions`
+- **S3 MinIO support** — `force_path_style` for MinIO compatibility
+- **Exec connector** — `input_format`, `output_format`, retry fields
+- **HCL block generation** — Proper `cors {}`, `tls {}`, `pool {}`, `retry {}` sub-blocks
+
 ## [0.12.0] - Auto-save, Connector Profiles & Backend Validation
 
 ### Added

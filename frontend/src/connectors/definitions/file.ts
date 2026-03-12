@@ -18,9 +18,12 @@ export const file: ConnectorDefinition = {
         { value: 'csv', label: 'CSV' },
         { value: 'excel', label: 'Excel' },
         { value: 'text', label: 'Text' },
+        { value: 'binary', label: 'Binary' },
       ],
     },
     { key: 'watch', label: 'Watch for changes', type: 'boolean' },
     { key: 'watch_interval', label: 'Watch Interval', type: 'string', placeholder: '5s', visibleWhen: { field: 'watch', value: 'true' } },
+    { key: 'create_dirs', label: 'Create Directories', type: 'boolean' },
+    { key: 'permissions', label: 'Permissions', type: 'string', placeholder: '0644' },
   ],
 }

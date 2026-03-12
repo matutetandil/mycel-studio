@@ -8,7 +8,7 @@ export type ConnectorType =
   | 'rest'
   | 'http'
   | 'database'
-  | 'queue'
+  | 'mq'
   | 'cache'
   | 'grpc'
   | 'graphql'
@@ -51,7 +51,7 @@ export const DEFAULT_CONNECTOR_DIRECTIONS: Record<ConnectorType, ConnectorDirect
   graphql: 'input',
   grpc: 'input',
   tcp: 'input',
-  queue: 'input',
+  mq: 'input',
   database: 'output',
   cache: 'bidirectional',
   file: 'output',
@@ -317,7 +317,7 @@ export interface ExecConfig {
 export type ConnectorConfig =
   | ({ type: 'rest' } & (RestServerConfig | RestClientConfig))
   | ({ type: 'database' } & DatabaseConfig)
-  | ({ type: 'queue' } & QueueConfig)
+  | ({ type: 'mq' } & QueueConfig)
   | ({ type: 'cache' } & CacheConfig)
   | ({ type: 'grpc' } & GrpcConfig)
   | ({ type: 'graphql' } & GraphqlConfig)

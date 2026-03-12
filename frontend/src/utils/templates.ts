@@ -121,7 +121,7 @@ const eventProcessing: ProjectTemplate = {
       position: { x: 400, y: 150 },
       data: {
         label: 'Queue',
-        connectorType: 'queue',
+        connectorType: 'mq',
         direction: 'input',
         config: { driver: 'rabbitmq', host: 'localhost', port: 5672, username: 'guest', password: 'guest' },
       },

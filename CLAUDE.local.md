@@ -681,11 +681,45 @@ En vez de escribir HCL manualmente, el usuario:
 - **Build:** ✅ TypeScript + Vite + Go build exitosos
 - **Docker:** ✅ Testeado en http://localhost:8080
 
+### 2026-03-12 - Connector Alignment & Env Panel — v0.13.0
+- **Estado:** ✅ Completado
+- **Fix env() escaping:**
+  - `hclValue()` helper: detecta expresiones HCL (function calls, variable refs) y las emite sin comillas
+  - `isHclExpression()`: regex para `func(...)` y `var.field` patterns
+  - Aplicado a connector config, profile config, auth config
+- **Panel de Environment Variables:**
+  - `EnvProperties` movido fuera de `ServiceProperties`, siempre visible al fondo del panel Properties
+  - Split resizable entre propiedades (70%) y env vars (30%)
+  - Ambas secciones con scroll independiente
+- **Queue → MQ rename:**
+  - ConnectorType: `'queue'` → `'mq'` en types, definitions, templates, DEFAULT_CONNECTOR_DIRECTIONS
+- **Connector fields alineados con Mycel runtime:**
+  - REST: CORS expandido (origins, methods, headers) con generación de bloque `cors {}`
+  - Database: pool fields (max, min, max_lifetime) para postgres/mysql, genera `pool {}`
+  - HTTP: retry block (count, interval, backoff), oauth2 auth type
+  - gRPC: `address` → `target`, proto_files, max_recv/send_mb, TLS block
+  - MQTT: connect_timeout, keep_alive, clean_session, TLS block
+  - GraphQL: playground_path, introspection, CORS fields
+  - Cache Redis: default_ttl, pool fields
+  - File: binary format, create_dirs, permissions
+  - S3: force_path_style (MinIO)
+  - Exec: input_format, output_format, retry fields
+  - SSE: heartbeat_interval → heartbeat
+- **HCL generator sub-blocks:**
+  - `cors {}` — origins/methods/headers con valores default
+  - `tls {}` — cert_file/key_file/cert/key/ca/ca_cert
+  - `pool {}` — max/min/max_lifetime
+  - `retry {}` — count/interval/delay/backoff
+  - Skip logic para sub-fields que pertenecen a bloques
+- **Build:** ✅ TypeScript + Go + Docker build exitosos
+
 ---
 
 ## Próximos pasos (pendientes para siguiente sesión)
 
-### Todas las fases principales COMPLETADAS (3-9) + UX Polish + Auto-save/Validation/Profiles
+### Todas las fases principales COMPLETADAS (3-9) + UX Polish + Connector Alignment
 
 ### Pendientes menores:
 - Phase 9.5: Full LSP via Backend (monaco-languageclient + WebSocket)
+- RabbitMQ/Kafka: consumer, producer, DLQ, exchange, SASL, Schema Registry sub-blocks
+- CDC: tables field

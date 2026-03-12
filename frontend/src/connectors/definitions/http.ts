@@ -19,6 +19,7 @@ export const http: ConnectorDefinition = {
         { value: 'bearer', label: 'Bearer Token' },
         { value: 'basic', label: 'Basic Auth' },
         { value: 'api_key', label: 'API Key' },
+        { value: 'oauth2', label: 'OAuth2' },
       ],
     },
     { key: 'auth_token', label: 'Token', type: 'password', placeholder: 'Bearer token', visibleWhen: { field: 'auth_type', value: 'bearer' } },
@@ -26,5 +27,15 @@ export const http: ConnectorDefinition = {
     { key: 'auth_password', label: 'Password', type: 'password', placeholder: '••••••••', visibleWhen: { field: 'auth_type', value: 'basic' } },
     { key: 'auth_header', label: 'Header Name', type: 'string', placeholder: 'X-API-Key', visibleWhen: { field: 'auth_type', value: 'api_key' } },
     { key: 'auth_value', label: 'API Key', type: 'password', placeholder: '••••••••', visibleWhen: { field: 'auth_type', value: 'api_key' } },
+    { key: 'retry_count', label: 'Retry Count', type: 'number', placeholder: '3' },
+    { key: 'retry_interval', label: 'Retry Interval', type: 'string', placeholder: '1s' },
+    {
+      key: 'retry_backoff', label: 'Retry Backoff', type: 'select',
+      options: [
+        { value: '', label: 'None' },
+        { value: 'constant', label: 'Constant' },
+        { value: 'exponential', label: 'Exponential' },
+      ],
+    },
   ],
 }

@@ -35,6 +35,9 @@ export const database: ConnectorDefinition = {
             { value: 'verify-full', label: 'Verify Full' },
           ],
         },
+        { key: 'pool_max', label: 'Max Connections', type: 'number', placeholder: '10' },
+        { key: 'pool_min', label: 'Min Connections', type: 'number', placeholder: '1' },
+        { key: 'pool_max_lifetime', label: 'Max Connection Lifetime', type: 'string', placeholder: '30m' },
       ],
     },
     {
@@ -47,6 +50,9 @@ export const database: ConnectorDefinition = {
         { key: 'user', label: 'User', type: 'string', placeholder: 'root' },
         { key: 'password', label: 'Password', type: 'password', placeholder: '••••••••' },
         { key: 'charset', label: 'Charset', type: 'string', placeholder: 'utf8mb4' },
+        { key: 'pool_max', label: 'Max Connections', type: 'number', placeholder: '10' },
+        { key: 'pool_min', label: 'Min Connections', type: 'number', placeholder: '1' },
+        { key: 'pool_max_lifetime', label: 'Max Connection Lifetime', type: 'string', placeholder: '30m' },
       ],
     },
     {

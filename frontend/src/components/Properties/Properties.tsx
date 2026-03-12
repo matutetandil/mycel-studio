@@ -1,5 +1,6 @@
-import { useState, useCallback } from 'react'
-import { ChevronLeft, ChevronRight as ChevronRightIcon, GripVertical, Plus, Trash2, ChevronDown, ChevronRight } from 'lucide-react'
+import { useState, useCallback, useRef, useEffect } from 'react'
+import { createPortal } from 'react-dom'
+import { ChevronLeft, ChevronRight as ChevronRightIcon, GripVertical, Plus, Trash2, ChevronDown, ChevronRight, Variable, Type, Pencil, X, Check, Lock } from 'lucide-react'
 import { useStudioStore } from '../../stores/useStudioStore'
 import type { ConnectorNodeData, ConnectorProfile, ConnectorProfileConfig, FlowNodeData, FlowTo, ConnectorDirection, RestOperation, GraphQLOperation, ConnectorOperation, TypeNodeData, TypeFieldDefinition, ValidatorNodeData, TransformNodeData, AspectNodeData, SagaNodeData, SagaStep, SagaAction, StateMachineNodeData, StateMachineState, StateMachineTransition, AuthConfig, AuthPreset, JwtAlgorithm, MfaRequirement, MfaMethod, AuthSocialProvider, EnvVariable, SecuritySanitizer, PluginDefinition } from '../../types'
 import OperationsEditor from './OperationsEditor'
@@ -14,6 +15,68 @@ const directionOptions: { value: ConnectorDirection; label: string; description:
   { value: 'bidirectional', label: 'Both', description: 'Can be source or target' },
 ]
 
+// Check if a value is an env() reference and extract the var name
+function parseEnvRef(value: unknown): string | null {
+  if (typeof value !== 'string') return null
+  const match = value.match(/^env\("([^"]+)"\)$/)
+  return match ? match[1] : null
+}
+
+// Toggle button for switching between free text and env variable
+function EnvToggle({
+  isEnvMode,
+  onToggle,
+}: {
+  isEnvMode: boolean
+  onToggle: () => void
+}) {
+  return (
+    <button
+      onClick={onToggle}
+      className={`flex-shrink-0 p-1.5 rounded transition-colors ${
+        isEnvMode
+          ? 'bg-green-800/40 text-green-400 hover:bg-green-800/60'
+          : 'text-neutral-500 hover:text-neutral-400 hover:bg-neutral-700'
+      }`}
+      title={isEnvMode ? 'Using environment variable — click for free text' : 'Using free text — click to use env variable'}
+    >
+      {isEnvMode ? <Variable className="w-3.5 h-3.5" /> : <Type className="w-3.5 h-3.5" />}
+    </button>
+  )
+}
+
+// Env variable selector dropdown
+function EnvVarSelector({
+  variables,
+  currentVar,
+  onChange,
+}: {
+  variables: EnvVariable[]
+  currentVar: string | null
+  onChange: (varName: string) => void
+}) {
+  const inputClass = "w-full px-3 py-2 text-sm bg-neutral-800 border border-neutral-700 rounded-md focus:ring-2 focus:ring-green-500 focus:border-transparent text-green-400 font-mono"
+
+  if (variables.length === 0) {
+    return (
+      <p className="text-xs text-neutral-500 italic py-2">No env variables defined. Add them in the Environment panel below.</p>
+    )
+  }
+
+  return (
+    <select
+      value={currentVar || ''}
+      onChange={(e) => onChange(e.target.value)}
+      className={inputClass}
+    >
+      <option value="">Select variable...</option>
+      {variables.map(v => (
+        <option key={v.key} value={v.key}>{v.key}</option>
+      ))}
+    </select>
+  )
+}
+
 // Generic field renderer for connector properties
 function FieldRenderer({
   field,
@@ -26,15 +89,49 @@ function FieldRenderer({
   config: Record<string, unknown>
   onChange: (key: string, val: unknown) => void
 }) {
+  const { envConfig } = useStudioStore()
   const inputClass = "w-full px-3 py-2 text-sm bg-neutral-800 border border-neutral-700 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-white placeholder-neutral-500"
 
   // Check visibility condition
   if (field.visibleWhen) {
     const depValue = config[field.visibleWhen.field]
-    const allowed = Array.isArray(field.visibleWhen.value)
-      ? field.visibleWhen.value.includes(String(depValue))
-      : String(depValue) === field.visibleWhen.value
+    const matchValue = field.visibleWhen.value
+    let allowed: boolean
+    if (matchValue === '*') {
+      // Wildcard: visible when field has any non-empty value
+      allowed = depValue !== undefined && depValue !== null && depValue !== '' && depValue !== false
+    } else if (Array.isArray(matchValue)) {
+      allowed = matchValue.includes(String(depValue))
+    } else {
+      allowed = String(depValue) === matchValue
+    }
     if (!allowed) return null
+  }
+
+  // Determine if current value is an env() ref
+  const envVar = parseEnvRef(value)
+  const isEnvMode = envVar !== null
+
+  // For string, number, password fields: support env var toggle
+  const supportsEnvToggle = field.type === 'string' || field.type === 'password' || field.type === 'number' || field.type === undefined
+
+  const handleToggleEnv = () => {
+    if (isEnvMode) {
+      // Switch to free text — clear value
+      onChange(field.key, undefined)
+    } else {
+      // Switch to env mode — pick first available or empty
+      const firstVar = envConfig.variables[0]?.key
+      if (firstVar) {
+        onChange(field.key, `env("${firstVar}")`)
+      } else {
+        onChange(field.key, 'env("")')
+      }
+    }
+  }
+
+  const handleEnvVarChange = (varName: string) => {
+    onChange(field.key, varName ? `env("${varName}")` : undefined)
   }
 
   switch (field.type) {
@@ -72,36 +169,6 @@ function FieldRenderer({
         </div>
       )
 
-    case 'number':
-      return (
-        <div>
-          <label className="block text-xs font-medium text-neutral-400 mb-1">{field.label}</label>
-          <input
-            type="number"
-            value={value != null ? String(value) : ''}
-            onChange={(e) => onChange(field.key, e.target.value ? parseInt(e.target.value) : undefined)}
-            placeholder={field.placeholder}
-            className={inputClass}
-          />
-          {field.helpText && <p className="text-xs text-neutral-500 mt-1">{field.helpText}</p>}
-        </div>
-      )
-
-    case 'password':
-      return (
-        <div>
-          <label className="block text-xs font-medium text-neutral-400 mb-1">{field.label}</label>
-          <input
-            type="password"
-            value={String(value || '')}
-            onChange={(e) => onChange(field.key, e.target.value || undefined)}
-            placeholder={field.placeholder || '••••••••'}
-            className={inputClass}
-          />
-          {field.helpText && <p className="text-xs text-neutral-500 mt-1">{field.helpText}</p>}
-        </div>
-      )
-
     case 'text':
       return (
         <div>
@@ -117,20 +184,41 @@ function FieldRenderer({
         </div>
       )
 
-    default: // string
+    default: {
+      // string, number, password — all support env var toggle
       return (
         <div>
-          <label className="block text-xs font-medium text-neutral-400 mb-1">{field.label}</label>
-          <input
-            type="text"
-            value={String(value || '')}
-            onChange={(e) => onChange(field.key, e.target.value || undefined)}
-            placeholder={field.placeholder}
-            className={inputClass}
-          />
+          <div className="flex items-center justify-between mb-1">
+            <label className="text-xs font-medium text-neutral-400">{field.label}</label>
+            {supportsEnvToggle && (
+              <EnvToggle isEnvMode={isEnvMode} onToggle={handleToggleEnv} />
+            )}
+          </div>
+          {isEnvMode ? (
+            <EnvVarSelector
+              variables={envConfig.variables}
+              currentVar={envVar}
+              onChange={handleEnvVarChange}
+            />
+          ) : (
+            <input
+              type={field.type === 'password' ? 'password' : field.type === 'number' ? 'number' : 'text'}
+              value={value != null ? String(value) : ''}
+              onChange={(e) => {
+                if (field.type === 'number') {
+                  onChange(field.key, e.target.value ? parseInt(e.target.value) : undefined)
+                } else {
+                  onChange(field.key, e.target.value || undefined)
+                }
+              }}
+              placeholder={field.type === 'password' ? (field.placeholder || '••••••••') : field.placeholder}
+              className={inputClass}
+            />
+          )}
           {field.helpText && <p className="text-xs text-neutral-500 mt-1">{field.helpText}</p>}
         </div>
       )
+    }
   }
 }
 
@@ -2816,10 +2904,130 @@ function scanEnvReferences(nodes: { data: Record<string, unknown> }[]): string[]
   return Array.from(refs).sort()
 }
 
+// Popup for adding/editing an env variable
+function EnvVarEditPopup({
+  variable,
+  isNew,
+  onSave,
+  onCancel,
+}: {
+  variable: EnvVariable
+  isNew: boolean
+  onSave: (v: EnvVariable) => void
+  onCancel: () => void
+}) {
+  const [key, setKey] = useState(variable.key)
+  const [val, setVal] = useState(variable.value)
+  const [secret, setSecret] = useState(variable.secret ?? false)
+  const [desc, setDesc] = useState(variable.description ?? '')
+  const keyRef = useRef<HTMLInputElement>(null)
+  const popupRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (isNew) keyRef.current?.focus()
+  }, [isNew])
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (popupRef.current && !popupRef.current.contains(e.target as Node)) {
+        onCancel()
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [onCancel])
+
+  const handleSave = () => {
+    if (!key.trim()) return
+    onSave({ key, value: val, secret, description: desc || undefined })
+  }
+
+  const inputClass = "w-full px-2 py-1.5 text-xs bg-neutral-800 border border-neutral-700 rounded text-white placeholder-neutral-600"
+
+  return createPortal(
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onMouseDown={(e) => { if (e.target === e.currentTarget) onCancel() }}>
+      <div ref={popupRef} className="w-80 border border-neutral-600 rounded-lg shadow-2xl p-4 space-y-3" style={{ backgroundColor: '#1a1a1a' }}>
+        <div className="flex items-center justify-between">
+          <span className="text-sm font-medium text-neutral-200">{isNew ? 'Add Variable' : 'Edit Variable'}</span>
+          <button onClick={onCancel} className="text-neutral-500 hover:text-neutral-300">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      <div>
+        <label className="block text-xs text-neutral-500 mb-0.5">Name</label>
+        <input
+          ref={keyRef}
+          type="text"
+          value={key}
+          onChange={(e) => setKey(e.target.value.toUpperCase().replace(/[^A-Z0-9_]/g, ''))}
+          placeholder="VAR_NAME"
+          className={inputClass + ' font-mono'}
+          onKeyDown={(e) => e.key === 'Enter' && handleSave()}
+        />
+      </div>
+      <div>
+        <label className="block text-xs text-neutral-500 mb-0.5">Value</label>
+        <input
+          type={secret ? 'password' : 'text'}
+          value={val}
+          onChange={(e) => setVal(e.target.value)}
+          placeholder="value"
+          className={inputClass}
+          onKeyDown={(e) => e.key === 'Enter' && handleSave()}
+        />
+      </div>
+      <div>
+        <label className="block text-xs text-neutral-500 mb-0.5">Description (optional)</label>
+        <input
+          type="text"
+          value={desc}
+          onChange={(e) => setDesc(e.target.value)}
+          placeholder="What this variable is for..."
+          className={inputClass}
+          onKeyDown={(e) => e.key === 'Enter' && handleSave()}
+        />
+      </div>
+      <div className="flex items-center justify-between pt-1">
+        <label className="flex items-center gap-1.5 text-xs text-neutral-400 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={secret}
+            onChange={(e) => setSecret(e.target.checked)}
+            className="w-3.5 h-3.5 text-amber-600 bg-neutral-800 border-neutral-600 rounded"
+          />
+          <Lock className="w-3 h-3" />
+          Secret
+        </label>
+        <div className="flex gap-1.5">
+          <button
+            onClick={onCancel}
+            className="px-2.5 py-1 text-xs text-neutral-400 hover:text-neutral-200 rounded"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={!key.trim()}
+            className="px-2.5 py-1 text-xs bg-indigo-600 hover:bg-indigo-500 disabled:bg-neutral-700 disabled:text-neutral-500 text-white rounded flex items-center gap-1"
+          >
+            <Check className="w-3 h-3" />
+            {isNew ? 'Add' : 'Save'}
+          </button>
+        </div>
+        </div>
+      </div>
+    </div>,
+    document.body
+  )
+}
+
 function EnvProperties() {
   const { envConfig, updateEnvConfig, nodes, authConfig } = useStudioStore()
   const [activeTab, setActiveTab] = useState<'variables' | 'environments'>('variables')
   const [selectedEnv, setSelectedEnv] = useState<string | null>(null)
+  const [editingIndex, setEditingIndex] = useState<number | null>(null)
+  const [isAdding, setIsAdding] = useState(false)
+  const [newVarName, setNewVarName] = useState('')
 
   // Scan for env() references in the project
   const allNodes = nodes.map(n => ({ data: n.data as Record<string, unknown> }))
@@ -2832,19 +3040,38 @@ function EnvProperties() {
   const undefinedRefs = envRefs.filter(r => !definedKeys.has(r))
 
   const addVariable = (key?: string) => {
-    const newVar: EnvVariable = { key: key || '', value: '', secret: false }
-    updateEnvConfig({ variables: [...envConfig.variables, newVar] })
+    if (key) {
+      const newVar: EnvVariable = { key, value: '', secret: false }
+      updateEnvConfig({ variables: [...envConfig.variables, newVar] })
+      // Open editor for the newly added var
+      const newIndex = envConfig.variables.length
+      setEditingIndex(newIndex)
+      setIsAdding(true)
+    }
   }
 
-  const updateVariable = (index: number, fields: Partial<EnvVariable>) => {
-    const updated = envConfig.variables.map((v, i) =>
-      i === index ? { ...v, ...fields } : v
+  const handleQuickAdd = () => {
+    if (!newVarName.trim()) return
+    const newVar: EnvVariable = { key: newVarName.trim(), value: '', secret: false }
+    updateEnvConfig({ variables: [...envConfig.variables, newVar] })
+    const newIndex = envConfig.variables.length
+    setNewVarName('')
+    // Open edit popup for the new variable so user can set value
+    setEditingIndex(newIndex)
+    setIsAdding(true)
+  }
+
+  const handleSaveEdit = (index: number, v: EnvVariable) => {
+    const updated = envConfig.variables.map((existing, i) =>
+      i === index ? v : existing
     )
     updateEnvConfig({ variables: updated })
+    setEditingIndex(null)
   }
 
   const removeVariable = (index: number) => {
     updateEnvConfig({ variables: envConfig.variables.filter((_, i) => i !== index) })
+    setEditingIndex(null)
   }
 
   const addEnvironment = () => {
@@ -2937,55 +3164,68 @@ function EnvProperties() {
             </div>
           )}
 
-          {/* Variable list */}
-          {envConfig.variables.map((v, i) => (
-            <div key={i} className="flex gap-1 items-start">
-              <div className="flex-1 space-y-1">
-                <input
-                  type="text"
-                  value={v.key}
-                  onChange={(e) => updateVariable(i, { key: e.target.value.toUpperCase().replace(/[^A-Z0-9_]/g, '') })}
-                  placeholder="VAR_NAME"
-                  className="w-full px-2 py-1 text-xs bg-neutral-800 border border-neutral-700 rounded text-white font-mono placeholder-neutral-600"
-                />
-                <input
-                  type={v.secret ? 'password' : 'text'}
-                  value={v.value}
-                  onChange={(e) => updateVariable(i, { value: e.target.value })}
-                  placeholder="value"
-                  className="w-full px-2 py-1 text-xs bg-neutral-800 border border-neutral-700 rounded text-white placeholder-neutral-600"
-                />
-              </div>
-              <div className="flex flex-col gap-0.5 pt-0.5">
+          {/* Add input — IntelliJ watch style, always visible at top */}
+          <div className="flex items-center gap-1">
+            <input
+              type="text"
+              value={newVarName}
+              onChange={(e) => setNewVarName(e.target.value.toUpperCase().replace(/[^A-Z0-9_]/g, ''))}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && newVarName.trim()) {
+                  handleQuickAdd()
+                }
+              }}
+              placeholder="NEW_VARIABLE"
+              className="flex-1 px-2 py-1 text-xs bg-neutral-800 border border-neutral-700 rounded text-white font-mono placeholder-neutral-600 focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+            />
+            <button
+              onClick={handleQuickAdd}
+              disabled={!newVarName.trim()}
+              className="p-1 text-neutral-500 hover:text-green-400 disabled:text-neutral-700 disabled:hover:text-neutral-700 transition-colors"
+              title="Add variable (Enter)"
+            >
+              <Plus className="w-4 h-4" />
+            </button>
+          </div>
+
+          {/* Variable list — compact names */}
+          <div className="space-y-0.5">
+            {envConfig.variables.map((v, i) => (
+              <div key={i} className="flex items-center gap-1 group px-2 py-1 rounded hover:bg-neutral-800/60">
+                <span className="flex-1 text-xs font-mono text-neutral-200 truncate" title={v.description || `env("${v.key}")`}>
+                  {v.key}
+                </span>
+                {v.secret && <span title="Secret"><Lock className="w-3 h-3 text-amber-500 flex-shrink-0" /></span>}
                 <button
-                  onClick={() => updateVariable(i, { secret: !v.secret })}
-                  className={`px-1 py-0.5 text-xs rounded ${v.secret ? 'text-amber-400 bg-amber-900/30' : 'text-neutral-500 hover:text-neutral-400'}`}
-                  title={v.secret ? 'Secret (hidden in .env.example)' : 'Mark as secret'}
+                  onClick={() => { setEditingIndex(i); setIsAdding(true) }}
+                  className="opacity-0 group-hover:opacity-100 text-neutral-500 hover:text-neutral-300 flex-shrink-0 transition-opacity"
+                  title="Edit"
                 >
-                  {v.secret ? 'S' : 's'}
+                  <Pencil className="w-3 h-3" />
                 </button>
                 <button
                   onClick={() => removeVariable(i)}
-                  className="text-red-500 hover:text-red-400"
+                  className="opacity-0 group-hover:opacity-100 text-red-500 hover:text-red-400 flex-shrink-0 transition-opacity"
+                  title="Remove"
                 >
                   <Trash2 className="w-3 h-3" />
                 </button>
               </div>
-            </div>
-          ))}
+            ))}
+          </div>
 
-          <button
-            onClick={() => addVariable()}
-            className="w-full flex items-center justify-center gap-1 px-2 py-1.5 text-xs text-neutral-500 hover:text-neutral-300 border border-dashed border-neutral-700 hover:border-neutral-600 rounded"
-          >
-            <Plus className="w-3 h-3" />
-            Add Variable
-          </button>
+          {envConfig.variables.length === 0 && (
+            <p className="text-xs text-neutral-600 text-center py-2">Type a name above and press Enter</p>
+          )}
 
-          {envConfig.variables.length > 0 && (
-            <p className="text-xs text-neutral-600">
-              Use as: env("{envConfig.variables[0]?.key || 'VAR_NAME'}")
-            </p>
+          {/* Modal popup for editing */}
+          {isAdding && editingIndex !== null && (
+            <EnvVarEditPopup
+              variable={envConfig.variables[editingIndex]}
+              isNew={false}
+              onSave={(updated) => handleSaveEdit(editingIndex, updated)}
+              onCancel={() => { setIsAdding(false); setEditingIndex(null) }}
+            />
           )}
         </div>
       )}
@@ -3208,8 +3448,6 @@ function ServiceProperties() {
 
       <AuthProperties />
 
-      <EnvProperties />
-
       <div className="pt-2 border-t border-neutral-800">
         <p className="text-xs text-neutral-500">Select a node to edit its properties</p>
       </div>
@@ -3223,6 +3461,8 @@ export default function Properties() {
   const [width, setWidth] = useState(400)
   const [collapsed, setCollapsed] = useState(false)
   const [isResizing, setIsResizing] = useState(false)
+  const [envSplit, setEnvSplit] = useState(30) // percentage for env panel
+  const [isSplitResizing, setIsSplitResizing] = useState(false)
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     e.preventDefault()
@@ -3245,6 +3485,30 @@ export default function Properties() {
     document.addEventListener('mousemove', handleMouseMove)
     document.addEventListener('mouseup', handleMouseUp)
   }, [width])
+
+  const handleSplitMouseDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault()
+    setIsSplitResizing(true)
+
+    const container = (e.target as HTMLElement).closest('[data-properties-container]')
+    if (!container) return
+    const containerRect = container.getBoundingClientRect()
+
+    const handleMouseMove = (e: MouseEvent) => {
+      const relY = e.clientY - containerRect.top
+      const pct = ((containerRect.height - relY) / containerRect.height) * 100
+      setEnvSplit(Math.max(15, Math.min(60, pct)))
+    }
+
+    const handleMouseUp = () => {
+      setIsSplitResizing(false)
+      document.removeEventListener('mousemove', handleMouseMove)
+      document.removeEventListener('mouseup', handleMouseUp)
+    }
+
+    document.addEventListener('mousemove', handleMouseMove)
+    document.addEventListener('mouseup', handleMouseUp)
+  }, [])
 
   const handleChange = selectedNode
     ? (data: Partial<ConnectorNodeData | FlowNodeData>) => { updateNode(selectedNode.id, data) }
@@ -3310,10 +3574,24 @@ export default function Properties() {
 
       <div
         style={{ width: collapsed ? 0 : width }}
-        className={`bg-neutral-900 border-l border-neutral-800 overflow-hidden h-full transition-[width] duration-200 ease-in-out ${isResizing ? 'select-none transition-none' : ''}`}
+        className={`bg-neutral-900 border-l border-neutral-800 overflow-hidden h-full transition-[width] duration-200 ease-in-out ${isResizing || isSplitResizing ? 'select-none transition-none' : ''}`}
       >
-        <div style={{ width }} className="p-4 overflow-y-auto h-full">
-          {renderContent()}
+        <div style={{ width }} className="flex flex-col h-full" data-properties-container>
+          {/* Properties section — top */}
+          <div className="overflow-y-auto p-4" style={{ flex: `0 0 ${100 - envSplit}%` }}>
+            {renderContent()}
+          </div>
+
+          {/* Horizontal resize handle between sections */}
+          <div
+            className="flex-shrink-0 h-1 cursor-ns-resize hover:bg-indigo-500/50 bg-neutral-800 transition-colors"
+            onMouseDown={handleSplitMouseDown}
+          />
+
+          {/* Environment Variables section — bottom */}
+          <div className="overflow-y-auto p-4" style={{ flex: `0 0 ${envSplit}%` }}>
+            <EnvProperties />
+          </div>
         </div>
       </div>
 

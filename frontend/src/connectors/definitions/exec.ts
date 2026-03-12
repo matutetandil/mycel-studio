@@ -13,5 +13,23 @@ export const exec: ConnectorDefinition = {
     { key: 'working_dir', label: 'Working Directory', type: 'string', placeholder: '/app/scripts' },
     { key: 'timeout', label: 'Timeout', type: 'string', placeholder: '30s' },
     { key: 'shell', label: 'Shell', type: 'string', placeholder: '/bin/sh' },
+    {
+      key: 'input_format', label: 'Input Format', type: 'select',
+      options: [
+        { value: 'args', label: 'Args' },
+        { value: 'stdin', label: 'Stdin' },
+        { value: 'json', label: 'JSON' },
+      ],
+    },
+    {
+      key: 'output_format', label: 'Output Format', type: 'select',
+      options: [
+        { value: 'text', label: 'Text' },
+        { value: 'json', label: 'JSON' },
+        { value: 'lines', label: 'Lines' },
+      ],
+    },
+    { key: 'retry_count', label: 'Retry Count', type: 'number' },
+    { key: 'retry_delay', label: 'Retry Delay', type: 'string', placeholder: '1s' },
   ],
 }
