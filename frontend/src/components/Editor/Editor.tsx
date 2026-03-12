@@ -1,9 +1,11 @@
-import { useMemo } from 'react'
+import { useMemo, useRef, useCallback } from 'react'
 import MonacoEditor from '@monaco-editor/react'
+import type { editor } from 'monaco-editor'
 import { X, Circle, FileCode, RefreshCw } from 'lucide-react'
 import { useProjectStore } from '../../stores/useProjectStore'
 import { useThemeStore } from '../../stores/useThemeStore'
 import { useSync } from '../../hooks/useSync'
+import { setupMonaco, createValidationRunner } from '../../monaco'
 
 interface TabProps {
   file: {
@@ -47,6 +49,22 @@ export default function Editor() {
   const { files, activeFile, setActiveFile, updateFile } = useProjectStore()
   const { theme } = useThemeStore()
   const { syncFromHCL, isSyncing } = useSync()
+  const validationRunnerRef = useRef<ReturnType<typeof createValidationRunner> | null>(null)
+
+  const handleEditorMount = useCallback((editorInstance: editor.IStandaloneCodeEditor, monacoInstance: typeof import('monaco-editor')) => {
+    const runner = createValidationRunner(monacoInstance)
+    validationRunnerRef.current = runner
+
+    // Run initial validation
+    const model = editorInstance.getModel()
+    if (model) runner(model)
+
+    // Validate on content change
+    editorInstance.onDidChangeModelContent(() => {
+      const m = editorInstance.getModel()
+      if (m) runner(m)
+    })
+  }, [])
 
   const openFiles = useMemo(
     () => files.filter((f) => f.name.endsWith('.hcl')),
@@ -107,7 +125,9 @@ export default function Editor() {
           <MonacoEditor
             height="100%"
             language="hcl"
-            theme={theme === 'dark' ? 'vs-dark' : 'light'}
+            theme={theme === 'dark' ? 'mycel-dark' : 'mycel-light'}
+            beforeMount={setupMonaco}
+            onMount={handleEditorMount}
             value={currentFile.content}
             onChange={(value) => {
               if (value !== undefined) {

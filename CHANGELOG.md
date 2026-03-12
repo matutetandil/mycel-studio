@@ -2,6 +2,60 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.11.0] - Phase 9: Monaco IDE Enhancement
+
+### Added
+
+- **HCL Syntax Highlighting (9.1):**
+  - Monarch tokenizer for HCL2 with full token classification
+  - Top-level blocks, sub-blocks, built-in functions, context variables
+  - String interpolation (`${...}`) and heredoc support
+  - Custom dark theme (`mycel-dark`) and light theme (`mycel-light`)
+  - Color-coded: keywords (purple), sub-blocks (blue), strings (orange), numbers (green), functions (yellow), comments (green italic), context vars (cyan italic), block names (teal bold)
+
+- **Context-Aware Autocompletion (9.2):**
+  - Top-level block snippets (connector, flow, type, saga, etc.)
+  - Connector attributes based on current block context
+  - Flow sub-block snippets (from, to, step, transform, response, etc.)
+  - Connector type values from registry (25 types)
+  - Driver values, backoff strategies, on_error strategies
+  - Connector name references from canvas state (dynamic)
+  - CEL function completions with signatures
+  - Context variable suggestions (input.*, output.*, step.*, etc.)
+  - Nested block awareness (retry, cache, lock, semaphore, etc.)
+
+- **Hover Information (9.4):**
+  - Block keyword documentation with examples
+  - Connector type descriptions
+  - CEL function signatures and descriptions
+  - Context variable documentation
+  - Attribute documentation (port, driver, timeout, etc.)
+
+- **Client-Side Validation (9.3):**
+  - Real-time syntax validation with error markers (squiggles)
+  - Unclosed strings, unmatched braces, unclosed block comments
+  - Malformed attribute assignments (warnings)
+  - Debounced validation (500ms) for performance
+
+- **Shared Documentation Data:**
+  - `hclDocs.ts` — Comprehensive docs for blocks, CEL functions, variables, connector types
+  - Used by both completion and hover providers
+
+### Changed
+
+- `Preview.tsx` — Uses `mycel-dark` theme and `beforeMount` for language registration
+- `Editor.tsx` — Uses custom themes, `beforeMount` for registration, `onMount` for validation wiring
+
+### New Files
+
+- `frontend/src/monaco/index.ts` — Entry point with idempotent `setupMonaco()`
+- `frontend/src/monaco/hclLanguage.ts` — Monarch tokenizer and language configuration
+- `frontend/src/monaco/hclTheme.ts` — Dark and light themes
+- `frontend/src/monaco/hclDocs.ts` — Shared documentation data
+- `frontend/src/monaco/hclCompletionProvider.ts` — Context-aware completion provider
+- `frontend/src/monaco/hclHoverProvider.ts` — Hover tooltip provider
+- `frontend/src/monaco/hclValidator.ts` — Client-side validation and marker management
+
 ## [0.10.0] - Phase 8: UX Polish
 
 ### Added

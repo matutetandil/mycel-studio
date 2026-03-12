@@ -1,6 +1,7 @@
 import { useMemo, useState, useEffect } from 'react'
 import MonacoEditor from '@monaco-editor/react'
 import { Copy, Check, Download, AlertTriangle, FileText } from 'lucide-react'
+import { setupMonaco } from '../../monaco'
 import { useStudioStore } from '../../stores/useStudioStore'
 import { useProjectStore } from '../../stores/useProjectStore'
 import { generateProject } from '../../utils/hclGenerator'
@@ -135,7 +136,8 @@ export default function Preview() {
             height="100%"
             language="hcl"
             value={currentContent}
-            theme="vs-dark"
+            theme="mycel-dark"
+            beforeMount={setupMonaco}
             options={{
               readOnly: true,
               minimap: { enabled: false },

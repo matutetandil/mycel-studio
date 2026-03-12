@@ -639,34 +639,19 @@ Use the Mycel parser (Go) in the backend to validate generated HCL against the a
 
 ---
 
-## Phase 9 — Monaco IDE Enhancement
+## Phase 9 — Monaco IDE Enhancement ✅ (v0.11.0)
 
-Progressively enhance the Monaco editor with IDE-like features. Monaco (`@monaco-editor/react`) is already integrated — these steps build on top of it.
+### 9.1 — HCL Syntax Highlighting ✅
+Monarch tokenizer with full HCL2 token classification. Custom dark/light themes. String interpolation and heredoc support.
 
-### 9.1 — HCL Syntax Highlighting
-**Priority: High** — Register HCL as a custom Monaco language using Monarch tokenizer.
+### 9.2 — Autocompletion ✅
+Context-aware completion provider. Top-level blocks, connector fields, flow sub-blocks, CEL functions, connector names from canvas, driver values, context variables.
 
-Tokenize: keywords (connector, flow, type, step, transform, etc.), strings, numbers, booleans, comments (#), block delimiters, attribute assignments.
+### 9.3 — Client-Side Validation ✅
+Real-time syntax validation with Monaco markers (squiggles). Detects unclosed strings/braces/comments, malformed attributes.
 
-### 9.2 — Autocompletion (Client-side)
-**Priority: High** — `registerCompletionItemProvider` for:
-- HCL keywords and block types
-- Connector types and their attributes
-- CEL functions (uuid(), now(), lower(), upper(), etc.)
-- Context variables (input.*, output.*, step.*, error.*)
-- Connector names from canvas state
-
-### 9.3 — Real-time Validation
-**Priority: Medium** — `editor.setModelMarkers` to show squiggles.
-- Call backend `/api/validate` on content change (debounced)
-- Show syntax errors with line/column markers
-- Show semantic errors (missing connector references, duplicate names)
-
-### 9.4 — Hover & Go-to-Definition
-**Priority: Medium** — `registerHoverProvider` and `registerDefinitionProvider`.
-- Hover over `connector = "db"` → show connector type and config
-- Click to jump to connector definition in another file
-- Show docs for CEL functions on hover
+### 9.4 — Hover Information ✅
+Hover provider with block docs, connector type descriptions, CEL function signatures, context variable docs, attribute descriptions.
 
 ### 9.5 — Full LSP via Backend
 **Priority: Low** — `monaco-languageclient` + WebSocket to Go backend.
@@ -686,7 +671,7 @@ Tokenize: keywords (connector, flow, type, step, transform, etc.), strings, numb
 | **6** | ~~Missing Connectors~~ | ~~Notifications (6), real-time (3), specialized (3 incl. SOAP), MQTT, FTP/SFTP, Redis Pub/Sub~~ + connector profiles (pending) | ~~—~~ ✅ v0.5.0 |
 | **7** | Enterprise Features | Batch processing, sagas, state machines, long-running workflows, auth UI, environments, security, plugins, mocks, WASM | Phase 5 |
 | **8** | ~~UX Polish~~ | ~~Undo/redo, copy/paste, shortcuts, templates~~, auto-save, runtime validation | ~~Any~~ ✅ v0.10.0 (core items) |
-| **9** | Monaco IDE | HCL syntax highlighting, autocompletion, real-time validation, hover/go-to, LSP | Any |
+| **9** | ~~Monaco IDE~~ | ~~HCL syntax highlighting, autocompletion, real-time validation, hover~~ + LSP (pending) | ~~Any~~ ✅ v0.11.0 (core items) |
 
 Phases 6, 8, and 9 can be done in parallel with any other phase.
 
