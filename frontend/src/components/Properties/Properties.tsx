@@ -1,11 +1,12 @@
 import { useState, useCallback } from 'react'
 import { ChevronLeft, ChevronRight as ChevronRightIcon, GripVertical, Plus, Trash2, ChevronDown, ChevronRight } from 'lucide-react'
 import { useStudioStore } from '../../stores/useStudioStore'
-import type { ConnectorNodeData, FlowNodeData, FlowTo, ConnectorDirection, RestOperation, GraphQLOperation, ConnectorOperation, TypeNodeData, TypeFieldDefinition, ValidatorNodeData, TransformNodeData, AspectNodeData, SagaNodeData, SagaStep, SagaAction, StateMachineNodeData, StateMachineState, StateMachineTransition, AuthConfig, AuthPreset, JwtAlgorithm, MfaRequirement, MfaMethod, AuthSocialProvider, EnvVariable, SecuritySanitizer, PluginDefinition } from '../../types'
+import type { ConnectorNodeData, ConnectorProfile, ConnectorProfileConfig, FlowNodeData, FlowTo, ConnectorDirection, RestOperation, GraphQLOperation, ConnectorOperation, TypeNodeData, TypeFieldDefinition, ValidatorNodeData, TransformNodeData, AspectNodeData, SagaNodeData, SagaStep, SagaAction, StateMachineNodeData, StateMachineState, StateMachineTransition, AuthConfig, AuthPreset, JwtAlgorithm, MfaRequirement, MfaMethod, AuthSocialProvider, EnvVariable, SecuritySanitizer, PluginDefinition } from '../../types'
 import OperationsEditor from './OperationsEditor'
 import GraphQLOperationsEditor from './GraphQLOperationsEditor'
 import { getConnector, type FieldDefinition } from '../../connectors'
 import { getAllValidatorTypes, getValidatorType } from '../../validators'
+import { useProjectStore } from '../../stores/useProjectStore'
 
 const directionOptions: { value: ConnectorDirection; label: string; description: string }[] = [
   { value: 'input', label: 'Source', description: 'Triggers flows (e.g., API server, queue consumer)' },
@@ -133,6 +134,182 @@ function FieldRenderer({
   }
 }
 
+function ProfilesEditor({ data, onChange }: { data: ConnectorNodeData; onChange: (d: Partial<ConnectorNodeData>) => void }) {
+  const pc = data.profileConfig || { enabled: false, select: '', default: '', fallback: [], profiles: [] }
+  const inputClass = "w-full px-3 py-2 text-sm bg-neutral-800 border border-neutral-700 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-white placeholder-neutral-500"
+
+  const update = (fields: Partial<ConnectorProfileConfig>) => {
+    onChange({ profileConfig: { ...pc, ...fields } })
+  }
+
+  const updateProfile = (index: number, fields: Partial<ConnectorProfile>) => {
+    const profiles = [...pc.profiles]
+    profiles[index] = { ...profiles[index], ...fields }
+    update({ profiles })
+  }
+
+  const addProfile = () => {
+    const name = `profile_${pc.profiles.length + 1}`
+    update({ profiles: [...pc.profiles, { name, config: {} }] })
+  }
+
+  const removeProfile = (index: number) => {
+    const profiles = pc.profiles.filter((_, i) => i !== index)
+    update({ profiles })
+  }
+
+  const updateProfileConfig = (index: number, key: string, value: unknown) => {
+    const profiles = [...pc.profiles]
+    profiles[index] = { ...profiles[index], config: { ...profiles[index].config, [key]: value } }
+    update({ profiles })
+  }
+
+  const updateProfileTransform = (index: number, fieldKey: string, value: string) => {
+    const profiles = [...pc.profiles]
+    const transform = { ...profiles[index].transform, [fieldKey]: value }
+    profiles[index] = { ...profiles[index], transform }
+    update({ profiles })
+  }
+
+  const removeProfileTransform = (index: number, fieldKey: string) => {
+    const profiles = [...pc.profiles]
+    const transform = { ...profiles[index].transform }
+    delete transform[fieldKey]
+    profiles[index] = { ...profiles[index], transform: Object.keys(transform).length ? transform : undefined }
+    update({ profiles })
+  }
+
+  return (
+    <div className="pt-3 border-t border-neutral-800">
+      <div className="flex items-center justify-between mb-2">
+        <h3 className="text-xs font-semibold text-neutral-400 uppercase tracking-wider">Profiles</h3>
+        <input
+          type="checkbox"
+          checked={pc.enabled}
+          onChange={(e) => update({ enabled: e.target.checked })}
+          className="w-4 h-4 text-indigo-600 bg-neutral-800 border-neutral-600 rounded"
+        />
+      </div>
+      {pc.enabled && (
+        <div className="space-y-3">
+          <div>
+            <label className="block text-xs text-neutral-500 mb-1">Select (CEL)</label>
+            <input
+              type="text"
+              value={pc.select}
+              onChange={(e) => update({ select: e.target.value })}
+              placeholder='env("PROFILE") or input.tenant_id'
+              className={inputClass}
+            />
+            <p className="text-xs text-neutral-600 mt-0.5">CEL expression to pick active profile</p>
+          </div>
+          <div className="flex gap-2">
+            <div className="flex-1">
+              <label className="block text-xs text-neutral-500 mb-1">Default</label>
+              <select
+                value={pc.default}
+                onChange={(e) => update({ default: e.target.value })}
+                className={inputClass}
+              >
+                <option value="">None</option>
+                {pc.profiles.map(p => (
+                  <option key={p.name} value={p.name}>{p.name}</option>
+                ))}
+              </select>
+            </div>
+            <div className="flex-1">
+              <label className="block text-xs text-neutral-500 mb-1">Fallback chain</label>
+              <input
+                type="text"
+                value={pc.fallback.join(', ')}
+                onChange={(e) => update({ fallback: e.target.value.split(',').map(s => s.trim()).filter(Boolean) })}
+                placeholder="primary, replica"
+                className={inputClass}
+              />
+            </div>
+          </div>
+
+          {/* Profile list */}
+          {pc.profiles.map((profile, i) => (
+            <div key={i} className="p-2 bg-neutral-800/50 rounded border border-neutral-700/50 space-y-2">
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  value={profile.name}
+                  onChange={(e) => updateProfile(i, { name: e.target.value })}
+                  className="flex-1 px-2 py-1 text-xs bg-neutral-800 border border-neutral-700 rounded text-white font-medium"
+                />
+                <button onClick={() => removeProfile(i)} className="text-red-500 hover:text-red-400">
+                  <Trash2 className="w-3 h-3" />
+                </button>
+              </div>
+
+              {/* Profile-specific config fields */}
+              {getConnector(data.connectorType)?.fields.map(field => (
+                <div key={field.key}>
+                  <label className="block text-xs text-neutral-500 mb-0.5">{field.label}</label>
+                  <input
+                    type={field.type === 'password' ? 'password' : 'text'}
+                    value={String(profile.config[field.key] ?? '')}
+                    onChange={(e) => updateProfileConfig(i, field.key, e.target.value)}
+                    placeholder={field.placeholder}
+                    className="w-full px-2 py-1 text-xs bg-neutral-800 border border-neutral-700 rounded text-white"
+                  />
+                </div>
+              ))}
+
+              {/* Transform */}
+              <div>
+                <div className="flex items-center justify-between">
+                  <label className="text-xs text-neutral-500">Transform</label>
+                  <button
+                    onClick={() => updateProfileTransform(i, `field_${Object.keys(profile.transform || {}).length + 1}`, '')}
+                    className="text-xs text-indigo-400 hover:text-indigo-300"
+                  >
+                    + field
+                  </button>
+                </div>
+                {Object.entries(profile.transform || {}).map(([key, val]) => (
+                  <div key={key} className="flex items-center gap-1 mt-1">
+                    <input
+                      value={key}
+                      onChange={(e) => {
+                        const t = { ...profile.transform }
+                        delete t[key]
+                        t[e.target.value] = val
+                        updateProfile(i, { transform: t })
+                      }}
+                      className="w-24 px-1 py-0.5 text-xs bg-neutral-800 border border-neutral-700 rounded text-amber-300 font-mono"
+                    />
+                    <span className="text-neutral-600 text-xs">=</span>
+                    <input
+                      value={val}
+                      onChange={(e) => updateProfileTransform(i, key, e.target.value)}
+                      className="flex-1 px-1 py-0.5 text-xs bg-neutral-800 border border-neutral-700 rounded text-white font-mono"
+                      placeholder="input.field"
+                    />
+                    <button onClick={() => removeProfileTransform(i, key)} className="text-red-500 hover:text-red-400">
+                      <Trash2 className="w-2.5 h-2.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+
+          <button
+            onClick={addProfile}
+            className="w-full flex items-center justify-center gap-1 px-2 py-1.5 text-xs text-indigo-400 hover:text-indigo-300 border border-dashed border-neutral-700 rounded hover:border-indigo-500"
+          >
+            <Plus className="w-3 h-3" />
+            Add Profile
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
 function ConnectorProperties({
   data,
   onChange,
@@ -242,6 +419,9 @@ function ConnectorProperties({
           onChange={(operations) => onChange({ operations })}
         />
       )}
+
+      {/* Profiles */}
+      <ProfilesEditor data={data} onChange={onChange} />
     </div>
   )
 }
@@ -2892,6 +3072,7 @@ function EnvProperties() {
 
 function ServiceProperties() {
   const { serviceConfig, updateServiceConfig, nodes } = useStudioStore()
+  const { projectName, metadata, setMetadata } = useProjectStore()
   const inputClass = "w-full px-3 py-2 text-sm bg-neutral-800 border border-neutral-700 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-white placeholder-neutral-500"
 
   const hasSagas = nodes.some(n => n.type === 'saga')
@@ -2934,6 +3115,20 @@ function ServiceProperties() {
           className={inputClass}
         />
       </div>
+
+      {/* Auto-save — only when a project is open */}
+      {projectName && metadata && (
+        <div className="flex items-center gap-2 pt-2 border-t border-neutral-800">
+          <input
+            type="checkbox"
+            id="auto-save"
+            checked={metadata.autoSave?.enabled ?? false}
+            onChange={(e) => setMetadata({ ...metadata, autoSave: { ...metadata.autoSave, enabled: e.target.checked } })}
+            className="w-4 h-4 text-indigo-600 bg-neutral-800 border-neutral-600 rounded"
+          />
+          <label htmlFor="auto-save" className="text-xs text-neutral-300">Auto-save</label>
+        </div>
+      )}
 
       {/* Workflow Storage — shown when sagas exist */}
       {hasSagas && (

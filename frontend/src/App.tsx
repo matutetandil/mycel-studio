@@ -2,6 +2,7 @@ import { ReactFlowProvider } from '@xyflow/react'
 import { useEffect } from 'react'
 import { useThemeStore } from './stores/useThemeStore'
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts'
+import { useAutoSave } from './hooks/useAutoSave'
 import MenuBar from './components/MenuBar/MenuBar'
 import Sidebar from './components/Sidebar/Sidebar'
 import Canvas from './components/Canvas/Canvas'
@@ -13,6 +14,7 @@ import TemplateGallery from './components/TemplateGallery'
 function App() {
   const { theme } = useThemeStore()
   const { showShortcuts, setShowShortcuts, showTemplates, setShowTemplates } = useKeyboardShortcuts()
+  useAutoSave()
 
   // Apply theme class to document
   useEffect(() => {

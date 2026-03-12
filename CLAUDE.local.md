@@ -307,11 +307,13 @@ En vez de escribir HCL manualmente, el usuario:
 
 ## Próximos pasos (pendientes para siguiente sesión)
 
-### Phase 7 COMPLETADO (7.1-7.9)
+### Todas las fases principales COMPLETADAS (3-9)
 
-### Pendientes de Phase 8-9:
-- Phase 8: UX Polish (undo/redo, copy/paste, shortcuts, templates)
-- Phase 9: Monaco IDE Enhancement (syntax highlighting, autocompletion, validation)
+### Pendientes menores:
+- Phase 8.5: Auto-save (File System Access API)
+- Phase 8.6: Validation against Mycel Runtime (backend parser)
+- Phase 9.5: Full LSP via Backend (monaco-languageclient + WebSocket)
+- Phase 6.6: Connector profiles (multiple backends with fallback)
 
 ### 2026-01-06 - Revisión de documentación Mycel actualizada
 - **Estado:** ✅ Completado
@@ -580,3 +582,110 @@ En vez de escribir HCL manualmente, el usuario:
 - **8.6 Validation against Mycel Runtime:** Pendiente
 - **Build:** ✅ TypeScript + Vite build exitosos
 - **Próximo paso:** Phase 9 (Monaco IDE Enhancement) — HCL syntax highlighting, autocompletion, validation
+
+### 2026-03-11 - Phase 9: Monaco IDE Enhancement (COMPLETADO) — v0.11.0
+- **Estado:** ✅ Completado
+- **9.1 HCL Syntax Highlighting:**
+  - `hclLanguage.ts` — Monarch tokenizer con clasificación completa de tokens HCL2
+  - Top-level blocks, sub-blocks, built-in functions, context variables
+  - String interpolation (`${...}`) y heredoc support
+  - `hclTheme.ts` — Temas `mycel-dark` y `mycel-light` con colores semánticos
+- **9.2 Autocompletion:**
+  - `hclCompletionProvider.ts` — Context-aware completion
+  - Top-level snippets, connector attributes, flow sub-blocks
+  - Connector type values desde registry (25 tipos)
+  - CEL functions con signatures, context variables
+  - Connector names dinámicos desde canvas state (Zustand getState())
+  - Nested block awareness (retry, cache, lock, semaphore, etc.)
+- **9.3 Client-Side Validation:**
+  - `hclValidator.ts` — Validación sintáctica en tiempo real
+  - Unclosed strings, unmatched braces, unclosed block comments
+  - Malformed attributes (warnings)
+  - Debounced (500ms), markers via `monaco.editor.setModelMarkers()`
+- **9.4 Hover Information:**
+  - `hclHoverProvider.ts` — Tooltips con documentación
+  - Block keywords con ejemplos, connector types, CEL function signatures
+  - Context variables, attribute descriptions
+- **Shared Documentation:**
+  - `hclDocs.ts` — Docs para blocks, CEL functions, variables, connector types
+  - Consumido por completion y hover providers
+- **Integration:**
+  - `index.ts` — `setupMonaco()` idempotente, registra language + themes + providers
+  - `Preview.tsx` — `beforeMount={setupMonaco}`, tema `mycel-dark`
+  - `Editor.tsx` — `beforeMount={setupMonaco}`, `onMount` para validation wiring
+- **Build:** ✅ TypeScript + Vite build exitosos
+- **Próximo paso:** Todas las fases principales completadas (3-9). Pendientes menores: auto-save (8.5), runtime validation (8.6), LSP backend (9.5), connector profiles (6.6)
+
+### 2026-03-12 - UX Polish: Panels, Editor Tabs & Split View — v0.12.0
+- **Estado:** ✅ Completado
+- **Commits:** `805942b`, `8869921`
+- **Palette Search:**
+  - Input de búsqueda en Palette que filtra componentes por nombre
+  - `useMemo` con filter por label
+- **Inline Flow Blocks:**
+  - Transform, Response, Steps y Error Handling se editan inline en FlowProperties
+  - `FlowBlockSection` — Componente colapsable con color-coding por tipo
+  - `InlineFieldMappings` — Editor de campos reutilizable con IDs numéricos estables (fix focus)
+  - Response block (v1.12.0): campos CEL con `input.*`/`output.*`, `http_status_code`, `grpc_status_code`
+- **Auto-Flow Creation:**
+  - `onConnect` en store intercepta conexiones conector-conector
+  - Crea automáticamente un nodo Flow entre ambos conectores
+  - Posiciona el flow en el punto medio, crea 2 edges
+- **Flow HCL Fix:**
+  - Clasificación de conectores por `direction` (input=from, output=to) en vez de dirección del edge
+- **Monarch Tokenizer Fix:**
+  - `@references` no funcionan en regex capture groups de Monarch — inlineadas como literales
+- **Sidebars Resizables y Colapsables:**
+  - Sidebar izquierdo: 280px default, resize 200-480px, colapsable
+  - Properties derecho: 400px default, resize 280-600px, colapsable
+  - Botón estilo Jira: círculo sobre línea divisoria (expandido), pestaña semicircular (colapsado)
+  - Transición suave de 200ms, se desactiva durante resize
+- **Editor Panel (reemplaza Preview):**
+  - `useEditorPanelStore.ts` — Zustand store para tabs, splits, panel height, collapse
+  - `EditorPanel.tsx` — Panel resizable verticalmente con botón de colapso (Ctrl+J)
+  - `TabBar.tsx` — Pestañas cerrables (X), reordenables (drag & drop nativo), tooltips
+  - `EditorGroup.tsx` — Monaco read-only por grupo, contenido desde `generateProject()`
+  - Split view: horizontal (Columns2) o vertical (Rows2), resize entre splits
+  - Drag tabs entre grupos de split
+  - Copy file + Download ZIP por pestaña activa
+  - Archivos del Explorer se abren como tabs automáticamente
+  - `Preview.tsx` eliminado
+  - `FileTree.tsx` refactorizado: `virtualActiveFile` reemplazado por store
+- **Keyboard Shortcuts:**
+  - Ctrl+J — Toggle editor panel
+- **Transform Focus Fix:**
+  - IDs numéricos estables como React keys en vez de field names mutables
+- **Build:** ✅ TypeScript + Vite build exitosos
+- **Docker:** ✅ Testeado en http://localhost:8080
+
+### 2026-03-12 - Auto-save, Connector Profiles & Backend Validation — v0.12.0
+- **Estado:** ✅ Completado
+- **Phase 8.5 — Auto-save:**
+  - `useAutoSave.ts` — Hook que subscribe a cambios del store, debounce configurable (default 2000ms)
+  - Status tracking: idle → saving → saved → error
+  - Solo activo cuando auto-save habilitado en project metadata y proyecto abierto
+  - Toggle checkbox en ServiceProperties
+- **Phase 6.6 — Connector Profiles:**
+  - `ConnectorProfile`, `ConnectorProfileConfig` types en `types/index.ts`
+  - `ProfilesEditor` componente en Properties: select CEL, default, fallback chain, per-profile config + transform
+  - `profileConfig?: ConnectorProfileConfig` en ConnectorNodeData
+  - HCL generation: `select`, `default`, `fallback`, `profile "name" { config + transform }` blocks
+- **Phase 8.6 — Backend Validation:**
+  - `ValidateContent()` en `parser.go` — Pipeline de 3 pasos:
+    1. Syntax: parse errors con línea/columna
+    2. Structure: validación contra rootSchema extendido (saga, state_machine, auth, security, plugin, workflow, batch, environment)
+    3. Semantic: nombres duplicados, `type` faltante en connectors, `from` faltante en flows, referencias a conectores no definidos
+  - `ValidationError` struct: Message, File, Line, Column, Severity
+  - `main.go` — Multi-file validation, structured error response
+  - Testeado con curl: detecta syntax errors y semantic warnings correctamente
+- **Build:** ✅ TypeScript + Vite + Go build exitosos
+- **Docker:** ✅ Testeado en http://localhost:8080
+
+---
+
+## Próximos pasos (pendientes para siguiente sesión)
+
+### Todas las fases principales COMPLETADAS (3-9) + UX Polish + Auto-save/Validation/Profiles
+
+### Pendientes menores:
+- Phase 9.5: Full LSP via Backend (monaco-languageclient + WebSocket)

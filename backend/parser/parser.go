@@ -445,6 +445,195 @@ func (p *Parser) ParseContent(ctx context.Context, content string, filename stri
 	return config, nil
 }
 
+// ValidationError represents a validation error with location info.
+type ValidationError struct {
+	Message  string `json:"message"`
+	File     string `json:"file,omitempty"`
+	Line     int    `json:"line,omitempty"`
+	Column   int    `json:"column,omitempty"`
+	Severity string `json:"severity"` // "error" or "warning"
+}
+
+// ValidateContent parses HCL and returns structured validation errors.
+func (p *Parser) ValidateContent(content string, filename string) []ValidationError {
+	var errors []ValidationError
+
+	// Step 1: Syntax validation
+	file, diags := p.hclParser.ParseHCL([]byte(content), filename)
+	if diags.HasErrors() {
+		for _, d := range diags {
+			ve := ValidationError{
+				Message:  d.Detail,
+				File:     filename,
+				Severity: "error",
+			}
+			if d.Subject != nil {
+				ve.Line = d.Subject.Start.Line
+				ve.Column = d.Subject.Start.Column
+			}
+			if ve.Message == "" {
+				ve.Message = d.Summary
+			}
+			errors = append(errors, ve)
+		}
+		return errors
+	}
+
+	// Step 2: Structure validation
+	bodyContent, diags := file.Body.Content(rootSchema())
+	if diags.HasErrors() {
+		for _, d := range diags {
+			ve := ValidationError{
+				Message:  d.Detail,
+				File:     filename,
+				Severity: "error",
+			}
+			if d.Subject != nil {
+				ve.Line = d.Subject.Start.Line
+				ve.Column = d.Subject.Start.Column
+			}
+			if ve.Message == "" {
+				ve.Message = d.Summary
+			}
+			errors = append(errors, ve)
+		}
+		return errors
+	}
+
+	// Step 3: Semantic validation
+	connectorNames := make(map[string]bool)
+	flowNames := make(map[string]bool)
+	var referencedConnectors []struct {
+		name string
+		line int
+	}
+
+	for _, block := range bodyContent.Blocks {
+		switch block.Type {
+		case "connector":
+			if len(block.Labels) > 0 {
+				name := block.Labels[0]
+				if connectorNames[name] {
+					errors = append(errors, ValidationError{
+						Message:  fmt.Sprintf("Duplicate connector name: %q", name),
+						File:     filename,
+						Line:     block.DefRange.Start.Line,
+						Severity: "error",
+					})
+				}
+				connectorNames[name] = true
+
+				// Check for required 'type' attribute
+				attrs, _ := block.Body.JustAttributes()
+				if _, ok := attrs["type"]; !ok {
+					errors = append(errors, ValidationError{
+						Message:  fmt.Sprintf("Connector %q is missing required attribute \"type\"", name),
+						File:     filename,
+						Line:     block.DefRange.Start.Line,
+						Severity: "error",
+					})
+				}
+			}
+
+		case "flow":
+			if len(block.Labels) > 0 {
+				name := block.Labels[0]
+				if flowNames[name] {
+					errors = append(errors, ValidationError{
+						Message:  fmt.Sprintf("Duplicate flow name: %q", name),
+						File:     filename,
+						Line:     block.DefRange.Start.Line,
+						Severity: "error",
+					})
+				}
+				flowNames[name] = true
+
+				// Check flow has 'from' block
+				flowContent, fdiags := block.Body.Content(&hcl.BodySchema{
+					Attributes: []hcl.AttributeSchema{
+						{Name: "when"},
+					},
+					Blocks: []hcl.BlockHeaderSchema{
+						{Type: "from"},
+						{Type: "to"},
+						{Type: "transform"},
+						{Type: "response"},
+						{Type: "step", LabelNames: []string{"name"}},
+						{Type: "validate"},
+						{Type: "cache"},
+						{Type: "lock"},
+						{Type: "semaphore"},
+						{Type: "dedupe"},
+						{Type: "error_handling"},
+						{Type: "batch"},
+					},
+				})
+				if fdiags.HasErrors() {
+					for _, d := range fdiags {
+						ve := ValidationError{Message: d.Summary, File: filename, Severity: "warning"}
+						if d.Subject != nil {
+							ve.Line = d.Subject.Start.Line
+						}
+						errors = append(errors, ve)
+					}
+				} else {
+					hasFrom := false
+					for _, fb := range flowContent.Blocks {
+						if fb.Type == "from" {
+							hasFrom = true
+							// Check connector reference
+							attrs, _ := fb.Body.JustAttributes()
+							if attr, ok := attrs["connector"]; ok {
+								val, _ := attr.Expr.Value(p.evalCtx)
+								if val.Type() == cty.String {
+									referencedConnectors = append(referencedConnectors, struct {
+										name string
+										line int
+									}{val.AsString(), attr.Range.Start.Line})
+								}
+							}
+						}
+						if fb.Type == "to" {
+							attrs, _ := fb.Body.JustAttributes()
+							if attr, ok := attrs["connector"]; ok {
+								val, _ := attr.Expr.Value(p.evalCtx)
+								if val.Type() == cty.String {
+									referencedConnectors = append(referencedConnectors, struct {
+										name string
+										line int
+									}{val.AsString(), attr.Range.Start.Line})
+								}
+							}
+						}
+					}
+					if !hasFrom {
+						errors = append(errors, ValidationError{
+							Message:  fmt.Sprintf("Flow %q is missing required \"from\" block", name),
+							File:     filename,
+							Line:     block.DefRange.Start.Line,
+							Severity: "error",
+						})
+					}
+				}
+			}
+		}
+	}
+
+	// Check connector references
+	for _, ref := range referencedConnectors {
+		if !connectorNames[ref.name] {
+			errors = append(errors, ValidationError{
+				Message:  fmt.Sprintf("Referenced connector %q is not defined", ref.name),
+				File:     filename,
+				Line:     ref.line,
+				Severity: "warning",
+			})
+		}
+	}
+
+	return errors
+}
+
 func rootSchema() *hcl.BodySchema {
 	return &hcl.BodySchema{
 		Blocks: []hcl.BlockHeaderSchema{
@@ -456,6 +645,14 @@ func rootSchema() *hcl.BodySchema {
 			{Type: "validator", LabelNames: []string{"name"}},
 			{Type: "aspect", LabelNames: []string{"name"}},
 			{Type: "cache", LabelNames: []string{"name"}},
+			{Type: "saga", LabelNames: []string{"name"}},
+			{Type: "state_machine", LabelNames: []string{"name"}},
+			{Type: "auth"},
+			{Type: "security"},
+			{Type: "plugin", LabelNames: []string{"name"}},
+			{Type: "workflow"},
+			{Type: "batch", LabelNames: []string{"name"}},
+			{Type: "environment", LabelNames: []string{"name"}},
 		},
 	}
 }

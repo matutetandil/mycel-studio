@@ -7,16 +7,19 @@ import (
 	"os"
 
 	"github.com/mycel-studio/backend/handlers"
+	studioparser "github.com/mycel-studio/backend/parser"
 	"github.com/rs/cors"
 )
 
 type ValidateRequest struct {
-	HCL string `json:"hcl"`
+	HCL      string            `json:"hcl"`
+	Files    map[string]string `json:"files,omitempty"`
+	Filename string            `json:"filename,omitempty"`
 }
 
 type ValidateResponse struct {
-	Valid  bool     `json:"valid"`
-	Errors []string `json:"errors,omitempty"`
+	Valid  bool                          `json:"valid"`
+	Errors []studioparser.ValidationError `json:"errors,omitempty"`
 }
 
 type Template struct {
@@ -94,14 +97,42 @@ func handleValidate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// TODO: Integrate with Mycel parser for real validation
-	// For now, return valid if HCL is not empty
-	response := ValidateResponse{
-		Valid: len(req.HCL) > 0,
+	p := studioparser.NewParser()
+
+	if len(req.Files) > 0 {
+		// Validate multiple files
+		var allErrors []studioparser.ValidationError
+		for filename, content := range req.Files {
+			errs := p.ValidateContent(content, filename)
+			allErrors = append(allErrors, errs...)
+		}
+		response := ValidateResponse{
+			Valid:  len(allErrors) == 0,
+			Errors: allErrors,
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(response)
+		return
 	}
 
-	if !response.Valid {
-		response.Errors = []string{"HCL configuration is empty"}
+	// Validate single HCL content
+	filename := req.Filename
+	if filename == "" {
+		filename = "config.hcl"
+	}
+
+	validationErrors := p.ValidateContent(req.HCL, filename)
+	response := ValidateResponse{
+		Valid:  len(validationErrors) == 0,
+		Errors: validationErrors,
+	}
+
+	if len(req.HCL) == 0 {
+		response.Valid = false
+		response.Errors = append(response.Errors, studioparser.ValidationError{
+			Message:  "HCL configuration is empty",
+			Severity: "error",
+		})
 	}
 
 	w.Header().Set("Content-Type", "application/json")

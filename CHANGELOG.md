@@ -2,6 +2,35 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.12.0] - Auto-save, Connector Profiles & Backend Validation
+
+### Added
+
+- **Auto-save (Phase 8.5):**
+  - `useAutoSave` hook with debounced file writes
+  - Subscribes to Zustand store changes, saves when dirty files exist
+  - Configurable debounce interval (default 2000ms)
+  - Status tracking: idle → saving → saved → error
+  - Toggle in ServiceProperties (only shown when project is open)
+
+- **Connector Profiles (Phase 6.6):**
+  - `ConnectorProfile` and `ConnectorProfileConfig` types
+  - `ProfilesEditor` component in Properties panel
+  - CEL-based profile selection (`select` expression)
+  - Default profile and fallback chain configuration
+  - Per-profile config fields matching connector type
+  - Optional per-profile transform overrides
+  - HCL generation: `select`, `default`, `fallback`, `profile` blocks
+
+- **Backend Validation (Phase 8.6):**
+  - `ValidateContent()` method with 3-step validation pipeline
+  - Step 1: HCL syntax validation (parse errors with line numbers)
+  - Step 2: Structure validation against extended schema
+  - Step 3: Semantic validation (duplicate names, missing attributes, undefined references)
+  - Extended `rootSchema` with saga, state_machine, auth, security, plugin, workflow, batch, environment
+  - Structured `ValidationError` with message, file, line, column, severity
+  - Multi-file validation support in `/api/validate` endpoint
+
 ## [0.11.0] - Phase 9: Monaco IDE Enhancement
 
 ### Added

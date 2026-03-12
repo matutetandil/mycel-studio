@@ -89,6 +89,45 @@ function generateConnectorHCL(node: StudioNode): string {
     lines.push(`  ${field.key} = "${value}"`)
   }
 
+  // Profiles
+  const pc = data.profileConfig
+  if (pc?.enabled && pc.profiles.length > 0) {
+    lines.push('')
+    if (pc.select) lines.push(`  select   = "${pc.select}"`)
+    if (pc.default) lines.push(`  default  = "${pc.default}"`)
+    if (pc.fallback.length > 0) {
+      lines.push(`  fallback = [${pc.fallback.map(f => `"${f}"`).join(', ')}]`)
+    }
+
+    for (const profile of pc.profiles) {
+      lines.push('')
+      lines.push(`  profile "${profile.name}" {`)
+      // Profile-specific type (for profiled connectors)
+      if (profile.connectorType) {
+        lines.push(`    type = "${profile.connectorType}"`)
+      }
+      // Profile config fields
+      for (const [k, v] of Object.entries(profile.config)) {
+        if (v === undefined || v === null || v === '') continue
+        if (typeof v === 'number' || typeof v === 'boolean') {
+          lines.push(`    ${k} = ${v}`)
+        } else {
+          lines.push(`    ${k} = "${v}"`)
+        }
+      }
+      // Profile transform
+      if (profile.transform && Object.keys(profile.transform).length > 0) {
+        lines.push('')
+        lines.push('    transform {')
+        for (const [k, v] of Object.entries(profile.transform)) {
+          lines.push(`      ${k} = "${v}"`)
+        }
+        lines.push('    }')
+      }
+      lines.push('  }')
+    }
+  }
+
   lines.push('}')
 
   return lines.join('\n')

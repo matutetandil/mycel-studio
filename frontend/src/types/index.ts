@@ -534,12 +534,28 @@ export type ConnectorOperation =
 // Node Data Types
 // =============================================================================
 
+export interface ConnectorProfile {
+  name: string
+  config: Record<string, unknown>
+  connectorType?: ConnectorType  // For profiled type, each profile can have its own type
+  transform?: Record<string, string>
+}
+
+export interface ConnectorProfileConfig {
+  enabled: boolean
+  select: string       // CEL expression to pick profile
+  default: string      // Fallback profile name
+  fallback: string[]   // Ordered fallback chain
+  profiles: ConnectorProfile[]
+}
+
 export interface ConnectorNodeData extends Record<string, unknown> {
   label: string
   connectorType: ConnectorType
   direction: ConnectorDirection
   config: Record<string, unknown>
   operations?: ConnectorOperation[]
+  profileConfig?: ConnectorProfileConfig
 }
 
 export interface FlowNodeData extends Record<string, unknown> {
