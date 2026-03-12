@@ -24,6 +24,7 @@ interface StudioState {
   nodes: StudioNode[]
   edges: Edge[]
   selectedNodeId: string | null
+  activeFlowEditor: string | null
   clipboard: ClipboardEntry | null
   serviceConfig: ServiceConfig
   authConfig: AuthConfig
@@ -36,6 +37,7 @@ interface StudioState {
   updateNode: (id: string, data: Partial<ConnectorNodeData | FlowNodeData>) => void
   removeNode: (id: string) => void
   selectNode: (id: string | null) => void
+  openFlowEditor: (editor: string | null) => void
   copyNode: () => void
   pasteNode: () => void
   duplicateNode: () => void
@@ -64,6 +66,7 @@ export const useStudioStore = create<StudioState>((set, get) => ({
   nodes: [],
   edges: [],
   selectedNodeId: null,
+  activeFlowEditor: null,
   clipboard: null,
   serviceConfig: { name: 'my-service', version: '1.0.0' },
   authConfig: {
@@ -138,6 +141,7 @@ export const useStudioStore = create<StudioState>((set, get) => ({
   },
 
   selectNode: (id) => set({ selectedNodeId: id }),
+  openFlowEditor: (editor) => set({ activeFlowEditor: editor }),
 
   copyNode: () => {
     const { selectedNodeId, nodes, edges } = get()

@@ -365,7 +365,7 @@ export interface FlowStep {
   format?: 'json' | 'xml'
   when?: string
   timeout?: string
-  onError?: 'fail' | 'skip' | 'default'
+  onError?: 'skip'
   default?: Record<string, string>
 }
 

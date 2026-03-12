@@ -481,21 +481,42 @@ function generateFlowHCL(
       lines.push('')
       lines.push(`  step "${step.name}" {`)
       lines.push(`    connector = "${step.connector}"`)
-      if (step.operation) lines.push(`    operation = "${step.operation}"`)
-      if (step.query) lines.push(`    query     = "${step.query}"`)
-      if (step.target) lines.push(`    target    = "${step.target}"`)
-      if (step.when) lines.push(`    when      = "${step.when}"`)
+      if (step.operation) lines.push(`    operation = ${hclValue(step.operation)}`)
+      if (step.query) lines.push(`    query     = ${hclValue(step.query)}`)
+      if (step.target) lines.push(`    target    = ${hclValue(step.target)}`)
+      if (step.format) lines.push(`    format    = "${step.format}"`)
+      if (step.when) lines.push(`    when      = ${hclValue(step.when)}`)
       if (step.timeout) lines.push(`    timeout   = "${step.timeout}"`)
-      if (step.onError && step.onError !== 'fail') {
-        lines.push(`    on_error  = "${step.onError}"`)
+      if (step.onError === 'skip') {
+        lines.push(`    on_error  = "skip"`)
       }
       if (step.params && Object.keys(step.params).length > 0) {
-        lines.push(`    params    = [${Object.values(step.params).join(', ')}]`)
+        const keys = Object.keys(step.params)
+        const allNumeric = keys.every(k => /^\d+$/.test(k))
+        if (allNumeric) {
+          // Array-style params: params = [value1, value2]
+          const values = keys.sort((a, b) => Number(a) - Number(b)).map(k => hclValue(step.params![k]))
+          lines.push(`    params    = [${values.join(', ')}]`)
+        } else {
+          // Map-style params: params { key = value }
+          lines.push('    params {')
+          for (const [key, value] of Object.entries(step.params)) {
+            lines.push(`      ${key} = ${hclValue(value)}`)
+          }
+          lines.push('    }')
+        }
       }
-      if (step.onError === 'default' && step.default && Object.keys(step.default).length > 0) {
+      if (step.body && Object.keys(step.body).length > 0) {
+        lines.push('    body {')
+        for (const [key, value] of Object.entries(step.body)) {
+          lines.push(`      ${key} = ${hclValue(value)}`)
+        }
+        lines.push('    }')
+      }
+      if (step.default && Object.keys(step.default).length > 0) {
         lines.push('    default {')
         for (const [key, value] of Object.entries(step.default)) {
-          lines.push(`      ${key} = "${value}"`)
+          lines.push(`      ${key} = ${hclValue(value)}`)
         }
         lines.push('    }')
       }

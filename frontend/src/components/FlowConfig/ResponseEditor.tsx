@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect } from 'react'
-import { X, MessageSquare, Info, Plus, Trash2 } from 'lucide-react'
+import { X, MessageSquare, Info } from 'lucide-react'
 import type { FlowResponse } from '../../types'
+import MiniEditor from './MiniEditor'
 
 interface ResponseEditorProps {
   isOpen: boolean
@@ -10,31 +11,55 @@ interface ResponseEditorProps {
   onClose: () => void
 }
 
-const CEL_PATTERNS = [
-  { label: 'output.field', value: 'output.' },
-  { label: 'input.field', value: 'input.' },
-  { label: 'lower()', value: 'lower(output.)' },
-  { label: 'upper()', value: 'upper(output.)' },
-  { label: 'uuid()', value: 'uuid()' },
-  { label: 'now()', value: 'now()' },
-  { label: 'step.name', value: 'step.' },
-  { label: 'string concat', value: 'output.first + " " + output.last' },
-]
-
-const TEMPLATES: Array<{ label: string; fields: Record<string, string> }> = [
+const TEMPLATES: Array<{ label: string; code: string }> = [
   {
     label: 'Pass through output',
-    fields: { id: 'output.id', email: 'output.email', name: 'output.name' },
+    code: 'id         = "output.id"\nemail      = "output.email"\nname       = "output.name"',
   },
   {
     label: 'Normalize output',
-    fields: { id: 'output.id', email: 'lower(output.email)', created_at: 'output.created_at' },
+    code: 'id         = "output.id"\nemail      = "lower(output.email)"\ncreated_at = "output.created_at"',
   },
   {
     label: 'Echo with metadata',
-    fields: { id: 'uuid()', email: 'lower(input.email)', created_at: 'now()' },
+    code: 'id         = "uuid()"\nemail      = "lower(input.email)"\ncreated_at = "now()"',
+  },
+  {
+    label: 'From steps',
+    code: 'id       = "step.order.id"\nstatus   = "step.order.status"\ncustomer = "step.customer"',
   },
 ]
+
+const CEL_PATTERNS = [
+  'output.field', 'input.field', 'step.name.field',
+  'lower()', 'upper()', 'uuid()', 'now()',
+  'output.first + " " + output.last',
+]
+
+function fieldsToCode(fields: Record<string, string>): string {
+  const entries = Object.entries(fields)
+  if (entries.length === 0) return ''
+  const maxKeyLen = Math.max(...entries.map(([k]) => k.length), 0)
+  return entries
+    .map(([k, v]) => `${k.padEnd(maxKeyLen)} = "${v}"`)
+    .join('\n')
+}
+
+function codeToFields(code: string): Record<string, string> {
+  const result: Record<string, string> = {}
+  for (const line of code.split('\n')) {
+    if (!line.includes('=')) continue
+    const eqIdx = line.indexOf('=')
+    const key = line.substring(0, eqIdx).trim()
+    let value = line.substring(eqIdx + 1).trim()
+    // Strip surrounding quotes if present
+    if (value.startsWith('"') && value.endsWith('"')) {
+      value = value.slice(1, -1)
+    }
+    if (key) result[key] = value
+  }
+  return result
+}
 
 export default function ResponseEditor({
   isOpen,
@@ -43,20 +68,18 @@ export default function ResponseEditor({
   onSave,
   onClose,
 }: ResponseEditorProps) {
-  const [fields, setFields] = useState<Array<{ key: string; value: string }>>([])
+  const [code, setCode] = useState('')
   const [httpStatusCode, setHttpStatusCode] = useState('')
   const [grpcStatusCode, setGrpcStatusCode] = useState('')
 
   useEffect(() => {
     if (isOpen) {
       if (response) {
-        setFields(
-          Object.entries(response.fields || {}).map(([key, value]) => ({ key, value }))
-        )
+        setCode(fieldsToCode(response.fields || {}))
         setHttpStatusCode(response.httpStatusCode || '')
         setGrpcStatusCode(response.grpcStatusCode || '')
       } else {
-        setFields([])
+        setCode('')
         setHttpStatusCode('')
         setGrpcStatusCode('')
       }
@@ -64,47 +87,37 @@ export default function ResponseEditor({
   }, [response, isOpen])
 
   const handleSave = useCallback(() => {
-    const fieldMap = fields.reduce((acc, f) => {
-      if (f.key.trim() && f.value.trim()) acc[f.key.trim()] = f.value.trim()
-      return acc
-    }, {} as Record<string, string>)
+    const fields = codeToFields(code)
 
-    if (Object.keys(fieldMap).length === 0 && !httpStatusCode && !grpcStatusCode) {
+    if (Object.keys(fields).length === 0 && !httpStatusCode && !grpcStatusCode) {
       onSave(undefined)
     } else {
       onSave({
-        fields: fieldMap,
+        fields,
         httpStatusCode: httpStatusCode || undefined,
         grpcStatusCode: grpcStatusCode || undefined,
       })
     }
     onClose()
-  }, [fields, httpStatusCode, grpcStatusCode, onSave, onClose])
+  }, [code, httpStatusCode, grpcStatusCode, onSave, onClose])
 
   const handleClear = useCallback(() => {
     onSave(undefined)
     onClose()
   }, [onSave, onClose])
 
-  const applyTemplate = useCallback((tplFields: Record<string, string>) => {
-    setFields(Object.entries(tplFields).map(([key, value]) => ({ key, value })))
-  }, [])
-
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="bg-neutral-800 border border-neutral-700 rounded-lg shadow-xl w-[550px] max-h-[80vh] flex flex-col">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onKeyDown={e => e.stopPropagation()}>
+      <div className="bg-neutral-800 border border-neutral-700 rounded-lg shadow-xl w-[650px] max-h-[85vh] flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-neutral-700">
           <div className="flex items-center gap-2">
             <MessageSquare className="w-5 h-5 text-green-400" />
             <h2 className="text-lg font-semibold text-neutral-200">Response Transform</h2>
           </div>
-          <button
-            onClick={onClose}
-            className="text-neutral-400 hover:text-neutral-200 transition-colors"
-          >
+          <button onClick={onClose} className="text-neutral-400 hover:text-neutral-200 transition-colors">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -120,83 +133,46 @@ export default function ResponseEditor({
             </p>
           </div>
 
-          {/* CEL field mappings */}
+          {/* Templates */}
           <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <label className="text-sm font-medium text-neutral-300">Field Mappings (CEL)</label>
-              <button
-                onClick={() => setFields(prev => [...prev, { key: '', value: '' }])}
-                className="flex items-center gap-1 px-2 py-1 text-xs text-green-400 hover:text-green-300 transition-colors"
-              >
-                <Plus className="w-3 h-3" />
-                Add Field
-              </button>
-            </div>
-
-            {/* Templates */}
+            <label className="text-xs font-medium text-neutral-400">Templates</label>
             <div className="flex flex-wrap gap-1">
               {TEMPLATES.map((tpl) => (
                 <button
                   key={tpl.label}
-                  onClick={() => applyTemplate(tpl.fields)}
+                  onClick={() => setCode(tpl.code)}
                   className="px-2 py-1 text-xs bg-neutral-700 border border-neutral-600 rounded text-neutral-400 hover:text-green-300 hover:border-green-500/50 transition-colors"
                 >
                   {tpl.label}
                 </button>
               ))}
             </div>
+          </div>
 
-            {fields.map((field, idx) => (
-              <div key={idx} className="flex items-center gap-2">
-                <input
-                  type="text"
-                  value={field.key}
-                  onChange={(e) => {
-                    const updated = [...fields]
-                    updated[idx] = { ...updated[idx], key: e.target.value }
-                    setFields(updated)
-                  }}
-                  placeholder="field_name"
-                  className="w-1/3 px-2 py-1.5 bg-neutral-700 border border-neutral-600 rounded text-sm text-neutral-200 placeholder:text-neutral-500 focus:outline-none focus:ring-2 focus:ring-green-500/50"
-                />
-                <span className="text-neutral-500">=</span>
-                <input
-                  type="text"
-                  value={field.value}
-                  onChange={(e) => {
-                    const updated = [...fields]
-                    updated[idx] = { ...updated[idx], value: e.target.value }
-                    setFields(updated)
-                  }}
-                  placeholder={isEchoFlow ? "input.field or CEL expr" : "output.field or CEL expr"}
-                  className="flex-1 px-2 py-1.5 bg-neutral-700 border border-neutral-600 rounded text-sm text-neutral-200 placeholder:text-neutral-500 focus:outline-none focus:ring-2 focus:ring-green-500/50 font-mono"
-                />
-                <button
-                  onClick={() => setFields(prev => prev.filter((_, i) => i !== idx))}
-                  className="p-1 text-neutral-400 hover:text-red-400 transition-colors"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            ))}
-
-            {fields.length === 0 && (
-              <div className="text-xs text-neutral-500 py-2 text-center">
-                No fields — add fields or pick a template above
-              </div>
-            )}
+          {/* Monaco editor for response fields */}
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-neutral-300">Field Mappings (CEL)</label>
+            <MiniEditor
+              value={code}
+              onChange={setCode}
+              language="hcl"
+              height="180px"
+              placeholder={isEchoFlow
+                ? 'id         = "uuid()"\nemail      = "lower(input.email)"\ncreated_at = "now()"'
+                : 'id         = "output.id"\nemail      = "lower(output.email)"\ncreated_at = "output.created_at"'}
+            />
+            <p className="text-xs text-neutral-500">
+              Format: <code className="bg-neutral-700 px-1 rounded">field_name = "CEL expression"</code> — one per line
+            </p>
           </div>
 
           {/* CEL patterns helper */}
           <div className="space-y-1">
-            <label className="text-xs text-neutral-500">CEL patterns:</label>
+            <label className="text-xs text-neutral-500">Available variables:</label>
             <div className="flex flex-wrap gap-1">
               {CEL_PATTERNS.map((p) => (
-                <span
-                  key={p.label}
-                  className="px-1.5 py-0.5 text-xs bg-neutral-700/50 border border-neutral-600/50 rounded text-neutral-500 font-mono"
-                >
-                  {p.label}
+                <span key={p} className="px-1.5 py-0.5 text-xs bg-neutral-700/50 border border-neutral-600/50 rounded text-neutral-500 font-mono">
+                  {p}
                 </span>
               ))}
             </div>
@@ -215,6 +191,14 @@ export default function ResponseEditor({
                   placeholder="e.g. 201"
                   className="w-full px-2 py-1.5 bg-neutral-700 border border-neutral-600 rounded text-sm text-neutral-200 placeholder:text-neutral-500 focus:outline-none focus:ring-2 focus:ring-green-500/50 font-mono"
                 />
+                <div className="flex gap-1">
+                  {['200', '201', '202', '204'].map(s => (
+                    <button key={s} onClick={() => setHttpStatusCode(s)}
+                      className={`px-2 py-0.5 text-xs rounded ${httpStatusCode === s ? 'bg-green-500/20 text-green-300 border border-green-500/50' : 'bg-neutral-700 text-neutral-400 border border-neutral-600 hover:text-neutral-200'}`}>
+                      {s}
+                    </button>
+                  ))}
+                </div>
               </div>
               <div className="space-y-1">
                 <label className="text-xs text-neutral-400">gRPC Status</label>
@@ -229,50 +213,38 @@ export default function ResponseEditor({
             </div>
           </div>
 
-          {/* HCL Preview */}
-          {(fields.length > 0 || httpStatusCode || grpcStatusCode) && (
-            <div className="p-3 bg-neutral-900 rounded text-xs font-mono text-neutral-400">
-              <div className="text-neutral-500 mb-1">HCL preview:</div>
-              <div className="text-green-300">response {'{'}</div>
-              {fields.filter(f => f.key.trim()).map((f, i) => (
-                <div key={i} className="text-neutral-300">
-                  {'  '}{f.key} = "{f.value}"
-                </div>
-              ))}
-              {httpStatusCode && (
-                <div className="text-neutral-300">
-                  {'  '}http_status_code = "{httpStatusCode}"
-                </div>
-              )}
-              {grpcStatusCode && (
-                <div className="text-neutral-300">
-                  {'  '}grpc_status_code = "{grpcStatusCode}"
-                </div>
-              )}
-              <div className="text-green-300">{'}'}</div>
-            </div>
-          )}
+          {/* Live HCL preview */}
+          {code.trim() && (() => {
+            const lines = code.split('\n').filter(l => l.trim())
+            const parsed = lines.map(l => {
+              const eq = l.indexOf('=')
+              if (eq === -1) return { key: l.trim(), value: '' }
+              return { key: l.substring(0, eq).trim(), value: l.substring(eq + 1).trim() }
+            })
+            if (httpStatusCode) parsed.push({ key: 'http_status_code', value: `"${httpStatusCode}"` })
+            if (grpcStatusCode) parsed.push({ key: 'grpc_status_code', value: `"${grpcStatusCode}"` })
+            const maxKey = Math.max(...parsed.map(p => p.key.length), 0)
+            return (
+              <div className="p-3 bg-neutral-900 rounded text-xs font-mono text-neutral-400">
+                <div className="text-neutral-500 mb-1">HCL preview:</div>
+                <pre className="text-green-300">{'response {\n'}{parsed.map((p, i) =>
+                  <span key={i} className="text-neutral-300">{'  '}{p.key.padEnd(maxKey)}{p.value ? ` = ${p.value}` : ''}{'\n'}</span>
+                )}<span className="text-green-300">{'}'}</span></pre>
+              </div>
+            )
+          })()}
         </div>
 
         {/* Footer */}
         <div className="flex items-center justify-between px-4 py-3 border-t border-neutral-700">
-          <button
-            onClick={handleClear}
-            className="px-4 py-2 text-sm text-red-400 hover:text-red-300 transition-colors"
-          >
+          <button onClick={handleClear} className="px-4 py-2 text-sm text-red-400 hover:text-red-300 transition-colors">
             Clear Response
           </button>
           <div className="flex gap-2">
-            <button
-              onClick={onClose}
-              className="px-4 py-2 bg-neutral-700 hover:bg-neutral-600 border border-neutral-600 rounded text-sm text-neutral-200 transition-colors"
-            >
+            <button onClick={onClose} className="px-4 py-2 bg-neutral-700 hover:bg-neutral-600 border border-neutral-600 rounded text-sm text-neutral-200 transition-colors">
               Cancel
             </button>
-            <button
-              onClick={handleSave}
-              className="px-4 py-2 bg-green-600 hover:bg-green-500 rounded text-sm text-white font-medium transition-colors"
-            >
+            <button onClick={handleSave} className="px-4 py-2 bg-green-600 hover:bg-green-500 rounded text-sm text-white font-medium transition-colors">
               Save Response
             </button>
           </div>

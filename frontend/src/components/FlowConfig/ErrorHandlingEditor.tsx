@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect } from 'react'
 import { X, AlertTriangle, Info, RotateCcw, Plus, Trash2, ArrowDownToLine, MessageSquareWarning } from 'lucide-react'
 import type { FlowErrorHandling } from '../../types'
+import MiniEditor from './MiniEditor'
 
 interface ErrorHandlingEditorProps {
   isOpen: boolean
@@ -39,6 +40,26 @@ const STATUS_PRESETS = [
   { value: 503, label: '503' },
 ]
 
+function recordToCode(rec?: Record<string, string>): string {
+  if (!rec || Object.keys(rec).length === 0) return ''
+  const entries = Object.entries(rec)
+  const maxKeyLen = Math.max(...entries.map(([k]) => k.length), 0)
+  return entries.map(([k, v]) => `${k.padEnd(maxKeyLen)} = "${v}"`).join('\n')
+}
+
+function codeToRecord(code: string): Record<string, string> {
+  const result: Record<string, string> = {}
+  for (const line of code.split('\n')) {
+    if (!line.includes('=')) continue
+    const eqIdx = line.indexOf('=')
+    const key = line.substring(0, eqIdx).trim()
+    let value = line.substring(eqIdx + 1).trim()
+    if (value.startsWith('"') && value.endsWith('"')) value = value.slice(1, -1)
+    if (key) result[key] = value
+  }
+  return result
+}
+
 export default function ErrorHandlingEditor({
   isOpen,
   errorHandling,
@@ -58,18 +79,17 @@ export default function ErrorHandlingEditor({
   const [fallbackConnector, setFallbackConnector] = useState('')
   const [fallbackTarget, setFallbackTarget] = useState('')
   const [fallbackIncludeError, setFallbackIncludeError] = useState(true)
-  const [fallbackTransform, setFallbackTransform] = useState<Array<{ key: string; value: string }>>([])
+  const [fallbackTransformCode, setFallbackTransformCode] = useState('')
 
   // Error response state
   const [errorResponseEnabled, setErrorResponseEnabled] = useState(false)
   const [errorStatus, setErrorStatus] = useState(422)
   const [errorHeaders, setErrorHeaders] = useState<Array<{ key: string; value: string }>>([])
-  const [errorBody, setErrorBody] = useState<Array<{ key: string; value: string }>>([])
+  const [errorBodyCode, setErrorBodyCode] = useState('')
 
   useEffect(() => {
     if (!isOpen) return
 
-    // Retry
     if (errorHandling?.retry) {
       setRetryEnabled(true)
       setAttempts(errorHandling.retry.attempts)
@@ -84,38 +104,32 @@ export default function ErrorHandlingEditor({
       setBackoff('exponential')
     }
 
-    // Fallback
     if (errorHandling?.fallback) {
       setFallbackEnabled(true)
       setFallbackConnector(errorHandling.fallback.connector)
       setFallbackTarget(errorHandling.fallback.target)
       setFallbackIncludeError(errorHandling.fallback.includeError ?? true)
-      setFallbackTransform(
-        Object.entries(errorHandling.fallback.transform || {}).map(([key, value]) => ({ key, value }))
-      )
+      setFallbackTransformCode(recordToCode(errorHandling.fallback.transform))
     } else {
       setFallbackEnabled(false)
       setFallbackConnector('')
       setFallbackTarget('')
       setFallbackIncludeError(true)
-      setFallbackTransform([])
+      setFallbackTransformCode('')
     }
 
-    // Error response
     if (errorHandling?.errorResponse) {
       setErrorResponseEnabled(true)
       setErrorStatus(errorHandling.errorResponse.status)
       setErrorHeaders(
         Object.entries(errorHandling.errorResponse.headers || {}).map(([key, value]) => ({ key, value }))
       )
-      setErrorBody(
-        Object.entries(errorHandling.errorResponse.body || {}).map(([key, value]) => ({ key, value }))
-      )
+      setErrorBodyCode(recordToCode(errorHandling.errorResponse.body))
     } else {
       setErrorResponseEnabled(false)
       setErrorStatus(422)
       setErrorHeaders([])
-      setErrorBody([])
+      setErrorBodyCode('')
     }
   }, [errorHandling, isOpen])
 
@@ -139,10 +153,7 @@ export default function ErrorHandlingEditor({
         target: fallbackTarget,
         includeError: fallbackIncludeError,
       }
-      const transform = fallbackTransform.reduce((acc, f) => {
-        if (f.key.trim() && f.value.trim()) acc[f.key.trim()] = f.value.trim()
-        return acc
-      }, {} as Record<string, string>)
+      const transform = codeToRecord(fallbackTransformCode)
       if (Object.keys(transform).length > 0) result.fallback.transform = transform
     }
 
@@ -153,10 +164,7 @@ export default function ErrorHandlingEditor({
         return acc
       }, {} as Record<string, string>)
       if (Object.keys(hdrs).length > 0) result.errorResponse.headers = hdrs
-      const body = errorBody.reduce((acc, f) => {
-        if (f.key.trim() && f.value.trim()) acc[f.key.trim()] = f.value.trim()
-        return acc
-      }, {} as Record<string, string>)
+      const body = codeToRecord(errorBodyCode)
       if (Object.keys(body).length > 0) result.errorResponse.body = body
     }
 
@@ -164,8 +172,8 @@ export default function ErrorHandlingEditor({
     onClose()
   }, [
     retryEnabled, attempts, delay, maxDelay, backoff,
-    fallbackEnabled, fallbackConnector, fallbackTarget, fallbackIncludeError, fallbackTransform,
-    errorResponseEnabled, errorStatus, errorHeaders, errorBody,
+    fallbackEnabled, fallbackConnector, fallbackTarget, fallbackIncludeError, fallbackTransformCode,
+    errorResponseEnabled, errorStatus, errorHeaders, errorBodyCode,
     onSave, onClose,
   ])
 
@@ -177,8 +185,8 @@ export default function ErrorHandlingEditor({
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="bg-neutral-800 border border-neutral-700 rounded-lg shadow-xl w-[600px] max-h-[85vh] flex flex-col">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onKeyDown={e => e.stopPropagation()}>
+      <div className="bg-neutral-800 border border-neutral-700 rounded-lg shadow-xl w-[650px] max-h-[90vh] flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-neutral-700">
           <div className="flex items-center gap-2">
@@ -201,8 +209,7 @@ export default function ErrorHandlingEditor({
           <div className="p-4 border border-neutral-600 rounded-lg space-y-4">
             <label className="flex items-center gap-3 cursor-pointer">
               <input
-                type="checkbox"
-                checked={retryEnabled}
+                type="checkbox" checked={retryEnabled}
                 onChange={(e) => setRetryEnabled(e.target.checked)}
                 className="w-5 h-5 rounded border-neutral-600 bg-neutral-700 text-red-500 focus:ring-red-500/50"
               />
@@ -243,7 +250,6 @@ export default function ErrorHandlingEditor({
                       ))}
                     </div>
                   </div>
-
                   <div className="space-y-2">
                     <label className="text-sm font-medium text-neutral-300">Max Delay</label>
                     <input type="text" value={maxDelay} onChange={(e) => setMaxDelay(e.target.value)} placeholder="30s (optional)"
@@ -301,8 +307,7 @@ export default function ErrorHandlingEditor({
           <div className="p-4 border border-neutral-600 rounded-lg space-y-4">
             <label className="flex items-center gap-3 cursor-pointer">
               <input
-                type="checkbox"
-                checked={fallbackEnabled}
+                type="checkbox" checked={fallbackEnabled}
                 onChange={(e) => setFallbackEnabled(e.target.checked)}
                 className="w-5 h-5 rounded border-neutral-600 bg-neutral-700 text-orange-500 focus:ring-orange-500/50"
               />
@@ -340,30 +345,16 @@ export default function ErrorHandlingEditor({
                   <span className="text-sm text-neutral-300">Include error details in message</span>
                 </label>
 
-                {/* Fallback transform */}
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <label className="text-xs font-medium text-neutral-400">Transform (optional)</label>
-                    <button onClick={() => setFallbackTransform(prev => [...prev, { key: '', value: '' }])}
-                      className="flex items-center gap-1 px-2 py-1 text-xs text-orange-400 hover:text-orange-300 transition-colors">
-                      <Plus className="w-3 h-3" /> Add
-                    </button>
-                  </div>
-                  {fallbackTransform.map((field, idx) => (
-                    <div key={idx} className="flex items-center gap-2">
-                      <input type="text" value={field.key}
-                        onChange={(e) => { const u = [...fallbackTransform]; u[idx] = { ...u[idx], key: e.target.value }; setFallbackTransform(u) }}
-                        placeholder="field" className="w-1/3 px-2 py-1.5 bg-neutral-700 border border-neutral-600 rounded text-sm text-neutral-200 placeholder:text-neutral-500 focus:outline-none focus:ring-2 focus:ring-orange-500/50" />
-                      <span className="text-neutral-500">=</span>
-                      <input type="text" value={field.value}
-                        onChange={(e) => { const u = [...fallbackTransform]; u[idx] = { ...u[idx], value: e.target.value }; setFallbackTransform(u) }}
-                        placeholder="error.message" className="flex-1 px-2 py-1.5 bg-neutral-700 border border-neutral-600 rounded text-sm text-neutral-200 placeholder:text-neutral-500 focus:outline-none focus:ring-2 focus:ring-orange-500/50 font-mono" />
-                      <button onClick={() => setFallbackTransform(prev => prev.filter((_, i) => i !== idx))}
-                        className="p-1 text-neutral-400 hover:text-red-400 transition-colors">
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  ))}
+                {/* Fallback transform — Monaco editor */}
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-neutral-400">Transform (optional, CEL)</label>
+                  <MiniEditor
+                    value={fallbackTransformCode}
+                    onChange={setFallbackTransformCode}
+                    language="hcl"
+                    height="80px"
+                    placeholder={'original_id = "input.id"\nerror_msg   = "error.message"'}
+                  />
                 </div>
               </div>
             )}
@@ -373,8 +364,7 @@ export default function ErrorHandlingEditor({
           <div className="p-4 border border-neutral-600 rounded-lg space-y-4">
             <label className="flex items-center gap-3 cursor-pointer">
               <input
-                type="checkbox"
-                checked={errorResponseEnabled}
+                type="checkbox" checked={errorResponseEnabled}
                 onChange={(e) => setErrorResponseEnabled(e.target.checked)}
                 className="w-5 h-5 rounded border-neutral-600 bg-neutral-700 text-rose-500 focus:ring-rose-500/50"
               />
@@ -427,41 +417,24 @@ export default function ErrorHandlingEditor({
                   ))}
                 </div>
 
-                {/* Error body */}
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <label className="text-xs font-medium text-neutral-400">Body (CEL expressions)</label>
-                    <button onClick={() => setErrorBody(prev => [...prev, { key: '', value: '' }])}
-                      className="flex items-center gap-1 px-2 py-1 text-xs text-rose-400 hover:text-rose-300 transition-colors">
-                      <Plus className="w-3 h-3" /> Add
-                    </button>
-                  </div>
-                  {errorBody.length === 0 && (
+                {/* Error body — Monaco editor */}
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-neutral-400">Body (CEL expressions)</label>
+                  {!errorBodyCode.trim() && (
                     <button
-                      onClick={() => setErrorBody([
-                        { key: 'code', value: "'VALIDATION_ERROR'" },
-                        { key: 'message', value: 'error.message' },
-                      ])}
-                      className="w-full px-3 py-2 text-xs text-rose-400 border border-dashed border-neutral-600 rounded hover:border-rose-500/50 transition-colors"
+                      onClick={() => setErrorBodyCode('code    = "\'VALIDATION_ERROR\'"\nmessage = "error.message"')}
+                      className="w-full px-3 py-2 text-xs text-rose-400 border border-dashed border-neutral-600 rounded hover:border-rose-500/50 transition-colors mb-1"
                     >
                       Use default template (code + message)
                     </button>
                   )}
-                  {errorBody.map((f, idx) => (
-                    <div key={idx} className="flex items-center gap-2">
-                      <input type="text" value={f.key}
-                        onChange={(e) => { const u = [...errorBody]; u[idx] = { ...u[idx], key: e.target.value }; setErrorBody(u) }}
-                        placeholder="field" className="w-1/3 px-2 py-1.5 bg-neutral-700 border border-neutral-600 rounded text-sm text-neutral-200 placeholder:text-neutral-500 focus:outline-none focus:ring-2 focus:ring-rose-500/50" />
-                      <span className="text-neutral-500">=</span>
-                      <input type="text" value={f.value}
-                        onChange={(e) => { const u = [...errorBody]; u[idx] = { ...u[idx], value: e.target.value }; setErrorBody(u) }}
-                        placeholder="error.message" className="flex-1 px-2 py-1.5 bg-neutral-700 border border-neutral-600 rounded text-sm text-neutral-200 placeholder:text-neutral-500 focus:outline-none focus:ring-2 focus:ring-rose-500/50 font-mono" />
-                      <button onClick={() => setErrorBody(prev => prev.filter((_, i) => i !== idx))}
-                        className="p-1 text-neutral-400 hover:text-red-400 transition-colors">
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  ))}
+                  <MiniEditor
+                    value={errorBodyCode}
+                    onChange={setErrorBodyCode}
+                    language="hcl"
+                    height="80px"
+                    placeholder={'code    = "\'VALIDATION_ERROR\'"\nmessage = "error.message"'}
+                  />
                 </div>
               </div>
             )}

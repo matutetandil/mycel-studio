@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react'
 import { createPortal } from 'react-dom'
-import { ChevronLeft, ChevronRight as ChevronRightIcon, GripVertical, Plus, Trash2, ChevronDown, ChevronRight, Variable, Type, Pencil, X, Check, Lock } from 'lucide-react'
+import { ChevronLeft, ChevronRight as ChevronRightIcon, GripVertical, Plus, Trash2, Variable, Type, Pencil, X, Check, Lock } from 'lucide-react'
 import { useStudioStore } from '../../stores/useStudioStore'
 import type { ConnectorNodeData, ConnectorProfile, ConnectorProfileConfig, FlowNodeData, FlowTo, ConnectorDirection, RestOperation, GraphQLOperation, ConnectorOperation, TypeNodeData, TypeFieldDefinition, ValidatorNodeData, TransformNodeData, AspectNodeData, SagaNodeData, SagaStep, SagaAction, StateMachineNodeData, StateMachineState, StateMachineTransition, AuthConfig, AuthPreset, JwtAlgorithm, MfaRequirement, MfaMethod, AuthSocialProvider, EnvVariable, SecuritySanitizer, PluginDefinition } from '../../types'
 import OperationsEditor from './OperationsEditor'
@@ -819,153 +819,51 @@ function FlowProperties({
         />
       </div>
 
-      {/* --- Flow Blocks (inline) --- */}
+      {/* --- Flow Blocks (open in modal editors) --- */}
 
       {/* Transform */}
-      <FlowBlockSection
+      <FlowBlockButton
         title="Transform"
         color="amber"
         isActive={!!(data.transform?.fields && Object.keys(data.transform.fields).length > 0)}
+        summary={data.transform?.fields ? `${Object.keys(data.transform.fields).length} fields` : undefined}
+        onEdit={() => useStudioStore.getState().openFlowEditor('transform')}
         onClear={() => onChange({ transform: undefined })}
-      >
-        <InlineFieldMappings
-          fields={data.transform?.fields || {}}
-          onChange={(fields) => onChange({ transform: { ...data.transform, fields } })}
-          placeholder="CEL expression (input.*)"
-          color="amber"
-        />
-      </FlowBlockSection>
-
-      {/* Response */}
-      <FlowBlockSection
-        title="Response"
-        color="green"
-        isActive={!!(data.response?.fields && Object.keys(data.response.fields).length > 0)}
-        onClear={() => onChange({ response: undefined })}
-      >
-        <InlineFieldMappings
-          fields={data.response?.fields || {}}
-          onChange={(fields) => onChange({ response: { ...data.response, fields } })}
-          placeholder="CEL expression (output.*)"
-          color="green"
-        />
-        <div className="mt-2 flex gap-2">
-          <div className="flex-1">
-            <label className="block text-xs text-neutral-500 mb-0.5">HTTP Status</label>
-            <input
-              type="text"
-              value={data.response?.httpStatusCode || ''}
-              onChange={(e) => onChange({ response: { ...data.response, fields: data.response?.fields || {}, httpStatusCode: e.target.value || undefined } })}
-              placeholder="200"
-              className="w-full px-2 py-1 text-xs bg-neutral-800 border border-neutral-700 rounded text-white font-mono"
-            />
-          </div>
-          <div className="flex-1">
-            <label className="block text-xs text-neutral-500 mb-0.5">gRPC Status</label>
-            <input
-              type="text"
-              value={data.response?.grpcStatusCode || ''}
-              onChange={(e) => onChange({ response: { ...data.response, fields: data.response?.fields || {}, grpcStatusCode: e.target.value || undefined } })}
-              placeholder="0"
-              className="w-full px-2 py-1 text-xs bg-neutral-800 border border-neutral-700 rounded text-white font-mono"
-            />
-          </div>
-        </div>
-      </FlowBlockSection>
+      />
 
       {/* Steps */}
-      <FlowBlockSection
+      <FlowBlockButton
         title="Steps"
         color="blue"
         isActive={!!(data.steps && data.steps.length > 0)}
+        summary={data.steps ? `${data.steps.length} step${data.steps.length > 1 ? 's' : ''}: ${data.steps.map(s => s.name).join(', ')}` : undefined}
+        onEdit={() => useStudioStore.getState().openFlowEditor('step')}
         onClear={() => onChange({ steps: undefined })}
-      >
-        {(data.steps || []).map((step, i) => (
-          <div key={i} className="p-2 bg-neutral-800/50 rounded mb-1 space-y-1">
-            <div className="flex items-center gap-1">
-              <input
-                type="text"
-                value={step.name}
-                onChange={(e) => {
-                  const steps = [...(data.steps || [])]
-                  steps[i] = { ...steps[i], name: e.target.value }
-                  onChange({ steps })
-                }}
-                placeholder="step_name"
-                className="flex-1 px-2 py-1 text-xs bg-neutral-800 border border-neutral-700 rounded text-blue-300 font-mono"
-              />
-              <button onClick={() => {
-                const steps = (data.steps || []).filter((_, idx) => idx !== i)
-                onChange({ steps: steps.length > 0 ? steps : undefined })
-              }} className="text-red-500 hover:text-red-400 p-0.5">
-                <Trash2 className="w-3 h-3" />
-              </button>
-            </div>
-            <input
-              type="text"
-              value={step.connector}
-              onChange={(e) => {
-                const steps = [...(data.steps || [])]
-                steps[i] = { ...steps[i], connector: e.target.value }
-                onChange({ steps })
-              }}
-              placeholder="connector"
-              className="w-full px-2 py-1 text-xs bg-neutral-800 border border-neutral-700 rounded text-white"
-            />
-            <input
-              type="text"
-              value={step.operation || ''}
-              onChange={(e) => {
-                const steps = [...(data.steps || [])]
-                steps[i] = { ...steps[i], operation: e.target.value || undefined }
-                onChange({ steps })
-              }}
-              placeholder="operation"
-              className="w-full px-2 py-1 text-xs bg-neutral-800 border border-neutral-700 rounded text-white"
-            />
-          </div>
-        ))}
-        <button
-          onClick={() => onChange({ steps: [...(data.steps || []), { name: `step_${(data.steps?.length || 0) + 1}`, connector: '' }] })}
-          className="w-full px-2 py-1 text-xs text-blue-400 hover:text-blue-300 border border-dashed border-neutral-700 rounded"
-        >
-          + Add Step
-        </button>
-      </FlowBlockSection>
+      />
+
+      {/* Response */}
+      <FlowBlockButton
+        title="Response"
+        color="green"
+        isActive={!!(data.response?.fields && Object.keys(data.response.fields).length > 0)}
+        summary={data.response?.fields ? `${Object.keys(data.response.fields).length} fields${data.response.httpStatusCode ? ` (${data.response.httpStatusCode})` : ''}` : undefined}
+        onEdit={() => useStudioStore.getState().openFlowEditor('response')}
+        onClear={() => onChange({ response: undefined })}
+      />
 
       {/* Error Handling */}
-      <FlowBlockSection
+      <FlowBlockButton
         title="Error Handling"
         color="red"
         isActive={!!(data.errorHandling?.retry?.attempts || data.errorHandling?.fallback?.connector || data.errorHandling?.errorResponse?.status)}
+        summary={[
+          data.errorHandling?.retry ? `retry(${data.errorHandling.retry.attempts})` : '',
+          data.errorHandling?.fallback ? 'fallback' : '',
+          data.errorHandling?.errorResponse ? `error(${data.errorHandling.errorResponse.status})` : '',
+        ].filter(Boolean).join(', ') || undefined}
+        onEdit={() => useStudioStore.getState().openFlowEditor('errorHandling')}
         onClear={() => onChange({ errorHandling: undefined })}
-      >
-        <div className="space-y-2">
-          <div>
-            <label className="block text-xs text-neutral-500 mb-0.5">Retry attempts</label>
-            <input
-              type="number"
-              value={data.errorHandling?.retry?.attempts || ''}
-              onChange={(e) => onChange({ errorHandling: { ...data.errorHandling, retry: { delay: data.errorHandling?.retry?.delay || '1s', ...data.errorHandling?.retry, attempts: parseInt(e.target.value) || 3, backoff: data.errorHandling?.retry?.backoff || 'exponential' } } })}
-              placeholder="3"
-              className="w-full px-2 py-1 text-xs bg-neutral-800 border border-neutral-700 rounded text-white"
-            />
-          </div>
-          <div>
-            <label className="block text-xs text-neutral-500 mb-0.5">Backoff</label>
-            <select
-              value={data.errorHandling?.retry?.backoff || ''}
-              onChange={(e) => onChange({ errorHandling: { ...data.errorHandling, retry: { delay: data.errorHandling?.retry?.delay || '1s', ...data.errorHandling?.retry, attempts: data.errorHandling?.retry?.attempts || 3, backoff: (e.target.value || undefined) as 'constant' | 'linear' | 'exponential' | undefined } } })}
-              className="w-full px-2 py-1 text-xs bg-neutral-800 border border-neutral-700 rounded text-white"
-            >
-              <option value="">None</option>
-              <option value="constant">Constant</option>
-              <option value="linear">Linear</option>
-              <option value="exponential">Exponential</option>
-            </select>
-          </div>
-        </div>
-      </FlowBlockSection>
+      />
     </div>
   )
 }
@@ -978,117 +876,54 @@ const blockColors: Record<string, { border: string; bg: string; text: string; fi
   red: { border: 'border-red-700/50', bg: 'bg-red-900/10', text: 'text-red-400', fieldKey: 'text-red-300', btn: 'text-red-400', btnHover: 'hover:text-red-300' },
 }
 
-// Reusable collapsible section for flow blocks
-function FlowBlockSection({
+// Button that opens a modal editor for a flow block
+function FlowBlockButton({
   title,
   color,
   isActive,
+  summary,
+  onEdit,
   onClear,
-  children,
 }: {
   title: string
   color: string
   isActive: boolean
+  summary?: string
+  onEdit: () => void
   onClear: () => void
-  children: React.ReactNode
 }) {
-  const [expanded, setExpanded] = useState(isActive)
   const c = blockColors[color] || blockColors.amber
 
   return (
     <div className={`border rounded-md ${isActive ? `${c.border} ${c.bg}` : 'border-neutral-700/50'}`}>
-      <button
-        onClick={() => setExpanded(!expanded)}
-        className="w-full flex items-center gap-2 px-3 py-2 text-xs"
-      >
-        {expanded ? <ChevronDown className="w-3 h-3 text-neutral-400" /> : <ChevronRight className="w-3 h-3 text-neutral-400" />}
-        <span className={`font-medium ${isActive ? c.text : 'text-neutral-400'}`}>{title}</span>
+      <div className="flex items-center gap-2 px-3 py-2">
+        <button
+          onClick={onEdit}
+          className="flex-1 flex items-center gap-2 text-xs text-left"
+        >
+          <Pencil className="w-3 h-3 text-neutral-500" />
+          <span className={`font-medium ${isActive ? c.text : 'text-neutral-400'}`}>{title}</span>
+          {isActive && summary && (
+            <span className="text-neutral-500 truncate ml-1">{summary}</span>
+          )}
+          {!isActive && (
+            <span className="text-neutral-600 italic">Click to configure</span>
+          )}
+        </button>
         {isActive && (
           <button
             onClick={(e) => { e.stopPropagation(); onClear() }}
-            className="ml-auto text-neutral-500 hover:text-red-400"
+            className="text-neutral-500 hover:text-red-400 shrink-0"
             title="Clear"
           >
             <Trash2 className="w-3 h-3" />
           </button>
         )}
-      </button>
-      {expanded && <div className="px-3 pb-3">{children}</div>}
+      </div>
     </div>
   )
 }
 
-// Reusable inline field mappings editor (for transform, response)
-function InlineFieldMappings({
-  fields,
-  onChange,
-  placeholder,
-  color,
-}: {
-  fields: Record<string, string>
-  onChange: (fields: Record<string, string>) => void
-  placeholder: string
-  color: string
-}) {
-  const c = blockColors[color] || blockColors.amber
-
-  // Use stable entries with numeric IDs to prevent focus loss
-  const [entries, setEntries] = useState(() =>
-    Object.entries(fields).map(([k, v], i) => ({ id: i, key: k, value: v }))
-  )
-  const nextId = useCallback(() => Math.max(0, ...entries.map(e => e.id)) + 1, [entries])
-
-  const sync = (updated: typeof entries) => {
-    setEntries(updated)
-    const result: Record<string, string> = {}
-    for (const e of updated) {
-      if (e.key) result[e.key] = e.value
-    }
-    onChange(result)
-  }
-
-  return (
-    <div className="space-y-1">
-      {entries.map((entry) => (
-        <div key={entry.id} className="flex items-center gap-1">
-          <input
-            type="text"
-            value={entry.key}
-            onChange={(e) => {
-              const clean = e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '')
-              sync(entries.map(en => en.id === entry.id ? { ...en, key: clean } : en))
-            }}
-            placeholder="field"
-            className={`w-24 px-2 py-1 text-xs bg-neutral-800 border border-neutral-700 rounded ${c.fieldKey} font-mono`}
-          />
-          <span className="text-neutral-600 text-xs">=</span>
-          <input
-            type="text"
-            value={entry.value}
-            onChange={(e) => sync(entries.map(en => en.id === entry.id ? { ...en, value: e.target.value } : en))}
-            placeholder={placeholder}
-            className="flex-1 px-2 py-1 text-xs bg-neutral-800 border border-neutral-700 rounded text-white font-mono placeholder-neutral-600"
-          />
-          <button onClick={() => sync(entries.filter(en => en.id !== entry.id))} className="text-red-500 hover:text-red-400 p-0.5">
-            <Trash2 className="w-3 h-3" />
-          </button>
-        </div>
-      ))}
-      <button
-        onClick={() => {
-          let name = 'field'
-          let i = 1
-          const keys = new Set(entries.map(e => e.key))
-          while (keys.has(name)) { name = `field_${i++}` }
-          sync([...entries, { id: nextId(), key: name, value: '' }])
-        }}
-        className={`w-full px-2 py-1 text-xs ${c.btn} ${c.btnHover} border border-dashed border-neutral-700 rounded`}
-      >
-        + Add Field
-      </button>
-    </div>
-  )
-}
 
 // =============================================================================
 // Type constraint options per base type

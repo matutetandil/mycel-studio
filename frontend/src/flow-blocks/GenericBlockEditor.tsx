@@ -77,7 +77,7 @@ export default function GenericBlockEditor({
   })
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onKeyDown={e => e.stopPropagation()}>
       <div className="bg-neutral-800 border border-neutral-700 rounded-lg shadow-xl w-[500px] max-h-[80vh] flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-neutral-700">

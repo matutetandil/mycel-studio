@@ -52,16 +52,20 @@ export default function Canvas() {
   // Context menu state
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null)
 
-  // Unified editor state: which block editor is open
-  const [activeEditor, setActiveEditor] = useState<string | null>(null)
+  // Editor state from store (shared with Properties panel)
+  const activeEditor = useStudioStore(s => s.activeFlowEditor)
+  const setActiveEditor = useStudioStore(s => s.openFlowEditor)
+  const selectedNodeId = useStudioStore(s => s.selectedNodeId)
 
-  // Get the selected flow node data for editors
+  // Get the selected flow node data for editors — works from both context menu and Properties
   const selectedFlowNode = useMemo(() => {
-    if (!contextMenu) return null
-    const node = nodes.find(n => n.id === contextMenu.nodeId)
+    // Prefer context menu node (right-click), fallback to selected node
+    const targetId = contextMenu?.nodeId || selectedNodeId
+    if (!targetId) return null
+    const node = nodes.find(n => n.id === targetId)
     if (!node || node.type !== 'flow') return null
     return node as Node<FlowNodeData>
-  }, [contextMenu, nodes])
+  }, [contextMenu, selectedNodeId, nodes])
 
   // Get available cache storages
   const availableCacheStorages = useMemo(() => {
@@ -79,6 +83,7 @@ export default function Canvas() {
         return {
           name: data.label.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, ''),
           type: data.connectorType,
+          operations: data.operations,
         }
       })
   }, [nodes])
@@ -109,7 +114,6 @@ export default function Canvas() {
   )
 
   // Sync external selectedNodeId changes (e.g., from editor tabs) to React Flow node selection
-  const selectedNodeId = useStudioStore(s => s.selectedNodeId)
   const prevSelectedRef = useRef<string | null>(null)
   useEffect(() => {
     if (selectedNodeId === prevSelectedRef.current) return
@@ -190,15 +194,16 @@ export default function Canvas() {
   // Update flow node data
   const updateFlowData = useCallback(
     (updates: Partial<FlowNodeData>) => {
-      if (!contextMenu) return
-      const node = nodes.find(n => n.id === contextMenu.nodeId)
+      const targetId = contextMenu?.nodeId || selectedNodeId
+      if (!targetId) return
+      const node = nodes.find(n => n.id === targetId)
       if (!node || node.type !== 'flow') return
-      updateNode(contextMenu.nodeId, {
+      updateNode(targetId, {
         ...node.data,
         ...updates,
       } as FlowNodeData)
     },
-    [contextMenu, nodes, updateNode]
+    [contextMenu, selectedNodeId, nodes, updateNode]
   )
 
   // Unified handler: open the right editor for a block key
