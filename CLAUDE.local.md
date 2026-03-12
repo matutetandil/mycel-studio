@@ -544,3 +544,39 @@ En vez de escribir HCL manualmente, el usuario:
   - Allow flows without `to` connector in canvas (echo flows)
   - Add `http_status_code` field to response editor
   - Move current HTTP status/headers/body logic to `error_response` only
+
+### 2026-03-11 - Phase 7: Enterprise Features (COMPLETADO) — v0.9.0
+- **Estado:** ✅ Completado
+- **7.1 Batch Processing:** BatchEditor, source/query/chunk_size, per-item transform
+- **7.2 Sagas:** SagaNode, SagaProperties, action/compensate pairs, delay/await
+- **7.3 State Machines:** StateMachineNode, state editor, transitions with guards/actions
+- **7.4 Auth UI:** AuthProperties, preset selector (strict/standard/relaxed/dev), JWT/password/MFA/sessions/security/social
+- **7.5 Environment Variables:** EnvProperties, variable management, secret marking, env() scanning, per-environment overlays
+- **7.6 Long-Running Workflows:** Workflow storage config in ServiceProperties, auto-generated API endpoints
+- **7.7 Security:** SecurityProperties, input limits, WASM sanitizers
+- **7.8 Mocks:** Skipped (low priority)
+- **7.9 Plugins:** PluginProperties, git sources, semver, WASM functions
+- **Commits:** `a1c009b` (Auth+Env), `f8779ec` (Security+Plugins+Workflow)
+
+### 2026-03-11 - Phase 8: UX Polish (COMPLETADO) — v0.10.0
+- **Estado:** ✅ Completado
+- **8.1 Undo/Redo:**
+  - `useHistoryStore.ts` — Snapshot-based (nodes+edges), 50 depth max
+  - Tracks: addNode, removeNode, updateNode, connect, edge remove, node drag
+  - Ctrl+Z / Ctrl+Shift+Z, menu bar shows enabled/disabled
+- **8.2 Copy/Paste:**
+  - `clipboard` state in useStudioStore
+  - `copyNode()`, `pasteNode()` (+50px offset), `duplicateNode()`
+  - Ctrl+C / Ctrl+V / Ctrl+D
+- **8.3 Keyboard Shortcuts:**
+  - `useKeyboardShortcuts.ts` — Global handler, skips input/textarea/Monaco
+  - `ShortcutsDialog.tsx` — Modal with all shortcuts (Ctrl+/)
+  - Platform-aware labels (Cmd vs Ctrl)
+- **8.4 Template Gallery:**
+  - `templates.ts` — 6 templates: REST+DB CRUD, GraphQL+DB, Scheduled Job, Event Processing, Real-time WebSocket, Order Saga
+  - `TemplateGallery.tsx` — Categorized browser (Basic, Messaging, Real-time, Enterprise)
+  - `loadTemplate()` method in store, Ctrl+N or File menu
+- **8.5 Auto-save:** Pendiente (bajo prioridad)
+- **8.6 Validation against Mycel Runtime:** Pendiente
+- **Build:** ✅ TypeScript + Vite build exitosos
+- **Próximo paso:** Phase 9 (Monaco IDE Enhancement) — HCL syntax highlighting, autocompletion, validation

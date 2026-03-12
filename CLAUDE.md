@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 **Mycel Studio** is a visual editor for creating Mycel microservice configurations.
 It generates HCL2 files that Mycel (the runtime) interprets.
 
-**Related project:** `/Users/matute/Documents/Personal/MYCEL` - The Mycel runtime (Go), currently at v1.11.0
+**Related project:** `/Users/matute/Documents/Personal/MYCEL` - The Mycel runtime (Go), currently at v1.12.0
 
 ## Tech Stack
 
@@ -80,6 +80,15 @@ flow "create_user" {
     target    = "users"
   }
 
+  # Response block: transforms output AFTER destination
+  # Variables: input.* (request), output.* (destination result)
+  response {
+    id               = "output.id"
+    email            = "output.email"
+    created_at       = "output.created_at"
+    http_status_code = "201"
+  }
+
   error_handling {
     retry {
       attempts = 3
@@ -93,7 +102,29 @@ flow "create_user" {
     }
   }
 }
+
+# Echo flow (no "to" block) — valid since v1.12.0
+# Returns transformed input directly, no external I/O
+flow "process" {
+  from {
+    connector = "api"
+    operation = "POST /process"
+  }
+  response {
+    id         = "uuid()"
+    email      = "lower(input.email)"
+    name       = "upper(input.name)"
+    created_at = "now()"
+  }
+}
 ```
+
+### Key Concepts (v1.12.0)
+
+- **`transform` block:** Reshapes data BEFORE sending to destination. Variables: `input.*`
+- **`response` block:** Reshapes data AFTER receiving from destination. Variables: `input.*` (request), `output.*` (destination result)
+- **Echo flows:** Flows without a `to` block. Return the (optionally transformed via `response`) input directly. Valid for pure transformation APIs
+- **Status code overrides:** `http_status_code` (REST/SOAP) or `grpc_status_code` (gRPC) in `response` block overrides default status
 
 ## Visual Concepts
 
@@ -203,15 +234,12 @@ For HCL2 structure and connector details, see:
 
 See `ROADMAP.md` for the full implementation plan (8 phases) and `TODO.md` for the detailed feature backlog.
 
-Key gaps vs Mycel runtime (v1.11.0):
-- Steps (replaces enrich), filter, multi-to, dedupe
-- Custom error responses, on-error aspects
-- WebSocket, CDC, SSE, Elasticsearch, OAuth connectors
-- MQTT, FTP/SFTP, SOAP connectors
-- Redis Pub/Sub as queue driver
-- Notification connectors (email, slack, discord, sms, push, webhook)
+Key gaps vs Mycel runtime (v1.12.0):
+- **CRITICAL — Response block semantics:** Studio's ResponseEditor generates HTTP status/headers/body. Mycel v1.12.0 `response` block is CEL transforms of output (`input.*`, `output.*`). Must rewrite
+- **CRITICAL — Echo flows:** Studio requires `to` block. Mycel v1.12.0 allows flows without `to` (echo flows)
+- **Status code overrides:** `http_status_code`/`grpc_status_code` in response block
 - Batch processing, sagas, state machines, long-running workflows
-- Types, validators, auth UI, environment variables
+- Auth UI, environment variables
 - Security system (sanitization, WASM sanitizers)
 - Plugin system (git sources, semver, WASM validators/sanitizers)
 - Format declarations (JSON/XML at connector/flow/step level)

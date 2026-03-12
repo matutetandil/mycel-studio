@@ -2,6 +2,42 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.10.0] - Phase 8: UX Polish
+
+### Added
+
+- **Undo/Redo (8.1):**
+  - `useHistoryStore.ts` — Snapshot-based history with configurable max depth (50)
+  - Tracks: node add/remove/update, edge connect/remove, node drag
+  - Keyboard shortcuts: Ctrl+Z (undo), Ctrl+Shift+Z (redo)
+  - Menu bar Edit menu shows enabled/disabled state
+
+- **Copy/Paste (8.2):**
+  - Copy selected node with Ctrl+C, paste with Ctrl+V (offset +50px)
+  - Duplicate in-place with Ctrl+D
+  - Clipboard persists across paste operations
+  - Menu bar Edit menu with copy/paste/duplicate
+
+- **Keyboard Shortcuts (8.3):**
+  - `useKeyboardShortcuts.ts` — Global shortcut handler
+  - `ShortcutsDialog.tsx` — Modal showing all available shortcuts (Ctrl+/)
+  - Skips shortcuts when typing in inputs, textareas, or Monaco editor
+  - Platform-aware key labels (Cmd on Mac, Ctrl on others)
+
+- **Template Gallery (8.4):**
+  - `templates.ts` — 6 pre-built project templates
+  - `TemplateGallery.tsx` — Modal with categorized template browser
+  - Templates: REST+DB CRUD, GraphQL+DB, Scheduled Job, Event Processing, Real-time WebSocket, Order Saga
+  - Categories: Basic, Messaging, Real-time, Enterprise
+  - Ctrl+N or File > New from Template
+
+### Changed
+
+- `useStudioStore.ts` — Added clipboard state, undo/redo/copy/paste/duplicate/loadTemplate methods
+- `MenuBar.tsx` — Edit menu now functional (undo/redo/copy/paste/duplicate), File menu has template entry
+- `Canvas.tsx` — Saves snapshot on node drag start for undo support
+- `App.tsx` — Integrates keyboard shortcuts hook, shortcuts dialog, and template gallery
+
 ## [0.9.0] - Phase 7: Enterprise Features
 
 ### Added

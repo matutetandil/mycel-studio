@@ -7,6 +7,7 @@ import {
   type Node,
   type OnSelectionChangeFunc,
   type NodeMouseHandler,
+  type NodeDragHandler,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 
@@ -42,6 +43,7 @@ export default function Canvas() {
     selectNode,
     addNode,
     updateNode,
+    saveSnapshot,
   } = useStudioStore()
 
   const { activeFile } = useProjectStore()
@@ -148,6 +150,11 @@ export default function Canvas() {
     []
   )
 
+  // Save snapshot before drag starts (for undo of position changes)
+  const onNodeDragStart: NodeDragHandler = useCallback(() => {
+    saveSnapshot()
+  }, [saveSnapshot])
+
   const closeContextMenu = useCallback(() => {
     setContextMenu(null)
   }, [])
@@ -201,6 +208,7 @@ export default function Canvas() {
         onSelectionChange={onSelectionChange}
         onDragOver={onDragOver}
         onDrop={onDrop}
+        onNodeDragStart={onNodeDragStart}
         onNodeContextMenu={onNodeContextMenu}
         nodeTypes={nodeTypes}
         fitView

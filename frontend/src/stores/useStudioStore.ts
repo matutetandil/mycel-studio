@@ -10,13 +10,21 @@ import {
   type Connection,
 } from '@xyflow/react'
 import type { ConnectorNodeData, FlowNodeData, ServiceConfig, AuthConfig, EnvironmentConfig, SecurityConfig, PluginConfig } from '../types'
+import { useHistoryStore } from './useHistoryStore'
 
 type StudioNode = Node<ConnectorNodeData | FlowNodeData>
+
+// Clipboard for copy/paste
+interface ClipboardEntry {
+  node: StudioNode
+  connectedEdges: Edge[]
+}
 
 interface StudioState {
   nodes: StudioNode[]
   edges: Edge[]
   selectedNodeId: string | null
+  clipboard: ClipboardEntry | null
   serviceConfig: ServiceConfig
   authConfig: AuthConfig
   envConfig: EnvironmentConfig
@@ -28,6 +36,13 @@ interface StudioState {
   updateNode: (id: string, data: Partial<ConnectorNodeData | FlowNodeData>) => void
   removeNode: (id: string) => void
   selectNode: (id: string | null) => void
+  copyNode: () => void
+  pasteNode: () => void
+  duplicateNode: () => void
+  undo: () => void
+  redo: () => void
+  saveSnapshot: () => void
+  loadTemplate: (nodes: StudioNode[], edges: Edge[]) => void
   updateServiceConfig: (config: Partial<ServiceConfig>) => void
   updateAuthConfig: (config: Partial<AuthConfig>) => void
   updateEnvConfig: (config: Partial<EnvironmentConfig>) => void
@@ -38,10 +53,18 @@ interface StudioState {
   onConnect: (connection: Connection) => void
 }
 
-export const useStudioStore = create<StudioState>((set) => ({
+function saveToHistory(state: { nodes: StudioNode[]; edges: Edge[] }) {
+  useHistoryStore.getState().pushState({
+    nodes: JSON.parse(JSON.stringify(state.nodes)),
+    edges: JSON.parse(JSON.stringify(state.edges)),
+  })
+}
+
+export const useStudioStore = create<StudioState>((set, get) => ({
   nodes: [],
   edges: [],
   selectedNodeId: null,
+  clipboard: null,
   serviceConfig: { name: 'my-service', version: '1.0.0' },
   authConfig: {
     enabled: false,
@@ -88,23 +111,118 @@ export const useStudioStore = create<StudioState>((set) => ({
   setNodes: (nodes) => set({ nodes }),
   setEdges: (edges) => set({ edges }),
 
-  addNode: (node) => set((state) => ({ nodes: [...state.nodes, node] })),
+  addNode: (node) => {
+    const state = get()
+    saveToHistory(state)
+    set({ nodes: [...state.nodes, node] })
+  },
 
-  updateNode: (id, data) =>
-    set((state) => ({
+  updateNode: (id, data) => {
+    const state = get()
+    saveToHistory(state)
+    set({
       nodes: state.nodes.map((node) =>
         node.id === id ? { ...node, data: { ...node.data, ...data } } : node
       ),
-    })),
+    })
+  },
 
-  removeNode: (id) =>
-    set((state) => ({
+  removeNode: (id) => {
+    const state = get()
+    saveToHistory(state)
+    set({
       nodes: state.nodes.filter((node) => node.id !== id),
       edges: state.edges.filter((edge) => edge.source !== id && edge.target !== id),
       selectedNodeId: state.selectedNodeId === id ? null : state.selectedNodeId,
-    })),
+    })
+  },
 
   selectNode: (id) => set({ selectedNodeId: id }),
+
+  copyNode: () => {
+    const { selectedNodeId, nodes, edges } = get()
+    if (!selectedNodeId) return
+    const node = nodes.find(n => n.id === selectedNodeId)
+    if (!node) return
+    const connectedEdges = edges.filter(e => e.source === selectedNodeId || e.target === selectedNodeId)
+    set({ clipboard: { node: JSON.parse(JSON.stringify(node)), connectedEdges: JSON.parse(JSON.stringify(connectedEdges)) } })
+  },
+
+  pasteNode: () => {
+    const { clipboard, nodes, edges } = get()
+    if (!clipboard) return
+    saveToHistory({ nodes, edges })
+    const newId = `${clipboard.node.type}-${Date.now()}`
+    const newNode: StudioNode = {
+      ...clipboard.node,
+      id: newId,
+      position: {
+        x: clipboard.node.position.x + 50,
+        y: clipboard.node.position.y + 50,
+      },
+      selected: false,
+    }
+    set({ nodes: [...nodes, newNode], selectedNodeId: newId })
+  },
+
+  duplicateNode: () => {
+    const { selectedNodeId, nodes, edges } = get()
+    if (!selectedNodeId) return
+    const node = nodes.find(n => n.id === selectedNodeId)
+    if (!node) return
+    saveToHistory({ nodes, edges })
+    const newId = `${node.type}-${Date.now()}`
+    const newNode: StudioNode = {
+      ...JSON.parse(JSON.stringify(node)),
+      id: newId,
+      position: {
+        x: node.position.x + 50,
+        y: node.position.y + 50,
+      },
+      selected: false,
+    }
+    set({ nodes: [...nodes, newNode], selectedNodeId: newId })
+  },
+
+  undo: () => {
+    const state = get()
+    const history = useHistoryStore.getState()
+    if (!history.canUndo()) return
+    // Push current state to future
+    history.future = [
+      { nodes: JSON.parse(JSON.stringify(state.nodes)), edges: JSON.parse(JSON.stringify(state.edges)) },
+      ...history.future,
+    ]
+    const snapshot = history.undo()
+    if (snapshot) {
+      set({ nodes: snapshot.nodes as StudioNode[], edges: snapshot.edges })
+    }
+  },
+
+  redo: () => {
+    const state = get()
+    const history = useHistoryStore.getState()
+    if (!history.canRedo()) return
+    // Push current state to past
+    history.past = [
+      ...history.past,
+      { nodes: JSON.parse(JSON.stringify(state.nodes)), edges: JSON.parse(JSON.stringify(state.edges)) },
+    ]
+    const snapshot = history.redo()
+    if (snapshot) {
+      set({ nodes: snapshot.nodes as StudioNode[], edges: snapshot.edges })
+    }
+  },
+
+  saveSnapshot: () => {
+    saveToHistory(get())
+  },
+
+  loadTemplate: (nodes, edges) => {
+    const state = get()
+    saveToHistory(state)
+    set({ nodes, edges, selectedNodeId: null })
+  },
 
   updateServiceConfig: (config) =>
     set((state) => ({
@@ -136,13 +254,18 @@ export const useStudioStore = create<StudioState>((set) => ({
       nodes: applyNodeChanges(changes, state.nodes),
     })),
 
-  onEdgesChange: (changes) =>
+  onEdgesChange: (changes) => {
+    // Save to history if edges are being removed
+    const hasRemoval = changes.some(c => c.type === 'remove')
+    if (hasRemoval) saveToHistory(get())
     set((state) => ({
       edges: applyEdgeChanges(changes, state.edges),
-    })),
+    }))
+  },
 
-  onConnect: (connection) =>
-    set((state) => ({
-      edges: addEdge(connection, state.edges),
-    })),
+  onConnect: (connection) => {
+    const state = get()
+    saveToHistory(state)
+    set({ edges: addEdge(connection, state.edges) })
+  },
 }))

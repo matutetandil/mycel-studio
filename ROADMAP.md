@@ -1,8 +1,8 @@
 # Mycel Studio - Roadmap
 
-Cross-referenced against Mycel runtime v1.11.0 documentation (docs/reference/configuration.md, docs/core-concepts/, docs/connectors/, docs/guides/, examples/).
+Cross-referenced against Mycel runtime v1.12.0 documentation (docs/reference/configuration.md, docs/core-concepts/, docs/connectors/, docs/guides/, examples/).
 
-Last updated: 2026-03-10
+Last updated: 2026-03-11
 
 ---
 
@@ -44,6 +44,9 @@ These need fixing regardless of new features:
 | ~~SOAP connector~~ | ~~Not supported~~ | ~~`type = "soap"`~~ | ~~✅ v0.5.0~~ |
 | Named operations | Partial — operations on connectors exist | Full named operations with params and reusable queries | Align with Mycel syntax |
 | Service version | Not shown/configurable | `service { name, version }` exposed in health, metrics, logs | Already in config.hcl generation, verify |
+| **`response` block semantics** | Studio generates HTTP status/headers/body (like `error_response`) | **Mycel v1.12.0**: `response` block contains CEL expressions that transform output AFTER destination. Variables: `input.*` (original request), `output.*` (destination result). For echo flows, only `input` is available. | **CRITICAL** — Rewrite ResponseEditor to be a CEL transform editor (like TransformEditor). Move HTTP status/headers to `error_response` only |
+| **Echo flows** | Studio requires `to` block on all flows | **Mycel v1.12.0**: Flows without `to` block are valid "echo flows" — they return the (optionally transformed) input directly | Allow flows without `to` connector. Valid for APIs that transform+return without external I/O |
+| **Status code overrides** | Not supported | `http_status_code` (REST/SOAP) and `grpc_status_code` (gRPC) in response block override default status | Add to response block editor |
 
 ### Missing Mycel Features (by runtime version)
 
@@ -67,6 +70,9 @@ These need fixing regardless of new features:
 | v1.11.0 | MQTT connector (QoS 0/1/2, TLS, topic wildcards) | ✅ v0.5.0 |
 | v1.11.0 | FTP/SFTP connector (LIST/GET/PUT/DELETE, SSH key auth) | ✅ v0.5.0 |
 | v1.11.0 | Redis Pub/Sub (queue driver, channels, patterns) | ✅ v0.5.0 |
+| v1.12.0 | Echo flows (no `to` block — return transformed input directly) | ⚠️ Partial — see inconsistency below |
+| v1.12.0 | Response block (CEL transforms applied AFTER destination) | ⚠️ Wrong semantics — see inconsistency below |
+| v1.12.0 | Status code overrides (`http_status_code`, `grpc_status_code` in response) | Not implemented |
 
 ### HCL2 Syntax Compliance
 
@@ -151,16 +157,53 @@ to {
 **UI:** "Add target" button in flow properties. Each `to` block is collapsible.
 
 ### 3.4 — Response Block Editor
-**Priority: Medium** — Custom HTTP responses for REST flows.
+**Priority: Medium** — ~~Custom HTTP responses for REST flows.~~ **UPDATED in Mycel v1.12.0:**
+
+The `response` block now contains CEL expressions that transform the output AFTER receiving from the destination (or after transforms for echo flows). It is NOT for HTTP status/headers — those go in `error_response`.
 
 ```hcl
-response {
-  status = 202
-  body   = { message = "Order received", order_id = "${output.id}" }
+# Response block = CEL transforms of output (v1.12.0)
+flow "get_user" {
+  from {
+    connector = "api"
+    operation = "GET /users/:id"
+  }
+  to {
+    connector = "db"
+    target    = "users"
+  }
+  response {
+    id               = "output.id"
+    email            = "lower(output.email)"
+    display_name     = "upper(output.first_name) + ' ' + upper(output.last_name)"
+    http_status_code = "200"
+  }
+}
+
+# Echo flow (no "to" block) — transforms + returns input directly
+flow "process" {
+  from {
+    connector = "api"
+    operation = "POST /process"
+  }
+  response {
+    id         = "uuid()"
+    email      = "lower(input.email)"
+    name       = "upper(input.name)"
+    created_at = "now()"
+  }
 }
 ```
 
-**UI:** Modal editor (already has a TODO in Canvas.tsx).
+**Variables available:**
+- `input.*` — Original request data (always available)
+- `output.*` — Result from destination connector (only when `to` block exists)
+
+**Status code overrides:**
+- `http_status_code` — Override HTTP status (REST, SOAP)
+- `grpc_status_code` — Override gRPC status code
+
+**UI:** ⚠️ **Current ResponseEditor (v0.4.0) has wrong semantics** — it generates HTTP status/headers/body. Must be rewritten as a CEL transform editor (similar to TransformEditor) with `input.*` and `output.*` variables. Status code override field should be a simple number input.
 
 ### 3.5 — Error Handling Updates
 **Priority: Medium** — Align with Mycel's error handling model.
@@ -574,19 +617,19 @@ security {
 
 ---
 
-## Phase 8 — UX Polish
+## Phase 8 — UX Polish ✅ (v0.10.0)
 
-### 8.1 — Undo/Redo
-Track canvas state changes. Ctrl+Z / Ctrl+Shift+Z.
+### 8.1 — Undo/Redo ✅
+Snapshot-based history (50 depth). Tracks node add/remove/update, edge changes, position drag. Ctrl+Z / Ctrl+Shift+Z.
 
-### 8.2 — Copy/Paste
-Duplicate nodes and their configuration. Ctrl+C / Ctrl+V.
+### 8.2 — Copy/Paste ✅
+Copy/paste/duplicate nodes with Ctrl+C/V/D. Clipboard persists across operations.
 
-### 8.3 — Keyboard Shortcuts
-Standard IDE shortcuts: Delete node, Select all, Zoom in/out, Save.
+### 8.3 — Keyboard Shortcuts ✅
+Global handler with platform-aware labels. Shortcuts dialog (Ctrl+/). Skips when typing in inputs/Monaco.
 
-### 8.4 — Template Gallery
-Pre-built patterns from `integration-patterns.md`: REST+DB CRUD, Event processing, Scheduled jobs, Real-time WebSocket, Saga workflow, etc. "New from template" in File menu.
+### 8.4 — Template Gallery ✅
+6 templates across 4 categories. REST+DB CRUD, GraphQL+DB, Scheduled Job, Event Processing, Real-time WebSocket, Order Saga. Ctrl+N or File menu.
 
 ### 8.5 — Auto-save
 Periodic save when using File System Access API.
@@ -642,10 +685,12 @@ Tokenize: keywords (connector, flow, type, step, transform, etc.), strings, numb
 | **5** | Reusability | Named transforms, aspects (incl. on_error), named operations | Phase 4 |
 | **6** | ~~Missing Connectors~~ | ~~Notifications (6), real-time (3), specialized (3 incl. SOAP), MQTT, FTP/SFTP, Redis Pub/Sub~~ + connector profiles (pending) | ~~—~~ ✅ v0.5.0 |
 | **7** | Enterprise Features | Batch processing, sagas, state machines, long-running workflows, auth UI, environments, security, plugins, mocks, WASM | Phase 5 |
-| **8** | UX Polish | Undo/redo, copy/paste, shortcuts, templates, auto-save, runtime validation | Any |
+| **8** | ~~UX Polish~~ | ~~Undo/redo, copy/paste, shortcuts, templates~~, auto-save, runtime validation | ~~Any~~ ✅ v0.10.0 (core items) |
 | **9** | Monaco IDE | HCL syntax highlighting, autocompletion, real-time validation, hover/go-to, LSP | Any |
 
 Phases 6, 8, and 9 can be done in parallel with any other phase.
 
-**Phase 3 is COMPLETE** — All foundation features implemented (v0.4.0).
+**Phase 3 is COMPLETE** — All foundation features implemented (v0.4.0). ⚠️ **Response block needs rewrite** for v1.12.0 semantics.
+**Phase 4 is COMPLETE** — Types & Validators (v0.7.0).
+**Phase 5 is COMPLETE** — Named Transforms & Aspects (v0.8.0).
 **Phase 6 is COMPLETE** — 25 connectors via data-driven registry (v0.5.0). Only connector profiles (6.6) remain.

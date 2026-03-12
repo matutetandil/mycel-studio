@@ -11,6 +11,8 @@ import {
 } from 'lucide-react'
 import { useThemeStore } from '../../stores/useThemeStore'
 import { useProjectStore } from '../../stores/useProjectStore'
+import { useStudioStore } from '../../stores/useStudioStore'
+import { useHistoryStore } from '../../stores/useHistoryStore'
 
 interface MenuItem {
   label?: string
@@ -72,30 +74,18 @@ function MenuDropdown({ label, items }: MenuItemProps) {
   )
 }
 
-export default function MenuBar() {
+interface MenuBarProps {
+  onShowShortcuts?: () => void
+  onShowTemplates?: () => void
+}
+
+export default function MenuBar({ onShowShortcuts, onShowTemplates }: MenuBarProps) {
   const { theme, toggleTheme } = useThemeStore()
   const { projectName, files, isLoading, gitBranch, capabilities, openProject, saveProject, closeProject } = useProjectStore()
+  const { undo, redo, copyNode, pasteNode, duplicateNode, selectedNodeId, clipboard } = useStudioStore()
+  const historyStore = useHistoryStore()
 
   const hasUnsavedChanges = files.some((f) => f.isDirty)
-
-  // Keyboard shortcuts
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      // Ctrl+O - Open Project
-      if (e.ctrlKey && e.key === 'o') {
-        e.preventDefault()
-        openProject()
-      }
-      // Ctrl+S - Save
-      if (e.ctrlKey && e.key === 's') {
-        e.preventDefault()
-        if (hasUnsavedChanges) saveProject()
-      }
-    }
-
-    window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [hasUnsavedChanges, openProject, saveProject])
 
   // Get open label based on provider
   const getOpenLabel = () => {
@@ -116,6 +106,11 @@ export default function MenuBar() {
   const fileMenu = {
     label: 'File',
     items: [
+      {
+        label: 'New from Template...',
+        shortcut: 'Ctrl+N',
+        onClick: onShowTemplates,
+      },
       {
         label: getOpenLabel(),
         shortcut: 'Ctrl+O',
@@ -139,12 +134,12 @@ export default function MenuBar() {
   const editMenu = {
     label: 'Edit',
     items: [
-      { label: 'Undo', shortcut: 'Ctrl+Z', onClick: () => {}, disabled: true },
-      { label: 'Redo', shortcut: 'Ctrl+Y', onClick: () => {}, disabled: true },
+      { label: 'Undo', shortcut: 'Ctrl+Z', onClick: undo, disabled: !historyStore.canUndo() },
+      { label: 'Redo', shortcut: 'Ctrl+Shift+Z', onClick: redo, disabled: !historyStore.canRedo() },
       { separator: true },
-      { label: 'Cut', shortcut: 'Ctrl+X', onClick: () => {} },
-      { label: 'Copy', shortcut: 'Ctrl+C', onClick: () => {} },
-      { label: 'Paste', shortcut: 'Ctrl+V', onClick: () => {} },
+      { label: 'Copy', shortcut: 'Ctrl+C', onClick: copyNode, disabled: !selectedNodeId },
+      { label: 'Paste', shortcut: 'Ctrl+V', onClick: pasteNode, disabled: !clipboard },
+      { label: 'Duplicate', shortcut: 'Ctrl+D', onClick: duplicateNode, disabled: !selectedNodeId },
     ],
   }
 
@@ -163,7 +158,7 @@ export default function MenuBar() {
     label: 'Help',
     items: [
       { label: 'Documentation', onClick: () => window.open('https://github.com/matutetandil/mycel', '_blank') },
-      { label: 'Keyboard Shortcuts', shortcut: 'Ctrl+/', onClick: () => {} },
+      { label: 'Keyboard Shortcuts', shortcut: 'Ctrl+/', onClick: onShowShortcuts },
       { separator: true },
       { label: 'About Mycel Studio', onClick: () => {} },
     ],
