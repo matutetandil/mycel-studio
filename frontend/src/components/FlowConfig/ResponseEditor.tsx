@@ -158,11 +158,11 @@ export default function ResponseEditor({
               language="hcl"
               height="180px"
               placeholder={isEchoFlow
-                ? 'id         = "uuid()"\nemail      = "lower(input.email)"\ncreated_at = "now()"'
-                : 'id         = "output.id"\nemail      = "lower(output.email)"\ncreated_at = "output.created_at"'}
+                ? 'id         = uuid()\nemail      = lower(input.email)\ncreated_at = now()'
+                : 'id         = output.id\nemail      = lower(output.email)\ncreated_at = output.created_at'}
             />
             <p className="text-xs text-neutral-500">
-              Format: <code className="bg-neutral-700 px-1 rounded">field_name = "CEL expression"</code> — one per line
+              Format: <code className="bg-neutral-700 px-1 rounded">field_name = CEL expression</code> — one per line (quotes added automatically)
             </p>
           </div>
 
@@ -221,13 +221,15 @@ export default function ResponseEditor({
               if (eq === -1) return { key: l.trim(), value: '' }
               return { key: l.substring(0, eq).trim(), value: l.substring(eq + 1).trim() }
             })
-            if (httpStatusCode) parsed.push({ key: 'http_status_code', value: `"${httpStatusCode}"` })
-            if (grpcStatusCode) parsed.push({ key: 'grpc_status_code', value: `"${grpcStatusCode}"` })
-            const maxKey = Math.max(...parsed.map(p => p.key.length), 0)
+            // Wrap values in quotes for HCL
+            const withQuotes = parsed.map(p => ({ ...p, value: p.value ? `"${p.value}"` : '' }))
+            if (httpStatusCode) withQuotes.push({ key: 'http_status_code', value: `"${httpStatusCode}"` })
+            if (grpcStatusCode) withQuotes.push({ key: 'grpc_status_code', value: `"${grpcStatusCode}"` })
+            const maxKey = Math.max(...withQuotes.map(p => p.key.length), 0)
             return (
               <div className="p-3 bg-neutral-900 rounded text-xs font-mono text-neutral-400">
                 <div className="text-neutral-500 mb-1">HCL preview:</div>
-                <pre className="text-green-300">{'response {\n'}{parsed.map((p, i) =>
+                <pre className="text-green-300">{'response {\n'}{withQuotes.map((p, i) =>
                   <span key={i} className="text-neutral-300">{'  '}{p.key.padEnd(maxKey)}{p.value ? ` = ${p.value}` : ''}{'\n'}</span>
                 )}<span className="text-green-300">{'}'}</span></pre>
               </div>

@@ -739,12 +739,106 @@ En vez de escribir HCL manualmente, el usuario:
   - Cleaned 8 connector definitions
 - **Build:** ✅ TypeScript + Vite build exitosos
 
+### 2026-03-12 - Mycel v1.12.1 Breaking Changes (upstream)
+- **Estado:** ⚠️ Pendiente de aplicar en Studio
+- **Cambios en Mycel runtime que afectan Studio:**
+  1. **Aspects target flow names (not file paths):**
+     - `on` patterns en aspects ahora matchean contra nombres de flows usando `filepath.Match` glob
+     - Antes: `on = ["flows/**/create_*.hcl"]` (file paths)
+     - Ahora: `on = ["create_*", "*_user"]` (flow names)
+     - Studio's `AspectProperties` genera patterns `on` — debe generar flow name globs, no file paths
+     - `AspectNode.tsx` muestra patterns — actualizar labels/hints
+  2. **Unique name validation per type:**
+     - Parser enforce nombres únicos dentro de cada tipo (connector, flow, type, transform, aspect, validator)
+     - Error: `duplicate flow name "create_user": defined in flows/api.hcl and flows/users.hcl`
+     - Studio ya valida nombres únicos para connectors y flows (v0.3.2), pero falta validar: types, transforms, aspects, validators
+     - Backend `ValidateContent()` ya detecta duplicados semánticos — ampliar a todos los tipos
+  3. **`FlowPath` removed from runtime:**
+     - `FlowHandler` ya no tiene `FlowPath` field — aspects reciben `flowName` directamente
+     - No afecta Studio directamente (Studio no interactúa con el runtime handler)
+- **Benchmark actualizado (Mycel v1.12.0):**
+  - Arquitectura paralela: 5 VPS (3 targets + 1 DB + 1 attacker 4vCPU)
+  - Calibración adaptiva auto-descubre límites del hardware
+  - Standard: 8,437 RPS (15x MuleSoft), Realistic: 204 RPS (2ms median), Stress: UNBREAKABLE
+  - 3.2M requests en 12 min, 0 crashes, $5/server
+- **Action items para siguiente sesión de código:**
+  - Actualizar `AspectProperties` para generar patterns de flow names en vez de file paths
+  - Actualizar hints/placeholders en AspectNode (ej: `"create_*"` en vez de `"flows/**/create_*.hcl"`)
+  - Extender validación de nombres únicos a types, transforms, aspects, validators en frontend
+  - Verificar que backend `ValidateContent()` cubra duplicados en todos los tipos
+
+### 2026-03-13 - Popup Modal Editors & UX Fixes — v0.15.0
+- **Estado:** ✅ Completado
+- **Flow Block Editors → Centered Popup Modals:**
+  - Replaced inline editors in Properties panel with `FlowBlockButton` components
+  - Buttons show summary (field counts, step names, retry config) and open modals via shared Zustand state
+  - `activeFlowEditor` / `openFlowEditor()` in `useStudioStore` — shared between Canvas and Properties
+  - Removed unused `FlowBlockSection` and `InlineFieldMappings` from Properties
+- **StepEditor Rewrite (context-aware):**
+  - MiniEditor (Monaco) for query (SQL), params (JSON), body (JSON), default (JSON)
+  - Connector categories: DB shows query+params, HTTP shows body, MQ shows relevant fields
+  - Connector selector with operations dropdown
+  - `on_error` simplified to match Mycel runtime (skip only, not fail/default)
+- **TransformEditor Rewrite:**
+  - Single Monaco HCL editor replacing individual key-value inputs
+  - Format: `field_name = CEL expression` — one per line
+  - CEL templates insert at bottom, live HCL preview with aligned `=`
+- **ResponseEditor Rewrite:**
+  - Same pattern as Transform — single Monaco HCL editor
+  - Templates: pass through, normalize, echo with metadata, from steps
+  - Status code presets, aligned HCL preview
+- **ErrorHandlingEditor Update:**
+  - Fallback transform and error body use MiniEditor (HCL)
+- **MiniEditor Component (`FlowConfig/MiniEditor.tsx`):**
+  - Reusable Monaco wrapper for modals (sql, json, hcl, plaintext)
+- **Bug Fixes:**
+  - `onKeyDown stopPropagation` on all modal overlays — fixes React Flow intercepting space key
+  - Canvas drop positioning: `screenToFlowPosition()` replaces hardcoded offsets
+- **Palette Tooltips:**
+  - Documentation-based tooltips for all 32 components (25 connectors + 7 logic/schema)
+- **HCL Generation:**
+  - Step: added `body {}` sub-block, `format` attribute
+  - Params: array-style for numeric keys, map-style for named keys
+- **Commits:** `6e40691`, `c862da7`
+- **Build:** ✅ TypeScript + Vite + Docker build exitosos
+
+### 2026-03-13 - File as Source of Truth (Generator Fix) — v0.15.1
+- **Estado:** ✅ Completado
+- **Problema:** El generador HCL regeneraba archivos que ya existían en disco, sobreescribiendo contenido real (sub-blocks como `consumer {}`, formato original, etc.)
+- **Principio:** El archivo es la fuente de verdad, no el canvas. El canvas actualiza el archivo, y se dibuja según el archivo.
+- **Fix — Generator filters by `hclFile`:**
+  - Connectors: ya estaba filtrado (sesión anterior)
+  - **Flows:** ahora solo genera para flows NUEVOS (sin `hclFile`)
+  - **Types:** solo genera para types nuevos
+  - **Validators:** solo genera para validators nuevos
+  - **Transforms:** solo genera para transforms nuevos
+  - **Aspects:** solo genera para aspects nuevos
+  - **Sagas:** solo genera para sagas nuevos
+  - **State Machines:** solo genera para state machines nuevos
+- **`hclFile` added to all node types:**
+  - `TypeNodeData`, `TransformNodeData`, `ValidatorNodeData`, `AspectNodeData`, `SagaNodeData`, `StateMachineNodeData`
+- **Backend SourceFile tracking for all block types:**
+  - Parser: `TypeConfig`, `TransformConfig`, `ValidatorConfig`, `AspectConfig` ahora tienen `SourceFile` con `block.DefRange.Filename`
+  - Models: `sourceFile` JSON field agregado a los 4 tipos
+  - Handler: `makeRelativePath()` aplicado a los 4 tipos en la respuesta
+- **Frontend useSync.ts:**
+  - `convertProjectToNodes()` ahora crea nodos para types, transforms, validators y aspects (antes solo connectors y flows)
+  - Todos pasan `sourceFile` → `hclFile` correctamente
+- **FileTree:** Usa `hclFile` para navegación en todos los tipos de nodo
+- **Build:** ✅ TypeScript + Go + Docker build exitosos
+- **Docker:** ✅ Running en http://localhost:8080
+
 ---
 
 ## Próximos pasos (pendientes para siguiente sesión)
 
 ### Todas las fases principales COMPLETADAS (3-9) + UX Polish + Connector Alignment
 
-### Pendientes menores:
-- Phase 9.5: Full LSP via Backend (monaco-languageclient + WebSocket)
+### Pendientes (por prioridad):
+- **Mycel v1.12.1 compatibility:** Aspect patterns → flow names, unique name validation para todos los tipos
+- **Mycel v1.12.2-1.12.3 compatibility:**
+  - Structured error object in on_error aspects (`error.code`, `error.message`, `error.type`) — update aspect property hints
+  - Flow invocation from aspects: `action { flow = "name" }` — AspectProperties needs `flow` field (mutually exclusive with `connector`), UI radio/toggle to choose between connector action and flow action
+  - Internal flows (no `from` block) — Studio should allow creating flows without a source connector
+- **Mycel LSP:** Mycel runtime próximo paso es un LSP — cuando esté listo, integrar via monaco-languageclient + WebSocket (Phase 9.5)
 - CDC: tables field

@@ -13,7 +13,9 @@ import '@xyflow/react/dist/style.css'
 
 import { useStudioStore } from '../../stores/useStudioStore'
 import { useProjectStore } from '../../stores/useProjectStore'
+import { consumePendingViewport } from '../../stores/useWorkspaceStore'
 import { nodeTypes } from '../Nodes'
+import { edgeTypes } from '../Edges'
 import { useSync } from '../../hooks/useSync'
 import { getFlowBlock, GenericBlockEditor } from '../../flow-blocks'
 import {
@@ -24,7 +26,38 @@ import {
   BatchEditor,
   ErrorHandlingEditor,
 } from '../FlowConfig'
-import type { ConnectorNodeData, FlowNodeData, FlowTransform, FlowStep, FlowResponse, FlowBatch, FlowErrorHandling } from '../../types'
+import type { ConnectorNodeData, FlowNodeData, AspectNodeData, FlowTransform, FlowStep, FlowResponse, FlowBatch, FlowErrorHandling } from '../../types'
+
+// Simple glob matcher compatible with Go's filepath.Match
+function globMatch(pattern: string, name: string): boolean {
+  let pi = 0, ni = 0
+  while (pi < pattern.length && ni < name.length) {
+    const pc = pattern[pi]
+    if (pc === '*') {
+      pi++
+      if (pi === pattern.length) return true
+      for (let k = ni; k <= name.length; k++) {
+        if (globMatch(pattern.slice(pi), name.slice(k))) return true
+      }
+      return false
+    } else if (pc === '?') {
+      pi++; ni++
+    } else if (pc === '[') {
+      const close = pattern.indexOf(']', pi + 1)
+      if (close === -1) return false
+      const negate = pattern[pi + 1] === '^' || pattern[pi + 1] === '!'
+      const chars = pattern.slice(pi + (negate ? 2 : 1), close)
+      const match = chars.includes(name[ni])
+      if (negate ? match : !match) return false
+      pi = close + 1; ni++
+    } else {
+      if (pc !== name[ni]) return false
+      pi++; ni++
+    }
+  }
+  while (pi < pattern.length && pattern[pi] === '*') pi++
+  return pi === pattern.length && ni === name.length
+}
 
 type StudioNode = Node<ConnectorNodeData | FlowNodeData>
 
@@ -46,10 +79,18 @@ export default function Canvas() {
     saveSnapshot,
   } = useStudioStore()
 
-  const { activeFile } = useProjectStore()
-  const { screenToFlowPosition } = useReactFlow()
+  const { activeFile, projectName } = useProjectStore()
+  const { screenToFlowPosition, setViewport } = useReactFlow()
   const { syncToHCL } = useSync()
   const prevNodesRef = useRef<string>('')
+
+  // Restore workspace viewport if pending
+  useEffect(() => {
+    const viewport = consumePendingViewport()
+    if (viewport) {
+      setTimeout(() => setViewport(viewport, { duration: 200 }), 200)
+    }
+  }, [setViewport])
 
   // Context menu state
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null)
@@ -90,6 +131,94 @@ export default function Canvas() {
       })
   }, [nodes])
 
+  // Generate virtual aspect edges (aspect→flows by pattern, aspect→connector by action)
+  const aspectEdges = useMemo(() => {
+    const aspectNodes = nodes.filter(n => n.type === 'aspect')
+    if (aspectNodes.length === 0) return []
+
+    const flowNodes = nodes.filter(n => n.type === 'flow')
+    // Build connector name → node id lookup
+    const connectorMap = new Map<string, string>()
+    for (const n of nodes.filter(n => n.type === 'connector')) {
+      const cd = n.data as ConnectorNodeData
+      const name = cd.label.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '')
+      connectorMap.set(name, n.id)
+    }
+
+    interface VirtualEdge {
+      id: string
+      source: string
+      sourceHandle: string
+      target: string
+      targetHandle: string
+      type: string
+      data: { when: string }
+      selectable: boolean
+      deletable: boolean
+      animated?: boolean
+      style?: Record<string, unknown>
+    }
+
+    const virtualEdges: VirtualEdge[] = []
+
+    for (const aspectNode of aspectNodes) {
+      const aspectData = aspectNode.data as AspectNodeData
+
+      // Aspect → flow edges (pattern matching)
+      const patterns = aspectData.on || []
+      if (patterns.length > 0) {
+        for (const flowNode of flowNodes) {
+          const flowData = flowNode.data as FlowNodeData
+          const flowName = flowData.label.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '')
+          if (!flowName) continue
+
+          const matches = patterns.some(p => globMatch(p, flowName))
+          if (matches) {
+            virtualEdges.push({
+              id: `aspect-${aspectNode.id}-${flowNode.id}`,
+              source: aspectNode.id,
+              sourceHandle: 'aspect-flows',
+              target: flowNode.id,
+              targetHandle: 'aspect-target',
+              type: 'aspect',
+              data: { when: aspectData.when },
+              selectable: false,
+              deletable: false,
+            })
+          }
+        }
+      }
+
+      // Aspect → action connector edge
+      const actionConnector = aspectData.action?.connector
+      if (actionConnector) {
+        const connectorId = connectorMap.get(actionConnector)
+        if (connectorId) {
+          virtualEdges.push({
+            id: `aspect-action-${aspectNode.id}-${connectorId}`,
+            source: aspectNode.id,
+            sourceHandle: 'action',
+            target: connectorId,
+            targetHandle: '',
+            type: 'smoothstep',
+            data: { when: aspectData.when },
+            selectable: false,
+            deletable: false,
+            animated: true,
+            style: { stroke: '#a3a3a3', strokeWidth: 1.5 },
+          })
+        }
+      }
+    }
+
+    return virtualEdges
+  }, [nodes])
+
+  // Merge real edges with virtual aspect edges
+  const allEdges = useMemo(() => {
+    return [...edges, ...aspectEdges]
+  }, [edges, aspectEdges])
+
   // Sync to HCL when nodes change significantly
   useEffect(() => {
     if (!activeFile) return
@@ -98,11 +227,14 @@ export default function Canvas() {
     )
     if (nodesData !== prevNodesRef.current) {
       prevNodesRef.current = nodesData
-      if (nodes.length > 0) {
+      // Only sync canvas → HCL via backend when there's NO project open.
+      // When a project is open, files on disk are the source of truth —
+      // the backend generator doesn't handle sub-blocks properly.
+      if (nodes.length > 0 && !projectName) {
         syncToHCL(activeFile)
       }
     }
-  }, [nodes, activeFile, syncToHCL])
+  }, [nodes, activeFile, syncToHCL, projectName])
 
   const onSelectionChange: OnSelectionChangeFunc = useCallback(
     ({ nodes: selectedNodes }) => {
@@ -232,7 +364,7 @@ export default function Canvas() {
     <div className="flex-1 h-full bg-neutral-950">
       <ReactFlow
         nodes={nodes}
-        edges={edges}
+        edges={allEdges}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
@@ -242,7 +374,9 @@ export default function Canvas() {
         onNodeDragStart={onNodeDragStart}
         onNodeContextMenu={onNodeContextMenu}
         nodeTypes={nodeTypes}
+        edgeTypes={edgeTypes}
         fitView
+        fitViewOptions={{ maxZoom: 1, padding: 0.3 }}
         deleteKeyCode={['Backspace', 'Delete']}
         edgesReconnectable
         elementsSelectable

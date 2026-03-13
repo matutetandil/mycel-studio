@@ -41,6 +41,12 @@ function fieldsToCode(fields: FieldMapping[]): string {
     .join('\n')
 }
 
+// Strip optional surrounding quotes from a value (user may or may not type them)
+function stripQuotes(s: string): string {
+  if (s.length >= 2 && s[0] === '"' && s[s.length - 1] === '"') return s.slice(1, -1)
+  return s
+}
+
 function codeToFields(code: string): FieldMapping[] {
   if (!code.trim()) return []
   return code.split('\n')
@@ -50,7 +56,7 @@ function codeToFields(code: string): FieldMapping[] {
       return {
         id: `field-${idx}-${Date.now()}`,
         key: line.substring(0, eqIdx).trim(),
-        expression: line.substring(eqIdx + 1).trim(),
+        expression: stripQuotes(line.substring(eqIdx + 1).trim()),
       }
     })
     .filter(f => f.key)
@@ -221,10 +227,10 @@ export default function TransformEditor({
                 onChange={setCode}
                 language="hcl"
                 height="200px"
-                placeholder={'id         = "uuid()"\nemail      = "lower(input.email)"\ncreated_at = "now()"'}
+                placeholder={'id         = uuid()\nemail      = lower(input.email)\ncreated_at = now()'}
               />
               <p className="text-xs text-neutral-500">
-                Format: <code className="bg-neutral-700 px-1 rounded">field_name = "CEL expression"</code> — one per line
+                Format: <code className="bg-neutral-700 px-1 rounded">field_name = CEL expression</code> — one per line (quotes added automatically)
               </p>
             </div>
           </div>
@@ -242,7 +248,7 @@ export default function TransformEditor({
               <div className="p-3 bg-neutral-900 rounded text-xs font-mono text-neutral-400">
                 <div className="text-neutral-500 mb-1">HCL preview:</div>
                 <pre className="text-amber-300">{'transform {\n'}{parsed.map((p, i) =>
-                  <span key={i} className="text-neutral-300">{'  '}{p.key.padEnd(maxKey)}{p.value ? ` = ${p.value}` : ''}{'\n'}</span>
+                  <span key={i} className="text-neutral-300">{'  '}{p.key.padEnd(maxKey)}{p.value ? ` = "${p.value}"` : ''}{'\n'}</span>
                 )}<span className="text-amber-300">{'}'}</span></pre>
               </div>
             )

@@ -3,6 +3,7 @@ import { useEffect } from 'react'
 import { useThemeStore } from './stores/useThemeStore'
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts'
 import { useAutoSave } from './hooks/useAutoSave'
+import { useWorkspacePersistence } from './hooks/useWorkspacePersistence'
 import MenuBar from './components/MenuBar/MenuBar'
 import Sidebar from './components/Sidebar/Sidebar'
 import Canvas from './components/Canvas/Canvas'
@@ -11,10 +12,11 @@ import EditorPanel from './components/EditorPanel'
 import ShortcutsDialog from './components/ShortcutsDialog'
 import TemplateGallery from './components/TemplateGallery'
 
-function App() {
+function AppInner() {
   const { theme } = useThemeStore()
   const { showShortcuts, setShowShortcuts, showTemplates, setShowTemplates } = useKeyboardShortcuts()
   useAutoSave()
+  useWorkspacePersistence()
 
   // Apply theme class to document
   useEffect(() => {
@@ -23,38 +25,44 @@ function App() {
   }, [theme])
 
   return (
-    <ReactFlowProvider>
-      <div className={`h-screen flex flex-col ${theme === 'dark' ? 'bg-neutral-950 text-white' : 'bg-white text-gray-900'}`}>
-        {/* Menu Bar */}
-        <MenuBar
-          onShowShortcuts={() => setShowShortcuts(true)}
-          onShowTemplates={() => setShowTemplates(true)}
-        />
+    <div className={`h-screen flex flex-col ${theme === 'dark' ? 'bg-neutral-950 text-white' : 'bg-white text-gray-900'}`}>
+      {/* Menu Bar */}
+      <MenuBar
+        onShowShortcuts={() => setShowShortcuts(true)}
+        onShowTemplates={() => setShowTemplates(true)}
+      />
 
-        {/* Main content */}
-        <div className="flex-1 flex overflow-hidden">
-          {/* Left sidebar - File Tree + Palette */}
-          <Sidebar />
+      {/* Main content */}
+      <div className="flex-1 flex overflow-hidden">
+        {/* Left sidebar - File Tree + Palette */}
+        <Sidebar />
 
-          {/* Center - Canvas and Editor */}
-          <div className="flex-1 flex flex-col overflow-hidden">
-            {/* Canvas area */}
-            <div className="flex-1 min-h-0">
-              <Canvas />
-            </div>
-
-            {/* Editor panel with tabs, split, resize */}
-            <EditorPanel />
+        {/* Center - Canvas and Editor */}
+        <div className="flex-1 flex flex-col overflow-hidden">
+          {/* Canvas area */}
+          <div className="flex-1 min-h-0">
+            <Canvas />
           </div>
 
-          {/* Right sidebar - Properties */}
-          <Properties />
+          {/* Editor panel with tabs, split, resize */}
+          <EditorPanel />
         </div>
 
-        {/* Dialogs */}
-        <ShortcutsDialog isOpen={showShortcuts} onClose={() => setShowShortcuts(false)} />
-        <TemplateGallery isOpen={showTemplates} onClose={() => setShowTemplates(false)} />
+        {/* Right sidebar - Properties */}
+        <Properties />
       </div>
+
+      {/* Dialogs */}
+      <ShortcutsDialog isOpen={showShortcuts} onClose={() => setShowShortcuts(false)} />
+      <TemplateGallery isOpen={showTemplates} onClose={() => setShowTemplates(false)} />
+    </div>
+  )
+}
+
+function App() {
+  return (
+    <ReactFlowProvider>
+      <AppInner />
     </ReactFlowProvider>
   )
 }

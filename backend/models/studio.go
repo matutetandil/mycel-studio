@@ -24,6 +24,7 @@ type ConnectorConfig struct {
 	Name       string                 `json:"name"`
 	Type       string                 `json:"type"`
 	Driver     string                 `json:"driver,omitempty"`
+	SourceFile string                 `json:"sourceFile,omitempty"`
 	Properties map[string]interface{} `json:"properties,omitempty"`
 }
 
@@ -151,8 +152,9 @@ type RetryConfig struct {
 
 // TypeConfig represents a type block.
 type TypeConfig struct {
-	Name   string                 `json:"name"`
-	Fields map[string]FieldConfig `json:"fields"`
+	Name       string                 `json:"name"`
+	SourceFile string                 `json:"sourceFile,omitempty"`
+	Fields     map[string]FieldConfig `json:"fields"`
 }
 
 // FieldConfig represents a field in a type.
@@ -174,14 +176,16 @@ type FieldConfig struct {
 
 // TransformConfig represents a named transform block.
 type TransformConfig struct {
-	Name     string            `json:"name"`
-	Mappings map[string]string `json:"mappings"`
+	Name       string            `json:"name"`
+	SourceFile string            `json:"sourceFile,omitempty"`
+	Mappings   map[string]string `json:"mappings"`
 }
 
 // ValidatorConfig represents a validator block.
 type ValidatorConfig struct {
-	Name     string `json:"name"`
-	Type     string `json:"type"` // regex, cel, wasm
+	Name       string `json:"name"`
+	SourceFile string `json:"sourceFile,omitempty"`
+	Type       string `json:"type"` // regex, cel, wasm
 	Pattern  string `json:"pattern,omitempty"`
 	Expr     string `json:"expr,omitempty"`
 	Module   string `json:"module,omitempty"`
@@ -192,6 +196,7 @@ type ValidatorConfig struct {
 // AspectConfig represents an aspect block.
 type AspectConfig struct {
 	Name       string                 `json:"name"`
+	SourceFile string                 `json:"sourceFile,omitempty"`
 	On         []string               `json:"on"`
 	When       string                 `json:"when"` // before, after, around, on_error
 	Condition  string                 `json:"condition,omitempty"`
@@ -223,12 +228,20 @@ type NamedCacheConfig struct {
 	TTL     string `json:"ttl"`
 }
 
+// ParseFileEntry is a named file for multi-file parsing.
+type ParseFileEntry struct {
+	Path    string `json:"path"`
+	Content string `json:"content"`
+}
+
 // ParseRequest is the request body for /api/parse.
 type ParseRequest struct {
 	// Path to the project directory (for parsing all files)
 	Path string `json:"path,omitempty"`
 	// Content is raw HCL content (for parsing a single snippet)
 	Content string `json:"content,omitempty"`
+	// Files is an array of named HCL files (for multi-file parsing from browser)
+	Files []ParseFileEntry `json:"files,omitempty"`
 }
 
 // ParseResponse is the response from /api/parse.

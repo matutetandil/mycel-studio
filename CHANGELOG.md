@@ -2,6 +2,33 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.15.0] - File-as-Source-of-Truth Architecture
+
+### Added
+
+- **Mycel root detection** — Detects `config.hcl` location to determine the root directory for all Mycel files (e.g., `src/`). All generated paths are relative to this root
+- **Source file tracking** — Backend parser now tracks which file each block was parsed from (`sourceFile`), carried through to canvas nodes via `hclFile` property
+- **Full project parsing** — Types, transforms, validators, and aspects are now parsed from HCL and rendered as canvas nodes (previously only connectors and flows)
+- **`.env` file loading** — Parses `.env` files on project open and populates the environment variables panel. Detects secrets via `.env.example`
+- **Resizable sidebar sections** — Explorer and Components sections have a draggable divider to adjust relative heights
+- **Layout persistence stores** — `useLayoutStore` for panel widths/collapse state, `useWorkspaceStore` for canvas viewport persistence
+- **Aspect edge visualization** — Virtual edges from aspect nodes to matched flows (glob pattern) and action connectors
+- **Workspace persistence hook** — `useWorkspacePersistence` auto-saves canvas viewport and node positions
+
+### Fixed
+
+- **Files no longer overwritten by generator** — Existing HCL files on disk are never regenerated or modified. The canvas reads from files; only new nodes generate new files
+- **`syncToHCL` disabled for open projects** — Canvas-to-HCL sync via backend was corrupting files with Go's `map[]` format. Disabled when a project is open (files on disk are source of truth)
+- **Hyphen preservation in identifiers** — `toIdentifier()` now preserves hyphens (`sales-consultant-queue` stays as-is instead of becoming `salesconsultantqueue`)
+- **Generated paths match real paths** — Generator prefixes all paths with `mycelRoot` so `connectors/x.hcl` becomes `src/connectors/x.hcl` when config.hcl is in `src/`
+- **Save now persists new files** — `saveProject()` merges generated files for new canvas nodes with existing project files before writing to disk
+- **`config.hcl` no longer regenerated** — `existingPaths` check prevents overwriting existing config
+
+### Changed
+
+- **`generateProject()` signature** — Now accepts `mycelRoot` and `existingPaths` parameters to support the file-as-source-of-truth architecture
+- **Node types extended with `hclFile`** — `TypeNodeData`, `TransformNodeData`, `ValidatorNodeData`, `AspectNodeData`, `SagaNodeData`, `StateMachineNodeData` all track their source file
+
 ## [0.14.0] - UX Improvements & Connector Cleanup
 
 ### Added

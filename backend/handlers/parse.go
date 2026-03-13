@@ -28,8 +28,8 @@ func HandleParse(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Validate request
-	if req.Path == "" && req.Content == "" {
-		sendParseError(w, "Either 'path' or 'content' must be provided")
+	if req.Path == "" && req.Content == "" && len(req.Files) == 0 {
+		sendParseError(w, "Either 'path', 'content', or 'files' must be provided")
 		return
 	}
 
@@ -52,6 +52,13 @@ func HandleParse(w http.ResponseWriter, r *http.Request) {
 		} else {
 			config, err = hclParser.ParseFile(ctx, req.Path)
 		}
+	} else if len(req.Files) > 0 {
+		// Parse multiple named files (from browser File System Access API)
+		fileMap := make(map[string]string, len(req.Files))
+		for _, f := range req.Files {
+			fileMap[f.Path] = f.Content
+		}
+		config, err = hclParser.ParseMultipleFiles(ctx, fileMap)
 	} else {
 		// Parse inline content
 		config, err = hclParser.ParseContent(ctx, req.Content, "inline.hcl")
@@ -102,6 +109,7 @@ func convertToStudioProject(config *parser.Configuration, basePath string) *mode
 			Name:       conn.Name,
 			Type:       conn.Type,
 			Driver:     conn.Driver,
+			SourceFile: makeRelativePath(conn.SourceFile, basePath),
 			Properties: conn.Properties,
 		})
 	}
@@ -238,8 +246,9 @@ func convertToStudioProject(config *parser.Configuration, basePath string) *mode
 	// Convert types
 	for _, typ := range config.Types {
 		typeConfig := models.TypeConfig{
-			Name:   typ.Name,
-			Fields: make(map[string]models.FieldConfig),
+			Name:       typ.Name,
+			SourceFile: makeRelativePath(typ.SourceFile, basePath),
+			Fields:     make(map[string]models.FieldConfig),
 		}
 
 		for fieldName, field := range typ.Fields {
@@ -261,32 +270,35 @@ func convertToStudioProject(config *parser.Configuration, basePath string) *mode
 	// Convert transforms
 	for _, tr := range config.Transforms {
 		project.Transforms = append(project.Transforms, models.TransformConfig{
-			Name:     tr.Name,
-			Mappings: tr.Mappings,
+			Name:       tr.Name,
+			SourceFile: makeRelativePath(tr.SourceFile, basePath),
+			Mappings:   tr.Mappings,
 		})
 	}
 
 	// Convert validators
 	for _, val := range config.Validators {
 		project.Validators = append(project.Validators, models.ValidatorConfig{
-			Name:     val.Name,
-			Type:     val.Type,
-			Pattern:  val.Pattern,
-			Expr:     val.Expr,
-			Module:   val.Module,
-			Function: val.Entrypoint,
-			Message:  val.Message,
+			Name:       val.Name,
+			SourceFile: makeRelativePath(val.SourceFile, basePath),
+			Type:       val.Type,
+			Pattern:    val.Pattern,
+			Expr:       val.Expr,
+			Module:     val.Module,
+			Function:   val.Entrypoint,
+			Message:    val.Message,
 		})
 	}
 
 	// Convert aspects
 	for _, asp := range config.Aspects {
 		aspectConfig := models.AspectConfig{
-			Name:      asp.Name,
-			On:        asp.On,
-			When:      asp.When,
-			Condition: asp.Condition,
-			Priority:  asp.Priority,
+			Name:       asp.Name,
+			SourceFile: makeRelativePath(asp.SourceFile, basePath),
+			On:         asp.On,
+			When:       asp.When,
+			Condition:  asp.Condition,
+			Priority:   asp.Priority,
 		}
 
 		if asp.Action != nil {

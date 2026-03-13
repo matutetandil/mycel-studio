@@ -6,6 +6,7 @@ import {
   Folder,
   Circle,
   Plus,
+  FolderPlus,
   Package,
   AlertTriangle,
 } from 'lucide-react'
@@ -84,13 +85,15 @@ function openFileInEditor(filePath: string, revealLine?: number) {
 }
 
 export default function FileTree() {
-  const { projectName, files, activeFile, setActiveFile, openProject, createFile, capabilities } = useProjectStore()
+  const { projectName, files, activeFile, setActiveFile, openProject, createFile, createDirectory, capabilities, mycelRoot } = useProjectStore()
   const { nodes, edges, selectedNodeId, serviceConfig, authConfig, envConfig, securityConfig, pluginConfig } = useStudioStore()
   const editorActiveTabId = useEditorPanelStore(s => s.groups.find(g => g.id === s.activeGroupId)?.activeTabId || null)
   const [isExpanded, setIsExpanded] = useState(true)
 
-  // Generate project from canvas
-  const generatedProject = useMemo(() => generateProject(nodes, edges, serviceConfig, authConfig, envConfig, securityConfig, pluginConfig), [nodes, edges, serviceConfig, authConfig, envConfig, securityConfig, pluginConfig])
+  // Generate project from canvas — pass mycelRoot and existing file paths so generator
+  // prefixes correctly and skips files that already exist on disk
+  const existingPaths = useMemo(() => new Set(files.map(f => f.relativePath)), [files])
+  const generatedProject = useMemo(() => generateProject(nodes, edges, serviceConfig, authConfig, envConfig, securityConfig, pluginConfig, mycelRoot, existingPaths), [nodes, edges, serviceConfig, authConfig, envConfig, securityConfig, pluginConfig, mycelRoot, existingPaths])
 
   // Track the previously opened file per node, so we can rename tabs on label change
   const prevNodeFileRef = useRef<Record<string, string>>({})
@@ -118,14 +121,14 @@ export default function FileTree() {
         const name = toIdentifier(data.label)
 
         const filePathMap: Record<string, string> = {
-          connector: `connectors/${name}.hcl`,
+          connector: (data as ConnectorNodeData).hclFile || `connectors/${name}.hcl`,
           flow: (data as FlowNodeData).hclFile || 'flows/flows.hcl',
-          type: 'types/types.hcl',
-          validator: 'validators/validators.hcl',
-          transform: 'transforms/transforms.hcl',
-          aspect: 'aspects/aspects.hcl',
-          saga: 'sagas/sagas.hcl',
-          state_machine: 'machines/machines.hcl',
+          type: (data as Record<string, unknown>).hclFile as string || 'types/types.hcl',
+          validator: (data as Record<string, unknown>).hclFile as string || 'validators/validators.hcl',
+          transform: (data as Record<string, unknown>).hclFile as string || 'transforms/transforms.hcl',
+          aspect: (data as Record<string, unknown>).hclFile as string || 'aspects/aspects.hcl',
+          saga: (data as Record<string, unknown>).hclFile as string || 'sagas/sagas.hcl',
+          state_machine: (data as Record<string, unknown>).hclFile as string || 'machines/machines.hcl',
         }
         const filePath = filePathMap[selectedNode.type || '']
         if (filePath) {
@@ -134,7 +137,7 @@ export default function FileTree() {
           // Compute line to reveal for blocks sharing a file
           let revealLine: number | undefined
           const hclBlockType: Record<string, string> = {
-            flow: 'flow', type: 'type', validator: 'validator',
+            connector: 'connector', flow: 'flow', type: 'type', validator: 'validator',
             transform: 'transform', aspect: 'aspect', saga: 'saga',
             state_machine: 'state_machine',
           }
@@ -150,12 +153,9 @@ export default function FileTree() {
             if (revealLine) {
               setTimeout(() => useEditorPanelStore.getState().setRevealLine(revealLine!), 50)
             }
-          } else if (!prevPath) {
-            // First time selecting — open file
+          } else {
+            // Open file (or activate existing tab) and scroll to block
             openFileInEditor(filePath, revealLine)
-          } else if (revealLine) {
-            // Same file, just scroll to the flow
-            setTimeout(() => useEditorPanelStore.getState().setRevealLine(revealLine!), 50)
           }
 
           prevNodeFileRef.current[selectedNodeId] = filePath
@@ -169,11 +169,43 @@ export default function FileTree() {
   }, [selectedNodeId, nodes, projectName, setActiveFile, generatedProject])
 
   const handleNewFile = () => {
-    const fileName = prompt('Enter file name (e.g., flows/users.hcl):')
-    if (fileName) {
-      createFile(fileName)
+    const fileName = prompt('Enter file path (e.g., flows/users.hcl):')
+    if (fileName?.trim()) {
+      createFile(fileName.trim())
     }
   }
+
+  const handleNewFolder = () => {
+    const dirName = prompt('Enter directory path (e.g., flows):')
+    if (dirName?.trim()) {
+      createDirectory(dirName.trim())
+    }
+  }
+
+  // Hidden files that shouldn't appear in the tree
+  const HIDDEN_FILES = ['.mycel-studio.json']
+
+  // Merge real project files with generated files (generated files that don't exist on disk)
+  const mergedFiles = useMemo(() => {
+    const visibleFiles = files.filter(f => !HIDDEN_FILES.includes(f.name))
+    const realPaths = new Set(visibleFiles.map(f => f.relativePath))
+    const generatedAsProject: ProjectFile[] = generatedProject.files
+      .filter(gf => !realPaths.has(gf.path))
+      .filter(gf => !HIDDEN_FILES.includes(gf.name))
+      .map(gf => ({
+        name: gf.name,
+        path: gf.path,
+        relativePath: gf.path,
+        content: gf.content,
+        isDirty: false,
+        gitStatus: 'new' as const,
+      }))
+    return [...visibleFiles, ...generatedAsProject]
+  }, [files, generatedProject])
+
+  // Build nested tree from merged file list (must be before early returns — hooks order)
+  const tree = useMemo(() => buildFileTree(mergedFiles), [mergedFiles])
+  const currentActiveFile = editorActiveTabId || activeFile
 
   const getOpenLabel = () => {
     if (capabilities.canOpenFolder) {
@@ -216,20 +248,10 @@ export default function FileTree() {
     )
   }
 
-  // Show real project files
-  const filesByDir = files.reduce((acc, file) => {
-    const parts = file.relativePath.split('/')
-    const dir = parts.length > 1 ? parts[0] : ''
-    if (!acc[dir]) acc[dir] = []
-    acc[dir].push(file)
-    return acc
-  }, {} as Record<string, ProjectFile[]>)
-
-  const sortedDirs = Object.keys(filesByDir).sort((a, b) => {
-    if (a === '') return -1
-    if (b === '') return 1
-    return a.localeCompare(b)
-  })
+  const handleFileClick = (path: string) => {
+    setActiveFile(path)
+    openFileInEditor(path)
+  }
 
   return (
     <div className="text-sm">
@@ -244,23 +266,26 @@ export default function FileTree() {
 
       {isExpanded && (
         <div className="pl-2">
-          {sortedDirs.map((dir) => (
-            <DirectorySection
-              key={dir || 'root'}
-              name={dir}
-              files={filesByDir[dir]}
-              activeFile={activeFile}
-              onFileClick={setActiveFile}
-            />
-          ))}
+          <FileTreeNode node={tree} activeFile={currentActiveFile} onFileClick={handleFileClick} isRoot />
 
-          <button
-            onClick={handleNewFile}
-            className="w-full flex items-center gap-2 px-2 py-1 text-sm text-neutral-500 hover:text-neutral-300 hover:bg-neutral-800 rounded mt-1"
-          >
-            <Plus className="w-4 h-4" />
-            <span>New file...</span>
-          </button>
+          <div className="flex gap-1 mt-1 px-1">
+            <button
+              onClick={handleNewFile}
+              className="flex-1 flex items-center justify-center gap-1 px-2 py-1 text-xs text-neutral-500 hover:text-neutral-300 hover:bg-neutral-800 rounded"
+              title="New file"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>File</span>
+            </button>
+            <button
+              onClick={handleNewFolder}
+              className="flex-1 flex items-center justify-center gap-1 px-2 py-1 text-xs text-neutral-500 hover:text-neutral-300 hover:bg-neutral-800 rounded"
+              title="New folder"
+            >
+              <FolderPlus className="w-3.5 h-3.5" />
+              <span>Folder</span>
+            </button>
+          </div>
         </div>
       )}
     </div>
@@ -382,20 +407,59 @@ function VirtualProjectTree({ project, activeFile, onFileClick, onOpenProject, o
   )
 }
 
-interface DirectorySectionProps {
+// Recursive tree node for files/directories
+interface TreeNode {
   name: string
+  children: Map<string, TreeNode>
   files: ProjectFile[]
-  activeFile: string | null
-  onFileClick: (relativePath: string) => void
 }
 
-function DirectorySection({ name, files, activeFile, onFileClick }: DirectorySectionProps) {
+function buildFileTree(files: ProjectFile[]): TreeNode {
+  const root: TreeNode = { name: '', children: new Map(), files: [] }
+
+  for (const file of files) {
+    const parts = file.relativePath.split('/')
+    let current = root
+
+    // Navigate/create directory nodes
+    for (let i = 0; i < parts.length - 1; i++) {
+      const dirName = parts[i]
+      if (!current.children.has(dirName)) {
+        current.children.set(dirName, { name: dirName, children: new Map(), files: [] })
+      }
+      current = current.children.get(dirName)!
+    }
+
+    current.files.push(file)
+  }
+
+  return root
+}
+
+function FileTreeNode({
+  node,
+  activeFile,
+  onFileClick,
+  isRoot,
+}: {
+  node: TreeNode
+  activeFile: string | null
+  onFileClick: (path: string) => void
+  isRoot?: boolean
+}) {
   const [isExpanded, setIsExpanded] = useState(true)
 
-  if (!name) {
+  // Sort: directories first, then files
+  const sortedDirs = [...node.children.entries()].sort((a, b) => a[0].localeCompare(b[0]))
+  const sortedFiles = [...node.files].sort((a, b) => a.name.localeCompare(b.name))
+
+  if (isRoot) {
     return (
       <>
-        {files.map((file) => (
+        {sortedDirs.map(([name, child]) => (
+          <FileTreeNode key={name} node={child} activeFile={activeFile} onFileClick={onFileClick} />
+        ))}
+        {sortedFiles.map((file) => (
           <FileItem
             key={file.relativePath}
             file={file}
@@ -415,11 +479,14 @@ function DirectorySection({ name, files, activeFile, onFileClick }: DirectorySec
       >
         {isExpanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
         {isExpanded ? <FolderOpen className="w-3.5 h-3.5 text-amber-600" /> : <Folder className="w-3.5 h-3.5 text-amber-600" />}
-        <span className="truncate">{name}</span>
+        <span className="truncate">{node.name}</span>
       </button>
       {isExpanded && (
         <div className="pl-4">
-          {files.map((file) => (
+          {sortedDirs.map(([name, child]) => (
+            <FileTreeNode key={name} node={child} activeFile={activeFile} onFileClick={onFileClick} />
+          ))}
+          {sortedFiles.map((file) => (
             <FileItem
               key={file.relativePath}
               file={file}

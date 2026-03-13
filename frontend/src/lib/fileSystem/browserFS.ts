@@ -90,6 +90,39 @@ export class BrowserFileSystem implements FileSystemProvider {
     }
   }
 
+  // Known binary extensions — skip content reading for these
+  private static readonly BINARY_EXTENSIONS = new Set([
+    '.png', '.jpg', '.jpeg', '.gif', '.bmp', '.ico', '.svg', '.webp', '.avif',
+    '.mp3', '.mp4', '.wav', '.ogg', '.webm', '.avi', '.mov', '.flac',
+    '.zip', '.tar', '.gz', '.bz2', '.xz', '.7z', '.rar',
+    '.woff', '.woff2', '.ttf', '.otf', '.eot',
+    '.exe', '.dll', '.so', '.dylib', '.bin', '.dat',
+    '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx',
+    '.wasm', '.class', '.pyc', '.o', '.a',
+    '.db', '.sqlite', '.sqlite3',
+  ])
+
+  // Directories to skip entirely
+  private static readonly SKIP_DIRS = new Set([
+    'node_modules', 'vendor', '.git', 'dist', 'build', '__pycache__',
+    '.next', '.nuxt', '.cache', '.idea', '.vscode', 'target',
+  ])
+
+  // Max file size to read (512 KB)
+  private static readonly MAX_FILE_SIZE = 512 * 1024
+
+  // Check if file content looks like binary (contains null bytes or too many non-printable chars)
+  private static isBinaryContent(content: string): boolean {
+    const sample = content.slice(0, 8192)
+    let nonPrintable = 0
+    for (let i = 0; i < sample.length; i++) {
+      const code = sample.charCodeAt(i)
+      if (code === 0) return true // null byte = definitely binary
+      if (code < 32 && code !== 9 && code !== 10 && code !== 13) nonPrintable++
+    }
+    return sample.length > 0 && (nonPrintable / sample.length) > 0.1
+  }
+
   private async readAllFiles(
     dirHandle: FSADirectoryHandle,
     basePath: string
@@ -99,27 +132,38 @@ export class BrowserFileSystem implements FileSystemProvider {
     for await (const entry of dirHandle.values()) {
       const relativePath = basePath ? `${basePath}/${entry.name}` : entry.name
 
-      // Skip hidden files (except .mycel-studio.json) and node_modules
-      if (entry.name.startsWith('.') && entry.name !== '.mycel-studio.json') continue
-      if (entry.name === 'node_modules') continue
+      // Skip .git directory (internals, not useful to display)
+      if (entry.kind === 'directory' && entry.name === '.git') continue
+      // Skip heavy dependency/build directories
+      if (entry.kind === 'directory' && BrowserFileSystem.SKIP_DIRS.has(entry.name)) continue
 
       if (entry.kind === 'file') {
-        // Only read HCL files and studio metadata
-        if (entry.name.endsWith('.hcl') || entry.name === '.mycel-studio.json') {
-          try {
-            const file = await entry.getFile()
-            const content = await file.text()
-            files.push({
-              name: entry.name,
-              relativePath,
-              content,
-            })
-          } catch (error) {
-            console.error(`Failed to read file ${relativePath}:`, error)
+        // Skip known binary extensions
+        const dotIdx = entry.name.lastIndexOf('.')
+        const ext = dotIdx >= 0 ? entry.name.slice(dotIdx).toLowerCase() : ''
+        if (ext && BrowserFileSystem.BINARY_EXTENSIONS.has(ext)) {
+          files.push({ name: entry.name, relativePath, content: `// Binary file (${ext})` })
+          continue
+        }
+
+        try {
+          const file = await entry.getFile()
+          // Skip large files
+          if (file.size > BrowserFileSystem.MAX_FILE_SIZE) {
+            files.push({ name: entry.name, relativePath, content: `// File too large to display (${(file.size / 1024).toFixed(0)} KB)` })
+            continue
           }
+          const content = await file.text()
+          // Detect binary content
+          if (BrowserFileSystem.isBinaryContent(content)) {
+            files.push({ name: entry.name, relativePath, content: `// Binary file` })
+            continue
+          }
+          files.push({ name: entry.name, relativePath, content })
+        } catch (error) {
+          console.error(`Failed to read file ${relativePath}:`, error)
         }
       } else if (entry.kind === 'directory') {
-        // Recursively read subdirectories
         const subFiles = await this.readAllFiles(entry, relativePath)
         files.push(...subFiles)
       }

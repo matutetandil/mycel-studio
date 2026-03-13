@@ -16,9 +16,10 @@ export interface GeneratedProject {
   errors: string[]
 }
 
-// Convert label to valid HCL identifier
+// Convert label to valid HCL block name (used inside quotes: connector "name" {})
+// Preserves hyphens since HCL quoted labels allow them
 export function toIdentifier(label: string): string {
-  return label.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '')
+  return label.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_-]/g, '')
 }
 
 // Check if a value is an HCL expression (function call, variable ref) that should NOT be quoted
@@ -1297,14 +1298,51 @@ export function validateProject(nodes: StudioNode[]): string[] {
     }
   }
 
+  // Validate unique names for all other block types
+  const namedTypes: Array<{ nodeType: string; blockName: string }> = [
+    { nodeType: 'type', blockName: 'type' },
+    { nodeType: 'transform', blockName: 'transform' },
+    { nodeType: 'aspect', blockName: 'aspect' },
+    { nodeType: 'validator', blockName: 'validator' },
+    { nodeType: 'saga', blockName: 'saga' },
+    { nodeType: 'state_machine', blockName: 'state machine' },
+  ]
+
+  for (const { nodeType, blockName } of namedTypes) {
+    const names = new Map<string, string[]>()
+    for (const node of nodes.filter(n => n.type === nodeType)) {
+      const data = node.data as { label: string }
+      const name = toIdentifier(data.label)
+      const existing = names.get(name) || []
+      existing.push(data.label)
+      names.set(name, existing)
+    }
+    for (const [name, labels] of names) {
+      if (labels.length > 1) {
+        errors.push(`Duplicate ${blockName} name "${name}": ${labels.join(', ')}`)
+      }
+    }
+  }
+
   return errors
 }
 
 // Generate project with multiple files
-export function generateProject(nodes: StudioNode[], edges: Edge[], serviceConfig?: ServiceConfig, authConfig?: AuthConfig, envConfig?: EnvironmentConfig, securityConfig?: SecurityConfig, pluginConfig?: PluginConfig): GeneratedProject {
+// mycelRoot: prefix for generated paths (e.g. 'src/' when config.hcl is at src/config.hcl)
+// existingPaths: set of real file paths from disk — generated files with matching paths are skipped
+export function generateProject(nodes: StudioNode[], edges: Edge[], serviceConfig?: ServiceConfig, authConfig?: AuthConfig, envConfig?: EnvironmentConfig, securityConfig?: SecurityConfig, pluginConfig?: PluginConfig, mycelRoot: string = '', existingPaths?: Set<string>): GeneratedProject {
   const nodesMap = new Map(nodes.map((n) => [n.id, n]))
   const files: GeneratedFile[] = []
   const errors = validateProject(nodes)
+  const realFiles = existingPaths || new Set<string>()
+
+  // Helper: prefix path with mycelRoot and only push if not already on disk
+  const pushFile = (relativePath: string, name: string, content: string) => {
+    const fullPath = mycelRoot + relativePath
+    if (!realFiles.has(fullPath)) {
+      files.push({ path: fullPath, name, content })
+    }
+  }
 
   const connectorNodes = nodes.filter((n) => n.type === 'connector')
   const flowNodes = nodes.filter((n) => n.type === 'flow')
@@ -1330,37 +1368,21 @@ export function generateProject(nodes: StudioNode[], edges: Edge[], serviceConfi
     configLines.push('  }')
   }
   configLines.push('}', '')
-  files.push({
-    path: 'config.hcl',
-    name: 'config.hcl',
-    content: configLines.join('\n')
-  })
+  pushFile('config.hcl', 'config.hcl', configLines.join('\n'))
 
   // Generate auth file
   if (authConfig?.enabled) {
-    files.push({
-      path: 'auth/auth.hcl',
-      name: 'auth.hcl',
-      content: generateAuthHCL(authConfig) + '\n'
-    })
+    pushFile('auth/auth.hcl', 'auth.hcl', generateAuthHCL(authConfig) + '\n')
   }
 
   // Generate security file
   if (securityConfig?.enabled) {
-    files.push({
-      path: 'security/security.hcl',
-      name: 'security.hcl',
-      content: generateSecurityHCL(securityConfig) + '\n'
-    })
+    pushFile('security/security.hcl', 'security.hcl', generateSecurityHCL(securityConfig) + '\n')
   }
 
   // Generate plugins file
   if (pluginConfig && pluginConfig.plugins.some(p => p.name && p.source)) {
-    files.push({
-      path: 'plugins/plugins.hcl',
-      name: 'plugins.hcl',
-      content: generatePluginHCL(pluginConfig)
-    })
+    pushFile('plugins/plugins.hcl', 'plugins.hcl', generatePluginHCL(pluginConfig))
   }
 
   // Generate .env file
@@ -1368,21 +1390,13 @@ export function generateProject(nodes: StudioNode[], edges: Edge[], serviceConfi
     const envLines = envConfig.variables.map(v =>
       `${v.key}=${v.value}`
     )
-    files.push({
-      path: '.env',
-      name: '.env',
-      content: envLines.join('\n') + '\n'
-    })
+    pushFile('.env', '.env', envLines.join('\n') + '\n')
 
     // .env.example (secrets blanked out)
     const exampleLines = envConfig.variables.map(v =>
       v.secret ? `${v.key}=` : `${v.key}=${v.value}`
     )
-    files.push({
-      path: '.env.example',
-      name: '.env.example',
-      content: exampleLines.join('\n') + '\n'
-    })
+    pushFile('.env.example', '.env.example', exampleLines.join('\n') + '\n')
   }
 
   // Generate environment overlay files
@@ -1390,128 +1404,93 @@ export function generateProject(nodes: StudioNode[], edges: Edge[], serviceConfi
     for (const env of envConfig.environments) {
       if (env.variables.length === 0) continue
       const lines = env.variables.map(v => `${v.key}=${v.value}`)
-      files.push({
-        path: `environments/${env.name}.env`,
-        name: `${env.name}.env`,
-        content: lines.join('\n') + '\n'
-      })
+      pushFile(`environments/${env.name}.env`, `${env.name}.env`, lines.join('\n') + '\n')
     }
   }
 
-  // Generate connector files (one per connector)
-  for (const node of connectorNodes) {
+  // Generate connector files — only for NEW connectors (no hclFile = not from disk)
+  const newConnectors = connectorNodes.filter(n => !(n.data as ConnectorNodeData).hclFile)
+  for (const node of newConnectors) {
     const data = node.data as ConnectorNodeData
     const fileName = `${toIdentifier(data.label)}.hcl`
-    files.push({
-      path: `connectors/${fileName}`,
-      name: fileName,
-      content: generateConnectorHCL(node) + '\n'
-    })
+    pushFile(`connectors/${fileName}`, fileName, generateConnectorHCL(node) + '\n')
   }
 
-  // Generate types file
-  if (typeNodes.length > 0) {
+  // Generate types file — only for NEW types (no hclFile = not from disk)
+  const newTypeNodes = typeNodes.filter(n => !(n.data as TypeNodeData).hclFile)
+  if (newTypeNodes.length > 0) {
     const typesContent: string[] = ['# Type definitions', '']
-    for (const node of typeNodes) {
+    for (const node of newTypeNodes) {
       typesContent.push(generateTypeHCL(node))
       typesContent.push('')
     }
-    files.push({
-      path: 'types/types.hcl',
-      name: 'types.hcl',
-      content: typesContent.join('\n')
-    })
+    pushFile('types/types.hcl', 'types.hcl', typesContent.join('\n'))
   }
 
-  // Generate validators file
-  if (validatorNodes.length > 0) {
+  // Generate validators file — only for NEW validators
+  const newValidatorNodes = validatorNodes.filter(n => !(n.data as ValidatorNodeData).hclFile)
+  if (newValidatorNodes.length > 0) {
     const validatorsContent: string[] = ['# Validators', '']
-    for (const node of validatorNodes) {
+    for (const node of newValidatorNodes) {
       validatorsContent.push(generateValidatorHCL(node))
       validatorsContent.push('')
     }
-    files.push({
-      path: 'validators/validators.hcl',
-      name: 'validators.hcl',
-      content: validatorsContent.join('\n')
-    })
+    pushFile('validators/validators.hcl', 'validators.hcl', validatorsContent.join('\n'))
   }
 
-  // Generate transforms file
-  if (transformNodes.length > 0) {
+  // Generate transforms file — only for NEW transforms
+  const newTransformNodes = transformNodes.filter(n => !(n.data as TransformNodeData).hclFile)
+  if (newTransformNodes.length > 0) {
     const transformsContent: string[] = ['# Named transforms', '']
-    for (const node of transformNodes) {
+    for (const node of newTransformNodes) {
       transformsContent.push(generateNamedTransformHCL(node))
       transformsContent.push('')
     }
-    files.push({
-      path: 'transforms/transforms.hcl',
-      name: 'transforms.hcl',
-      content: transformsContent.join('\n')
-    })
+    pushFile('transforms/transforms.hcl', 'transforms.hcl', transformsContent.join('\n'))
   }
 
-  // Generate aspects file
-  if (aspectNodes.length > 0) {
+  // Generate aspects file — only for NEW aspects
+  const newAspectNodes = aspectNodes.filter(n => !(n.data as AspectNodeData).hclFile)
+  if (newAspectNodes.length > 0) {
     const aspectsContent: string[] = ['# Aspects (cross-cutting concerns)', '']
-    for (const node of aspectNodes) {
+    for (const node of newAspectNodes) {
       aspectsContent.push(generateAspectHCL(node))
       aspectsContent.push('')
     }
-    files.push({
-      path: 'aspects/aspects.hcl',
-      name: 'aspects.hcl',
-      content: aspectsContent.join('\n')
-    })
+    pushFile('aspects/aspects.hcl', 'aspects.hcl', aspectsContent.join('\n'))
   }
 
-  // Generate sagas file
-  if (sagaNodes.length > 0) {
+  // Generate sagas file — only for NEW sagas
+  const newSagaNodes = sagaNodes.filter(n => !(n.data as SagaNodeData).hclFile)
+  if (newSagaNodes.length > 0) {
     const sagasContent: string[] = ['# Sagas (distributed transactions)', '']
-    for (const node of sagaNodes) {
+    for (const node of newSagaNodes) {
       sagasContent.push(generateSagaHCL(node))
       sagasContent.push('')
     }
-    files.push({
-      path: 'sagas/sagas.hcl',
-      name: 'sagas.hcl',
-      content: sagasContent.join('\n')
-    })
+    pushFile('sagas/sagas.hcl', 'sagas.hcl', sagasContent.join('\n'))
   }
 
-  // Generate state machines file
-  if (stateMachineNodes.length > 0) {
+  // Generate state machines file — only for NEW state machines
+  const newSmNodes = stateMachineNodes.filter(n => !(n.data as StateMachineNodeData).hclFile)
+  if (newSmNodes.length > 0) {
     const smContent: string[] = ['# State machines', '']
-    for (const node of stateMachineNodes) {
+    for (const node of newSmNodes) {
       smContent.push(generateStateMachineHCL(node))
       smContent.push('')
     }
-    files.push({
-      path: 'machines/machines.hcl',
-      name: 'machines.hcl',
-      content: smContent.join('\n')
-    })
+    pushFile('machines/machines.hcl', 'machines.hcl', smContent.join('\n'))
   }
 
-  // Generate flow files — group by hclFile (default: 'flows/flows.hcl')
-  if (flowNodes.length > 0) {
-    const flowsByFile = new Map<string, StudioNode[]>()
-    for (const node of flowNodes) {
-      const data = node.data as FlowNodeData
-      const filePath = data.hclFile || 'flows/flows.hcl'
-      if (!flowsByFile.has(filePath)) flowsByFile.set(filePath, [])
-      flowsByFile.get(filePath)!.push(node)
+  // Generate flow files — only for NEW flows (no hclFile = not from disk)
+  const newFlowNodes = flowNodes.filter(n => !(n.data as FlowNodeData).hclFile)
+  if (newFlowNodes.length > 0) {
+    const content: string[] = ['# Flow definitions', '']
+    for (const node of newFlowNodes) {
+      content.push(generateFlowHCL(node, edges, nodesMap))
+      content.push('')
     }
-
-    for (const [filePath, nodes] of flowsByFile) {
-      const content: string[] = ['# Flow definitions', '']
-      for (const node of nodes) {
-        content.push(generateFlowHCL(node, edges, nodesMap))
-        content.push('')
-      }
-      const fileName = filePath.split('/').pop() || filePath
-      files.push({ path: filePath, name: fileName, content: content.join('\n') })
-    }
+    pushFile('flows/flows.hcl', 'flows.hcl', content.join('\n'))
   }
 
   return { files, errors }

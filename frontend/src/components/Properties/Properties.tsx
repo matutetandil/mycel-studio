@@ -2,12 +2,54 @@ import { useState, useCallback, useRef, useEffect, useMemo } from 'react'
 import { createPortal } from 'react-dom'
 import { ChevronLeft, ChevronRight as ChevronRightIcon, GripVertical, Plus, Trash2, Variable, Type, Pencil, X, Check, Lock } from 'lucide-react'
 import { useStudioStore } from '../../stores/useStudioStore'
-import type { ConnectorNodeData, ConnectorProfile, ConnectorProfileConfig, FlowNodeData, FlowTo, ConnectorDirection, RestOperation, GraphQLOperation, ConnectorOperation, TypeNodeData, TypeFieldDefinition, ValidatorNodeData, TransformNodeData, AspectNodeData, SagaNodeData, SagaStep, SagaAction, StateMachineNodeData, StateMachineState, StateMachineTransition, AuthConfig, AuthPreset, JwtAlgorithm, MfaRequirement, MfaMethod, AuthSocialProvider, EnvVariable, SecuritySanitizer, PluginDefinition } from '../../types'
+import { useLayoutStore } from '../../stores/useLayoutStore'
+import type { ConnectorNodeData, ConnectorProfile, ConnectorProfileConfig, FlowNodeData, FlowTo, FlowTransform, ConnectorDirection, RestOperation, GraphQLOperation, ConnectorOperation, TypeNodeData, TypeFieldDefinition, ValidatorNodeData, TransformNodeData, AspectNodeData, SagaNodeData, SagaStep, SagaAction, StateMachineNodeData, StateMachineState, StateMachineTransition, AuthConfig, AuthPreset, JwtAlgorithm, MfaRequirement, MfaMethod, AuthSocialProvider, EnvVariable, SecuritySanitizer, PluginDefinition } from '../../types'
 import OperationsEditor from './OperationsEditor'
 import GraphQLOperationsEditor from './GraphQLOperationsEditor'
 import { getConnector, type FieldDefinition } from '../../connectors'
 import { getAllValidatorTypes, getValidatorType } from '../../validators'
 import { useProjectStore } from '../../stores/useProjectStore'
+import { TransformEditor } from '../FlowConfig'
+import { Wand2 } from 'lucide-react'
+
+// Reusable button that opens TransformEditor popup for any Record<string, string> transform
+function TransformPopupButton({
+  fields,
+  onSave,
+  label = 'Transform',
+}: {
+  fields: Record<string, string> | undefined
+  onSave: (fields: Record<string, string> | undefined) => void
+  label?: string
+}) {
+  const [isOpen, setIsOpen] = useState(false)
+  const count = fields ? Object.keys(fields).length : 0
+
+  return (
+    <>
+      <button
+        onClick={() => setIsOpen(true)}
+        className="w-full flex items-center justify-between px-3 py-2 text-xs bg-neutral-800 border border-neutral-700 rounded-md hover:border-amber-500/50 hover:bg-neutral-700/50 transition-colors"
+      >
+        <span className="flex items-center gap-2 text-neutral-300">
+          <Wand2 className="w-3.5 h-3.5 text-amber-400" />
+          {label}
+        </span>
+        <span className={`text-xs ${count > 0 ? 'text-amber-400' : 'text-neutral-500'}`}>
+          {count > 0 ? `${count} field${count > 1 ? 's' : ''}` : 'None'}
+        </span>
+      </button>
+      <TransformEditor
+        isOpen={isOpen}
+        transform={fields && Object.keys(fields).length > 0 ? { fields } : undefined}
+        onSave={(transform: FlowTransform | undefined) => {
+          onSave(transform?.fields && Object.keys(transform.fields).length > 0 ? transform.fields : undefined)
+        }}
+        onClose={() => setIsOpen(false)}
+      />
+    </>
+  )
+}
 
 const directionOptions: { value: ConnectorDirection; label: string; description: string }[] = [
   { value: 'input', label: 'Source', description: 'Triggers flows (e.g., API server, queue consumer)' },
@@ -252,21 +294,6 @@ function ProfilesEditor({ data, onChange }: { data: ConnectorNodeData; onChange:
     update({ profiles })
   }
 
-  const updateProfileTransform = (index: number, fieldKey: string, value: string) => {
-    const profiles = [...pc.profiles]
-    const transform = { ...profiles[index].transform, [fieldKey]: value }
-    profiles[index] = { ...profiles[index], transform }
-    update({ profiles })
-  }
-
-  const removeProfileTransform = (index: number, fieldKey: string) => {
-    const profiles = [...pc.profiles]
-    const transform = { ...profiles[index].transform }
-    delete transform[fieldKey]
-    profiles[index] = { ...profiles[index], transform: Object.keys(transform).length ? transform : undefined }
-    update({ profiles })
-  }
-
   return (
     <div className="pt-3 border-t border-neutral-800">
       <div className="flex items-center justify-between mb-2">
@@ -347,41 +374,10 @@ function ProfilesEditor({ data, onChange }: { data: ConnectorNodeData; onChange:
               ))}
 
               {/* Transform */}
-              <div>
-                <div className="flex items-center justify-between">
-                  <label className="text-xs text-neutral-500">Transform</label>
-                  <button
-                    onClick={() => updateProfileTransform(i, `field_${Object.keys(profile.transform || {}).length + 1}`, '')}
-                    className="text-xs text-indigo-400 hover:text-indigo-300"
-                  >
-                    + field
-                  </button>
-                </div>
-                {Object.entries(profile.transform || {}).map(([key, val]) => (
-                  <div key={key} className="flex items-center gap-1 mt-1">
-                    <input
-                      value={key}
-                      onChange={(e) => {
-                        const t = { ...profile.transform }
-                        delete t[key]
-                        t[e.target.value] = val
-                        updateProfile(i, { transform: t })
-                      }}
-                      className="w-24 px-1 py-0.5 text-xs bg-neutral-800 border border-neutral-700 rounded text-amber-300 font-mono"
-                    />
-                    <span className="text-neutral-600 text-xs">=</span>
-                    <input
-                      value={val}
-                      onChange={(e) => updateProfileTransform(i, key, e.target.value)}
-                      className="flex-1 px-1 py-0.5 text-xs bg-neutral-800 border border-neutral-700 rounded text-white font-mono"
-                      placeholder="input.field"
-                    />
-                    <button onClick={() => removeProfileTransform(i, key)} className="text-red-500 hover:text-red-400">
-                      <Trash2 className="w-2.5 h-2.5" />
-                    </button>
-                  </div>
-                ))}
-              </div>
+              <TransformPopupButton
+                fields={profile.transform && Object.keys(profile.transform).length > 0 ? profile.transform : undefined}
+                onSave={(fields) => updateProfile(i, { transform: fields || {} })}
+              />
             </div>
           ))}
 
@@ -428,7 +424,7 @@ function ConnectorProperties({
         <input
           type="text"
           value={data.label}
-          onChange={(e) => onChange({ label: e.target.value })}
+          onChange={(e) => onChange({ label: e.target.value.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '') })}
           className="w-full px-3 py-2 text-sm bg-neutral-800 border border-neutral-700 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-white"
         />
       </div>
@@ -597,8 +593,12 @@ function FlowProperties({
         <input
           type="text"
           value={data.label}
-          onChange={(e) => onChange({ label: e.target.value })}
-          className="w-full px-3 py-2 text-sm bg-neutral-800 border border-neutral-700 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-white"
+          onChange={(e) => {
+            const clean = e.target.value.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '')
+            onChange({ label: clean })
+          }}
+          placeholder="my_flow_name"
+          className="w-full px-3 py-2 text-sm bg-neutral-800 border border-neutral-700 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-white font-mono"
         />
       </div>
 
@@ -1151,7 +1151,7 @@ function TypeProperties({
         <input
           type="text"
           value={data.label}
-          onChange={(e) => onChange({ label: e.target.value })}
+          onChange={(e) => onChange({ label: e.target.value.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '') })}
           className="w-full px-3 py-2 text-sm bg-neutral-800 border border-neutral-700 rounded-md focus:ring-2 focus:ring-cyan-500 focus:border-transparent text-white"
         />
       </div>
@@ -1209,7 +1209,7 @@ function ValidatorProperties({
         <input
           type="text"
           value={data.label}
-          onChange={(e) => onChange({ label: e.target.value })}
+          onChange={(e) => onChange({ label: e.target.value.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '') })}
           className={inputClass}
         />
       </div>
@@ -1293,50 +1293,7 @@ function TransformProperties({
   data: TransformNodeData
   onChange: (data: Partial<TransformNodeData>) => void
 }) {
-  const fields = data.fields || {}
   const inputClass = "w-full px-3 py-2 text-sm bg-neutral-800 border border-neutral-700 rounded-md focus:ring-2 focus:ring-amber-500 focus:border-transparent text-white placeholder-neutral-500"
-
-  // Use stable array for rendering to avoid focus loss on key rename
-  const [fieldEntries, setFieldEntries] = useState(() => Object.entries(fields).map(([k, v], i) => ({ id: i, key: k, value: v })))
-
-  // Sync from props when fields change externally (but not during local edits)
-  const fieldsRef = useCallback((entries: typeof fieldEntries) => {
-    const newFields: Record<string, string> = {}
-    for (const e of entries) {
-      if (e.key) newFields[e.key] = e.value
-    }
-    onChange({ fields: newFields })
-  }, [onChange])
-
-  const updateEntryKey = (id: number, newKey: string) => {
-    const clean = newKey.toLowerCase().replace(/[^a-z0-9_]/g, '')
-    const updated = fieldEntries.map(e => e.id === id ? { ...e, key: clean } : e)
-    setFieldEntries(updated)
-    fieldsRef(updated)
-  }
-
-  const updateEntryValue = (id: number, value: string) => {
-    const updated = fieldEntries.map(e => e.id === id ? { ...e, value } : e)
-    setFieldEntries(updated)
-    fieldsRef(updated)
-  }
-
-  const removeEntry = (id: number) => {
-    const updated = fieldEntries.filter(e => e.id !== id)
-    setFieldEntries(updated)
-    fieldsRef(updated)
-  }
-
-  const addField = () => {
-    let name = 'field'
-    let i = 1
-    const keys = new Set(fieldEntries.map(e => e.key))
-    while (keys.has(name)) { name = `field_${i++}` }
-    const newId = Math.max(0, ...fieldEntries.map(e => e.id)) + 1
-    const updated = [...fieldEntries, { id: newId, key: name, value: '' }]
-    setFieldEntries(updated)
-    fieldsRef(updated)
-  }
 
   return (
     <div className="space-y-4">
@@ -1345,48 +1302,17 @@ function TransformProperties({
         <input
           type="text"
           value={data.label}
-          onChange={(e) => onChange({ label: e.target.value })}
+          onChange={(e) => onChange({ label: e.target.value.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '') })}
           className={inputClass}
         />
         <p className="text-xs text-neutral-500 mt-1">Reference in flows with <code className="text-amber-400">use = [transform.{'{name}'}]</code></p>
       </div>
 
-      <div>
-        <div className="flex items-center justify-between mb-2">
-          <label className="text-xs font-medium text-neutral-400">Field Mappings (CEL)</label>
-          <button onClick={addField} className="flex items-center gap-1 text-xs text-amber-400 hover:text-amber-300">
-            <Plus className="w-3 h-3" /> Add
-          </button>
-        </div>
-        <div className="space-y-2">
-          {fieldEntries.map((entry) => (
-            <div key={entry.id} className="flex items-center gap-1">
-              <input
-                type="text"
-                value={entry.key}
-                onChange={(e) => updateEntryKey(entry.id, e.target.value)}
-                className="w-28 px-2 py-1.5 text-xs bg-neutral-800 border border-neutral-700 rounded text-amber-300 font-mono focus:ring-2 focus:ring-amber-500 focus:border-transparent"
-              />
-              <span className="text-neutral-500 text-xs">=</span>
-              <input
-                type="text"
-                value={entry.value}
-                onChange={(e) => updateEntryValue(entry.id, e.target.value)}
-                placeholder="CEL expression"
-                className="flex-1 px-2 py-1.5 text-xs bg-neutral-800 border border-neutral-700 rounded text-white font-mono placeholder-neutral-500 focus:ring-2 focus:ring-amber-500 focus:border-transparent"
-              />
-              <button onClick={() => removeEntry(entry.id)} className="text-red-500 hover:text-red-400 p-0.5">
-                <Trash2 className="w-3 h-3" />
-              </button>
-            </div>
-          ))}
-          {fieldEntries.length === 0 && (
-            <div className="text-xs text-neutral-500 text-center py-3 border border-dashed border-neutral-700 rounded">
-              No mappings. Click "Add" to define fields.
-            </div>
-          )}
-        </div>
-      </div>
+      <TransformPopupButton
+        fields={data.fields}
+        onSave={(fields) => onChange({ fields: fields || {} })}
+        label="Field Mappings (CEL)"
+      />
     </div>
   )
 }
@@ -1398,6 +1324,45 @@ const aspectWhenOptions = [
   { value: 'on_error', label: 'On Error', description: 'Run when the flow fails' },
 ]
 
+// Simple glob matcher compatible with Go's filepath.Match
+// Supports: * (any chars except separator), ? (single char), [...] (character class)
+function globMatch(pattern: string, name: string): boolean {
+  let pi = 0, ni = 0
+  while (pi < pattern.length && ni < name.length) {
+    const pc = pattern[pi]
+    if (pc === '*') {
+      // * matches any sequence of characters
+      pi++
+      if (pi === pattern.length) return true
+      // Try matching rest of pattern against rest of name
+      for (let k = ni; k <= name.length; k++) {
+        if (globMatch(pattern.slice(pi), name.slice(k))) return true
+      }
+      return false
+    } else if (pc === '?') {
+      pi++
+      ni++
+    } else if (pc === '[') {
+      // Character class
+      const close = pattern.indexOf(']', pi + 1)
+      if (close === -1) return false
+      const negate = pattern[pi + 1] === '^' || pattern[pi + 1] === '!'
+      const chars = pattern.slice(pi + (negate ? 2 : 1), close)
+      const match = chars.includes(name[ni])
+      if (negate ? match : !match) return false
+      pi = close + 1
+      ni++
+    } else {
+      if (pc !== name[ni]) return false
+      pi++
+      ni++
+    }
+  }
+  // Consume trailing *
+  while (pi < pattern.length && pattern[pi] === '*') pi++
+  return pi === pattern.length && ni === name.length
+}
+
 function AspectProperties({
   data,
   onChange,
@@ -1406,8 +1371,26 @@ function AspectProperties({
   onChange: (data: Partial<AspectNodeData>) => void
 }) {
   const inputClass = "w-full px-3 py-2 text-sm bg-neutral-800 border border-neutral-700 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-white placeholder-neutral-500"
+  const nodes = useStudioStore(s => s.nodes)
+
+  // All flow names in the canvas
+  const flowNames = useMemo(() => {
+    return nodes
+      .filter(n => n.type === 'flow')
+      .map(n => (n.data as FlowNodeData).label)
+      .map(label => label.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, ''))
+      .filter(name => name.length > 0)
+  }, [nodes])
 
   const patterns = data.on || []
+
+  // For each pattern, compute which flows match
+  const patternMatches = useMemo(() => {
+    return patterns.map(pattern => {
+      if (!pattern.trim()) return []
+      return flowNames.filter(name => globMatch(pattern, name))
+    })
+  }, [patterns, flowNames])
 
   const updatePattern = (index: number, value: string) => {
     const newPatterns = [...patterns]
@@ -1415,11 +1398,12 @@ function AspectProperties({
     onChange({ on: newPatterns })
   }
 
-  const addPattern = () => onChange({ on: [...patterns, '**/*.hcl'] })
+  const addPattern = () => onChange({ on: [...patterns, ''] })
 
   const removePattern = (index: number) => {
     onChange({ on: patterns.filter((_, i) => i !== index) })
   }
+
 
   // Action section
   const action = data.action || { connector: '', target: '' }
@@ -1432,23 +1416,6 @@ function AspectProperties({
   // Action transform fields
   const actionFields = data.action?.transform || {}
 
-  const updateActionField = (key: string, value: string) => {
-    updateAction({ transform: { ...actionFields, [key]: value } })
-  }
-
-  const removeActionField = (key: string) => {
-    const newFields = { ...actionFields }
-    delete newFields[key]
-    updateAction({ transform: newFields })
-  }
-
-  const addActionField = () => {
-    let name = 'field'
-    let i = 1
-    while (name in actionFields) { name = `field_${i++}` }
-    updateAction({ transform: { ...actionFields, [name]: '' } })
-  }
-
   // Invalidation section
   const invalidate = data.invalidate
   const hasInvalidation = !!invalidate
@@ -1457,7 +1424,7 @@ function AspectProperties({
     <div className="space-y-4">
       <div>
         <label className="block text-xs font-medium text-neutral-400 mb-1">Name</label>
-        <input type="text" value={data.label} onChange={(e) => onChange({ label: e.target.value })} className={inputClass} />
+        <input type="text" value={data.label} onChange={(e) => onChange({ label: e.target.value.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '') })} className={inputClass} />
       </div>
 
       {/* When */}
@@ -1486,30 +1453,82 @@ function AspectProperties({
       {/* Flow Patterns (on) */}
       <div>
         <div className="flex items-center justify-between mb-1">
-          <label className="text-xs font-medium text-neutral-400">Match Flows (glob patterns)</label>
+          <label className="text-xs font-medium text-neutral-400">Match Flows (by name, glob patterns)</label>
           <button onClick={addPattern} className="flex items-center gap-1 text-xs text-indigo-400 hover:text-indigo-300">
-            <Plus className="w-3 h-3" /> Add
+            <Plus className="w-3 h-3" /> Add Pattern
           </button>
         </div>
-        <div className="space-y-1">
-          {patterns.map((pattern, i) => (
-            <div key={i} className="flex items-center gap-1">
-              <input
-                type="text"
-                value={pattern}
-                onChange={(e) => updatePattern(i, e.target.value)}
-                placeholder="**/create_*.hcl"
-                className="flex-1 px-2 py-1.5 text-xs bg-neutral-800 border border-neutral-700 rounded text-white font-mono placeholder-neutral-500"
-              />
-              <button onClick={() => removePattern(i)} className="text-red-500 hover:text-red-400 p-0.5">
-                <Trash2 className="w-3 h-3" />
-              </button>
-            </div>
-          ))}
+        <div className="space-y-2">
+          {patterns.map((pattern, i) => {
+            const matches = patternMatches[i] || []
+            const isGlob = pattern.includes('*') || pattern.includes('?') || pattern.includes('[')
+            const isValid = pattern.trim() === '' || matches.length > 0 || !isGlob
+            const exactExists = !isGlob && pattern.trim() && flowNames.includes(pattern.trim())
+            return (
+              <div key={i} className="space-y-1">
+                <div className="flex items-center gap-1">
+                  <input
+                    type="text"
+                    value={pattern}
+                    onChange={(e) => updatePattern(i, e.target.value)}
+                    placeholder="create_* or exact_flow_name"
+                    className={`flex-1 px-2 py-1.5 text-xs bg-neutral-800 border rounded text-white font-mono placeholder-neutral-500 ${
+                      pattern.trim() && !isValid && !exactExists
+                        ? 'border-yellow-500/50'
+                        : 'border-neutral-700'
+                    }`}
+                  />
+                  <button onClick={() => removePattern(i)} className="text-red-500 hover:text-red-400 p-0.5">
+                    <Trash2 className="w-3 h-3" />
+                  </button>
+                </div>
+                {/* Match results */}
+                {pattern.trim() && isGlob && matches.length > 0 && (
+                  <div className="flex flex-wrap gap-1 pl-1">
+                    {matches.map(m => (
+                      <span key={m} className="px-1.5 py-0.5 text-[10px] bg-green-500/10 border border-green-500/30 rounded text-green-400 font-mono">{m}</span>
+                    ))}
+                  </div>
+                )}
+                {pattern.trim() && isGlob && matches.length === 0 && (
+                  <p className="text-[10px] text-yellow-500 pl-1">No flows match this pattern</p>
+                )}
+                {pattern.trim() && !isGlob && !exactExists && (
+                  <p className="text-[10px] text-yellow-500 pl-1">Flow "{pattern}" not found in canvas</p>
+                )}
+              </div>
+            )
+          })}
           {patterns.length === 0 && (
             <p className="text-xs text-neutral-500 italic">No patterns. Aspect won't match any flows.</p>
           )}
         </div>
+
+        {/* Quick-add: available flows */}
+        {flowNames.length > 0 && (
+          <div className="mt-2">
+            <label className="text-[10px] text-neutral-500 mb-1 block">Available flows (click to add):</label>
+            <div className="flex flex-wrap gap-1">
+              {flowNames.map(name => {
+                const alreadyMatched = patternMatches.some(matches => matches.includes(name))
+                return (
+                  <button
+                    key={name}
+                    onClick={() => onChange({ on: [...patterns, name] })}
+                    disabled={alreadyMatched}
+                    className={`px-1.5 py-0.5 text-[10px] rounded font-mono transition-colors ${
+                      alreadyMatched
+                        ? 'bg-green-500/10 border border-green-500/20 text-green-500/50 cursor-default'
+                        : 'bg-neutral-700/50 border border-neutral-600/50 text-neutral-400 hover:text-indigo-300 hover:border-indigo-500/50 cursor-pointer'
+                    }`}
+                  >
+                    {alreadyMatched ? '\u2713 ' : ''}{name}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Condition */}
@@ -1553,27 +1572,25 @@ function AspectProperties({
           </div>
           {hasAction && (
             <div className="space-y-2">
-              <input type="text" value={action.connector} onChange={(e) => updateAction({ connector: e.target.value })} placeholder="connector_name" className={inputClass + ' text-xs'} />
+              <select
+                value={action.connector}
+                onChange={(e) => updateAction({ connector: e.target.value })}
+                className={inputClass + ' text-xs'}
+              >
+                <option value="">Select connector...</option>
+                {nodes
+                  .filter(n => n.type === 'connector')
+                  .map(n => {
+                    const cd = n.data as ConnectorNodeData
+                    const name = cd.label.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '')
+                    return <option key={n.id} value={name}>{cd.label} ({cd.connectorType})</option>
+                  })}
+              </select>
               <input type="text" value={action.target} onChange={(e) => updateAction({ target: e.target.value })} placeholder="target (table, operation)" className={inputClass + ' text-xs'} />
-              <div className="flex items-center justify-between">
-                <label className="text-[10px] font-medium text-neutral-500">Transform</label>
-                <button onClick={addActionField} className="text-[10px] text-amber-400 hover:text-amber-300">+ Add</button>
-              </div>
-              {Object.entries(actionFields).map(([key, expr]) => (
-                <div key={key} className="flex items-center gap-1">
-                  <input type="text" value={key} onChange={(e) => {
-                    const newKey = e.target.value.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '')
-                    if (newKey && !(newKey in actionFields)) {
-                      const nf: Record<string, string> = {}
-                      for (const [k, v] of Object.entries(actionFields)) { nf[k === key ? newKey : k] = v }
-                      updateAction({ transform: nf })
-                    }
-                  }} className="w-24 px-1.5 py-1 text-[11px] bg-neutral-800 border border-neutral-700 rounded text-amber-300 font-mono" />
-                  <span className="text-neutral-600 text-[10px]">=</span>
-                  <input type="text" value={expr} onChange={(e) => updateActionField(key, e.target.value)} placeholder="CEL" className="flex-1 px-1.5 py-1 text-[11px] bg-neutral-800 border border-neutral-700 rounded text-white font-mono placeholder-neutral-500" />
-                  <button onClick={() => removeActionField(key)} className="text-red-500 hover:text-red-400"><Trash2 className="w-2.5 h-2.5" /></button>
-                </div>
-              ))}
+              <TransformPopupButton
+                fields={actionFields}
+                onSave={(fields) => updateAction({ transform: fields })}
+              />
             </div>
           )}
         </div>
@@ -1583,7 +1600,20 @@ function AspectProperties({
       {data.when === 'around' && (
         <div className="p-3 bg-neutral-800/50 rounded-md space-y-2">
           <label className="text-xs font-medium text-neutral-400">Cache</label>
-          <input type="text" value={data.cache?.storage || ''} onChange={(e) => onChange({ cache: { storage: e.target.value, key: data.cache?.key || '', ttl: data.cache?.ttl || '5m' } })} placeholder="storage (cache connector)" className={inputClass + ' text-xs'} />
+          <select
+            value={data.cache?.storage || ''}
+            onChange={(e) => onChange({ cache: { storage: e.target.value, key: data.cache?.key || '', ttl: data.cache?.ttl || '5m' } })}
+            className={inputClass + ' text-xs'}
+          >
+            <option value="">Select cache connector...</option>
+            {nodes
+              .filter(n => n.type === 'connector' && (n.data as ConnectorNodeData).connectorType === 'cache')
+              .map(n => {
+                const cd = n.data as ConnectorNodeData
+                const name = cd.label.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '')
+                return <option key={n.id} value={name}>{cd.label}</option>
+              })}
+          </select>
           <input type="text" value={data.cache?.key || ''} onChange={(e) => onChange({ cache: { ...data.cache!, key: e.target.value } })} placeholder="cache key expression" className={inputClass + ' text-xs font-mono'} />
           <input type="text" value={data.cache?.ttl || ''} onChange={(e) => onChange({ cache: { ...data.cache!, ttl: e.target.value } })} placeholder="TTL (e.g., 10m)" className={inputClass + ' text-xs font-mono'} />
         </div>
@@ -1606,7 +1636,20 @@ function AspectProperties({
           </div>
           {hasInvalidation && (
             <div className="space-y-2">
-              <input type="text" value={invalidate!.storage || ''} onChange={(e) => onChange({ invalidate: { ...invalidate!, storage: e.target.value } })} placeholder="storage (cache connector)" className={inputClass + ' text-xs'} />
+              <select
+                value={invalidate!.storage || ''}
+                onChange={(e) => onChange({ invalidate: { ...invalidate!, storage: e.target.value } })}
+                className={inputClass + ' text-xs'}
+              >
+                <option value="">Select cache connector...</option>
+                {nodes
+                  .filter(n => n.type === 'connector' && (n.data as ConnectorNodeData).connectorType === 'cache')
+                  .map(n => {
+                    const cd = n.data as ConnectorNodeData
+                    const name = cd.label.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '')
+                    return <option key={n.id} value={name}>{cd.label}</option>
+                  })}
+              </select>
               <input type="text" value={invalidate!.keys?.join(', ') || ''} onChange={(e) => {
                 const val = e.target.value.trim()
                 onChange({ invalidate: { ...invalidate!, keys: val ? val.split(',').map(s => s.trim()) : undefined } })
@@ -1675,7 +1718,7 @@ function SagaProperties({ data, onChange }: { data: SagaNodeData; onChange: (upd
       {/* Name */}
       <div>
         <label className="block text-xs font-medium text-neutral-400 mb-1">Name</label>
-        <input type="text" value={data.label} onChange={(e) => onChange({ label: e.target.value })} placeholder="create_order" className={inputClass} />
+        <input type="text" value={data.label} onChange={(e) => onChange({ label: e.target.value.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '') })} placeholder="create_order" className={inputClass} />
       </div>
 
       {/* Timeout */}
@@ -1803,7 +1846,7 @@ function StateMachineProperties({ data, onChange }: { data: StateMachineNodeData
       {/* Name */}
       <div>
         <label className="block text-xs font-medium text-neutral-400 mb-1">Name</label>
-        <input type="text" value={data.label} onChange={(e) => onChange({ label: e.target.value })} placeholder="order_status" className={inputClass} />
+        <input type="text" value={data.label} onChange={(e) => onChange({ label: e.target.value.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '') })} placeholder="order_status" className={inputClass} />
       </div>
 
       {/* Initial state */}
@@ -3361,8 +3404,10 @@ function ServiceProperties() {
 export default function Properties() {
   const { nodes, selectedNodeId, updateNode, removeNode } = useStudioStore()
   const selectedNode = nodes.find((n) => n.id === selectedNodeId)
-  const [width, setWidth] = useState(400)
-  const [collapsed, setCollapsed] = useState(false)
+  const width = useLayoutStore(s => s.rightWidth)
+  const setWidth = useLayoutStore(s => s.setRightWidth)
+  const collapsed = useLayoutStore(s => s.rightCollapsed)
+  const setCollapsed = useLayoutStore(s => s.setRightCollapsed)
   const [isResizing, setIsResizing] = useState(false)
   const [envSplit, setEnvSplit] = useState(30) // percentage for env panel
   const [isSplitResizing, setIsSplitResizing] = useState(false)

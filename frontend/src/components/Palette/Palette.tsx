@@ -69,25 +69,25 @@ function PaletteItemView({ item }: { item: PaletteItem }) {
 
     if (item.type === 'connector' && item.connectorType) {
       nodeData = {
-        label: item.label,
+        label: item.label.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, ''),
         connectorType: item.connectorType,
         direction: DEFAULT_CONNECTOR_DIRECTIONS[item.connectorType!],
         config: { type: item.connectorType },
       }
     } else if (item.type === 'type') {
-      nodeData = { label: `New ${item.label}`, fields: {} }
+      nodeData = { label: `new_${item.label.toLowerCase().replace(/\s+/g, '_')}`, fields: {} }
     } else if (item.type === 'validator') {
-      nodeData = { label: `New ${item.label}`, validatorType: 'regex', message: '' }
+      nodeData = { label: `new_${item.label.toLowerCase().replace(/\s+/g, '_')}`, validatorType: 'regex', message: '' }
     } else if (item.type === 'transform') {
-      nodeData = { label: `New ${item.label}`, fields: {} }
+      nodeData = { label: `new_${item.label.toLowerCase().replace(/\s+/g, '_')}`, fields: {} }
     } else if (item.type === 'aspect') {
-      nodeData = { label: `New ${item.label}`, on: [], when: 'after' }
+      nodeData = { label: `new_${item.label.toLowerCase().replace(/\s+/g, '_')}`, on: [], when: 'after' }
     } else if (item.type === 'saga') {
-      nodeData = { label: `New ${item.label}`, steps: [] }
+      nodeData = { label: `new_${item.label.toLowerCase().replace(/\s+/g, '_')}`, steps: [] }
     } else if (item.type === 'state_machine') {
-      nodeData = { label: `New ${item.label}`, initial: '', states: [] }
+      nodeData = { label: `new_${item.label.toLowerCase().replace(/\s+/g, '_')}`, initial: '', states: [] }
     } else {
-      nodeData = { label: `New ${item.label}` }
+      nodeData = { label: `new_${item.label.toLowerCase().replace(/\s+/g, '_')}` }
     }
 
     event.dataTransfer.setData('application/mycel-node-type', item.type)

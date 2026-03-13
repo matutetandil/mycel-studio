@@ -3,11 +3,11 @@ import { Handle, Position } from '@xyflow/react'
 import { Eye } from 'lucide-react'
 import type { AspectNodeData } from '../../types'
 
-const whenColors: Record<string, string> = {
-  before: 'bg-blue-600',
-  after: 'bg-green-600',
-  around: 'bg-purple-600',
-  on_error: 'bg-red-600',
+const whenColors: Record<string, { bg: string; border: string; text: string }> = {
+  before: { bg: 'bg-sky-600', border: 'border-sky-500', text: 'text-sky-400' },
+  after: { bg: 'bg-green-600', border: 'border-green-500', text: 'text-green-400' },
+  around: { bg: 'bg-purple-600', border: 'border-purple-500', text: 'text-purple-400' },
+  on_error: { bg: 'bg-red-600', border: 'border-red-500', text: 'text-red-400' },
 }
 
 const whenLabels: Record<string, string> = {
@@ -23,26 +23,26 @@ interface AspectNodeProps {
 }
 
 function AspectNode({ data, selected }: AspectNodeProps) {
-  const colorClass = whenColors[data.when] || 'bg-neutral-600'
+  const colors = whenColors[data.when] || { bg: 'bg-neutral-600', border: 'border-neutral-500', text: 'text-neutral-400' }
 
   return (
     <div
       className={`
         px-4 py-3 rounded-lg bg-neutral-800 border-2 shadow-md min-w-[160px]
-        ${selected ? 'border-indigo-500 shadow-lg shadow-indigo-500/20' : 'border-neutral-700'}
+        ${selected ? `${colors.border} shadow-lg shadow-indigo-500/20` : 'border-neutral-700'}
       `}
     >
-      <Handle type="target" position={Position.Left} className="w-3 h-3 !bg-neutral-400" />
+      {/* No left handle — aspects don't receive input */}
 
       <div className="flex items-center gap-3">
-        <div className={`p-2 rounded-lg ${colorClass}`}>
+        <div className={`p-2 rounded-lg ${colors.bg}`}>
           <Eye className="w-5 h-5 text-white" />
         </div>
         <div className="flex-1">
           <div className="font-semibold text-neutral-100">{data.label}</div>
           <div className="text-xs text-neutral-400">
             ASPECT
-            <span className={`ml-1 ${data.when === 'on_error' ? 'text-red-400' : data.when === 'before' ? 'text-blue-400' : data.when === 'after' ? 'text-green-400' : 'text-purple-400'}`}>
+            <span className={`ml-1 ${colors.text}`}>
               ({whenLabels[data.when] || data.when})
             </span>
           </div>
@@ -64,7 +64,7 @@ function AspectNode({ data, selected }: AspectNodeProps) {
       {/* Show what the aspect does */}
       {data.action && (
         <div className="mt-1 px-2 py-1 bg-blue-900/20 border border-blue-700/30 rounded text-xs text-blue-300 truncate">
-          Action: {data.action.connector} → {data.action.target}
+          Action → {data.action.connector}{data.action.target ? ` (${data.action.target})` : ''}
         </div>
       )}
       {data.cache && (
@@ -78,7 +78,21 @@ function AspectNode({ data, selected }: AspectNodeProps) {
         </div>
       )}
 
-      <Handle type="source" position={Position.Right} className="w-3 h-3 !bg-neutral-400" />
+      {/* Right handle — connects to action connector (always visible) */}
+      <Handle
+        type="source"
+        position={Position.Right}
+        id="action"
+        className="w-3 h-3 !bg-neutral-400"
+      />
+
+      {/* Bottom handle — visual link to matched flows */}
+      <Handle
+        type="source"
+        position={Position.Bottom}
+        id="aspect-flows"
+        className={`w-2.5 h-2.5 !rounded-full !border-2 ${colors.bg.replace('bg-', '!bg-')}`}
+      />
     </div>
   )
 }

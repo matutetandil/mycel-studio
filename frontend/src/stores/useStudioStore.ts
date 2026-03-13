@@ -9,8 +9,139 @@ import {
   type EdgeChange,
   type Connection,
 } from '@xyflow/react'
-import type { ConnectorNodeData, FlowNodeData, ServiceConfig, AuthConfig, EnvironmentConfig, SecurityConfig, PluginConfig, TypeNodeData, TransformNodeData, ValidatorNodeData, AspectNodeData, SagaNodeData, StateMachineNodeData } from '../types'
+import type { ConnectorNodeData, FlowNodeData, FlowTo, ServiceConfig, AuthConfig, EnvironmentConfig, SecurityConfig, PluginConfig, TypeNodeData, TransformNodeData, ValidatorNodeData, AspectNodeData, SagaNodeData, StateMachineNodeData } from '../types'
 import { useHistoryStore } from './useHistoryStore'
+
+// Convert label to identifier (same logic as toIdentifier in hclGenerator)
+function labelToId(label: string): string {
+  return label.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '')
+}
+
+// Propagate a name change across all nodes that reference the old name
+function propagateRename(
+  nodes: StudioNode[],
+  changedNodeType: string,
+  oldName: string,
+  newName: string,
+): StudioNode[] {
+  if (oldName === newName || !oldName || !newName) return nodes
+
+  return nodes.map(node => {
+    // Connector renamed → update flows, aspects, sagas, steps, enrichments
+    if (changedNodeType === 'connector') {
+      if (node.type === 'flow') {
+        const d = node.data as FlowNodeData
+        let changed = false
+        const updates: Partial<FlowNodeData> = {}
+
+        if (d.from?.connector === oldName) {
+          updates.from = { ...d.from, connector: newName }
+          changed = true
+        }
+        if (d.to) {
+          if (Array.isArray(d.to)) {
+            const origTo = d.to as FlowTo[]
+            const newTo = origTo.map((t: FlowTo) => t.connector === oldName ? { ...t, connector: newName } : t)
+            if (newTo.some((t: FlowTo, i: number) => t !== origTo[i])) {
+              updates.to = newTo
+              changed = true
+            }
+          } else if ((d.to as FlowTo).connector === oldName) {
+            updates.to = { ...(d.to as FlowTo), connector: newName }
+            changed = true
+          }
+        }
+        if (d.steps?.some(s => s.connector === oldName)) {
+          updates.steps = d.steps.map(s => s.connector === oldName ? { ...s, connector: newName } : s)
+          changed = true
+        }
+        if (d.enrich?.some(e => e.connector === oldName)) {
+          updates.enrich = d.enrich.map(e => e.connector === oldName ? { ...e, connector: newName } : e)
+          changed = true
+        }
+        if (d.cache?.storage === oldName) {
+          updates.cache = { ...d.cache, storage: newName }
+          changed = true
+        }
+        if (d.lock?.storage === oldName) {
+          updates.lock = { ...d.lock, storage: newName }
+          changed = true
+        }
+        if (d.semaphore?.storage === oldName) {
+          updates.semaphore = { ...d.semaphore, storage: newName }
+          changed = true
+        }
+        if (d.dedupe?.storage === oldName) {
+          updates.dedupe = { ...d.dedupe, storage: newName }
+          changed = true
+        }
+        if (d.batch?.to?.connector === oldName) {
+          updates.batch = { ...d.batch, to: { ...d.batch.to, connector: newName } }
+          changed = true
+        }
+        if (changed) {
+          return { ...node, data: { ...d, ...updates } } as StudioNode
+        }
+      }
+      if (node.type === 'aspect') {
+        const d = node.data as AspectNodeData
+        if (d.action?.connector === oldName) {
+          return { ...node, data: { ...d, action: { ...d.action, connector: newName } } } as StudioNode
+        }
+        if (d.invalidate?.storage === oldName) {
+          return { ...node, data: { ...d, invalidate: { ...d.invalidate, storage: newName } } } as StudioNode
+        }
+        if (d.cache?.storage === oldName) {
+          return { ...node, data: { ...d, cache: { ...d.cache, storage: newName } } } as StudioNode
+        }
+      }
+      if (node.type === 'saga') {
+        const d = node.data as SagaNodeData
+        const newSteps = d.steps.map(s => {
+          let step = s
+          if (s.action?.connector === oldName) step = { ...step, action: { ...s.action!, connector: newName } }
+          if (s.compensate?.connector === oldName) step = { ...step, compensate: { ...s.compensate!, connector: newName } }
+          return step
+        })
+        if (newSteps.some((s, i) => s !== d.steps[i])) {
+          return { ...node, data: { ...d, steps: newSteps } } as StudioNode
+        }
+      }
+    }
+
+    // Flow renamed → update aspect on[] patterns (exact matches only)
+    if (changedNodeType === 'flow' && node.type === 'aspect') {
+      const d = node.data as AspectNodeData
+      if (d.on?.includes(oldName)) {
+        return { ...node, data: { ...d, on: d.on.map(p => p === oldName ? newName : p) } } as StudioNode
+      }
+    }
+
+    // Type renamed → update flow validate references
+    if (changedNodeType === 'type' && node.type === 'flow') {
+      const d = node.data as FlowNodeData
+      if (d.validate?.input === oldName || d.validate?.output === oldName) {
+        return { ...node, data: { ...d, validate: {
+          input: d.validate?.input === oldName ? newName : d.validate?.input,
+          output: d.validate?.output === oldName ? newName : d.validate?.output,
+        } } } as StudioNode
+      }
+    }
+
+    // Transform renamed → update flow transform.use references
+    if (changedNodeType === 'transform' && node.type === 'flow') {
+      const d = node.data as FlowNodeData
+      if (d.transform?.use?.includes(oldName)) {
+        return { ...node, data: { ...d, transform: {
+          ...d.transform,
+          use: d.transform.use.map(u => u === oldName ? newName : u),
+        } } } as StudioNode
+      }
+    }
+
+    return node
+  })
+}
 
 type StudioNode = Node<ConnectorNodeData | FlowNodeData | TypeNodeData | TransformNodeData | ValidatorNodeData | AspectNodeData | SagaNodeData | StateMachineNodeData>
 
@@ -123,11 +254,20 @@ export const useStudioStore = create<StudioState>((set, get) => ({
   updateNode: (id, data) => {
     const state = get()
     saveToHistory(state)
-    set({
-      nodes: state.nodes.map((node) =>
-        node.id === id ? { ...node, data: { ...node.data, ...data } } as StudioNode : node
-      ),
-    })
+
+    const targetNode = state.nodes.find(n => n.id === id)
+    let updatedNodes = state.nodes.map((node) =>
+      node.id === id ? { ...node, data: { ...node.data, ...data } } as StudioNode : node
+    )
+
+    // If label changed, propagate rename to all referencing nodes
+    if (targetNode && data.label && data.label !== (targetNode.data as { label: string }).label) {
+      const oldName = labelToId((targetNode.data as { label: string }).label)
+      const newName = labelToId(data.label as string)
+      updatedNodes = propagateRename(updatedNodes, targetNode.type || '', oldName, newName)
+    }
+
+    set({ nodes: updatedNodes })
   },
 
   removeNode: (id) => {
@@ -272,6 +412,45 @@ export const useStudioStore = create<StudioState>((set, get) => ({
     const sourceNode = state.nodes.find(n => n.id === connection.source)
     const targetNode = state.nodes.find(n => n.id === connection.target)
 
+    // If aspect → connector, auto-assign action connector
+    if (sourceNode?.type === 'aspect' && targetNode?.type === 'connector') {
+      saveToHistory(state)
+      const connectorData = targetNode.data as ConnectorNodeData
+      const connectorName = connectorData.label.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '')
+      const aspectData = sourceNode.data as AspectNodeData
+      set({
+        nodes: state.nodes.map(n =>
+          n.id === sourceNode.id
+            ? { ...n, data: { ...n.data, action: { ...aspectData.action, connector: connectorName, target: aspectData.action?.target || '' } } } as StudioNode
+            : n
+        ),
+      })
+      // Don't create an edge — the action is stored in data, virtual edge renders it
+      return
+    }
+
+    // If aspect → flow or flow → aspect, auto-add flow name to aspect's on patterns
+    const aspectNode = sourceNode?.type === 'aspect' ? sourceNode : targetNode?.type === 'aspect' ? targetNode : null
+    const flowNode = sourceNode?.type === 'flow' ? sourceNode : targetNode?.type === 'flow' ? targetNode : null
+    if (aspectNode && flowNode) {
+      saveToHistory(state)
+      const flowData = flowNode.data as FlowNodeData
+      const flowName = flowData.label.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '')
+      const aspectData = aspectNode.data as AspectNodeData
+      const currentPatterns = aspectData.on || []
+      if (flowName && !currentPatterns.includes(flowName)) {
+        set({
+          nodes: state.nodes.map(n =>
+            n.id === aspectNode.id
+              ? { ...n, data: { ...n.data, on: [...currentPatterns, flowName] } } as StudioNode
+              : n
+          ),
+        })
+      }
+      // Don't create an edge — the virtual aspect edge renders it
+      return
+    }
+
     // If both ends are connectors, auto-create a Flow node in between
     if (sourceNode?.type === 'connector' && targetNode?.type === 'connector') {
       saveToHistory(state)
@@ -288,7 +467,7 @@ export const useStudioStore = create<StudioState>((set, get) => ({
           y: (sourceNode.position.y + targetNode.position.y) / 2,
         },
         data: {
-          label: `${sourceData.label} to ${targetData.label}`,
+          label: `${sourceData.label.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '')}_to_${targetData.label.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '')}`,
         } as FlowNodeData,
       }
 

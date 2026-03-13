@@ -6,6 +6,10 @@ import type { Node } from '@xyflow/react'
 import {
   type ConnectorNodeData,
   type FlowNodeData,
+  type TypeNodeData,
+  type TransformNodeData,
+  type ValidatorNodeData,
+  type AspectNodeData,
   type StudioNode,
   DEFAULT_CONNECTOR_DIRECTIONS,
 } from '../types'
@@ -19,6 +23,7 @@ interface ParsedProject {
     name: string
     type: string
     driver?: string
+    sourceFile?: string
     properties?: Record<string, unknown>
   }>
   flows: Array<{
@@ -51,11 +56,13 @@ interface ParsedProject {
   }>
   types: Array<{
     name: string
+    sourceFile?: string
     fields: Record<string, { type: string; required?: boolean }>
   }>
-  transforms: Array<{ name: string; mappings: Record<string, string> }>
+  transforms: Array<{ name: string; sourceFile?: string; mappings: Record<string, string> }>
   validators: Array<{
     name: string
+    sourceFile?: string
     type: string
     pattern?: string
     expr?: string
@@ -65,6 +72,7 @@ interface ParsedProject {
   }>
   aspects: Array<{
     name: string
+    sourceFile?: string
     on: string[]
     when: string
     condition?: string
@@ -266,6 +274,7 @@ function convertProjectToNodes(project: ParsedProject): {
         driver: conn.driver,
         ...conn.properties,
       },
+      hclFile: conn.sourceFile || undefined,
     }
 
     newNodes.push({
@@ -282,6 +291,7 @@ function convertProjectToNodes(project: ParsedProject): {
 
     const nodeData: FlowNodeData = {
       label: flow.name,
+      hclFile: flow.sourceFile || undefined,
       when: flow.when,
       from: flow.from ? {
         connector: flow.from.connector,
@@ -351,6 +361,94 @@ function convertProjectToNodes(project: ParsedProject): {
         target: targetId,
       })
     }
+  })
+
+  // Create type nodes
+  const TYPE_START_X = 900
+  const TYPE_START_Y = 100
+  const TYPE_SPACING_Y = 150
+  project.types.forEach((typ, index) => {
+    const position = { x: TYPE_START_X, y: TYPE_START_Y + index * TYPE_SPACING_Y }
+    const fields: TypeNodeData['fields'] = {}
+    for (const [name, field] of Object.entries(typ.fields)) {
+      fields[name] = { type: (field.type || 'string') as 'string' | 'number' | 'bool' | 'object' | 'array', required: field.required }
+    }
+    const nodeData: TypeNodeData = {
+      label: typ.name,
+      hclFile: typ.sourceFile || undefined,
+      fields,
+    }
+    newNodes.push({
+      id: `type-${typ.name}`,
+      type: 'type',
+      position,
+      data: nodeData,
+    })
+  })
+
+  // Create transform nodes
+  const TRANSFORM_START_X = 900
+  const TRANSFORM_START_Y = 100 + project.types.length * TYPE_SPACING_Y
+  project.transforms.forEach((tr, index) => {
+    const position = { x: TRANSFORM_START_X, y: TRANSFORM_START_Y + index * 150 }
+    const nodeData: TransformNodeData = {
+      label: tr.name,
+      hclFile: tr.sourceFile || undefined,
+      fields: tr.mappings,
+    }
+    newNodes.push({
+      id: `transform-${tr.name}`,
+      type: 'transform',
+      position,
+      data: nodeData,
+    })
+  })
+
+  // Create validator nodes
+  const VALIDATOR_START_X = 1200
+  const VALIDATOR_START_Y = 100
+  project.validators.forEach((val, index) => {
+    const position = { x: VALIDATOR_START_X, y: VALIDATOR_START_Y + index * 150 }
+    const nodeData: ValidatorNodeData = {
+      label: val.name,
+      hclFile: val.sourceFile || undefined,
+      validatorType: val.type as 'regex' | 'cel' | 'wasm',
+      pattern: val.pattern,
+      expr: val.expr,
+      module: val.module,
+      entrypoint: val.function,
+      message: val.message,
+    }
+    newNodes.push({
+      id: `validator-${val.name}`,
+      type: 'validator',
+      position,
+      data: nodeData,
+    })
+  })
+
+  // Create aspect nodes
+  const ASPECT_START_X = 1200
+  const ASPECT_START_Y = 100 + project.validators.length * 150
+  project.aspects.forEach((asp, index) => {
+    const position = { x: ASPECT_START_X, y: ASPECT_START_Y + index * 150 }
+    const nodeData: AspectNodeData = {
+      label: asp.name,
+      hclFile: asp.sourceFile || undefined,
+      on: asp.on,
+      when: asp.when as AspectNodeData['when'],
+      condition: asp.condition,
+      priority: asp.priority,
+      action: asp.action,
+      cache: asp.cache,
+      invalidate: asp.invalidate,
+    }
+    newNodes.push({
+      id: `aspect-${asp.name}`,
+      type: 'aspect',
+      position,
+      data: nodeData,
+    })
   })
 
   return { newNodes, newEdges }
@@ -427,6 +525,23 @@ function convertNodesToProject(nodes: Node[]): GenerateRequest['project'] {
     validators,
     aspects,
     namedCaches,
+  }
+}
+
+// Standalone function to parse a backend project response into canvas nodes
+// Called from useProjectStore.openProject() — not a hook
+export function parseProjectToCanvas(project: ParsedProject) {
+  const { newNodes, newEdges } = convertProjectToNodes(project)
+  const store = useStudioStore.getState()
+  store.setNodes(newNodes)
+  store.setEdges(newEdges)
+
+  // Apply service config if present
+  if (project.service) {
+    store.updateServiceConfig({
+      name: project.service.name || 'my-service',
+      version: project.service.version || '1.0.0',
+    })
   }
 }
 

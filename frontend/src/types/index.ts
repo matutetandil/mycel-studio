@@ -556,6 +556,7 @@ export interface ConnectorNodeData extends Record<string, unknown> {
   config: Record<string, unknown>
   operations?: ConnectorOperation[]
   profileConfig?: ConnectorProfileConfig
+  hclFile?: string // Original source file path, e.g. 'src/connectors/api.hcl'
 }
 
 export interface FlowNodeData extends Record<string, unknown> {
@@ -582,6 +583,7 @@ export interface FlowNodeData extends Record<string, unknown> {
 export interface TypeNodeData extends Record<string, unknown> {
   label: string
   fields: Record<string, TypeFieldDefinition>
+  hclFile?: string
 }
 
 export interface TypeFieldDefinition {
@@ -603,11 +605,13 @@ export interface TypeFieldDefinition {
 export interface TransformNodeData extends Record<string, unknown> {
   label: string
   fields: Record<string, string>
+  hclFile?: string
 }
 
 export interface ValidatorNodeData extends Record<string, unknown> {
   label: string
   validatorType: 'regex' | 'cel' | 'wasm'
+  hclFile?: string
   pattern?: string
   expr?: string
   module?: string
@@ -619,6 +623,7 @@ export interface AspectNodeData extends Record<string, unknown> {
   label: string
   on: string[]
   when: 'before' | 'after' | 'around' | 'on_error'
+  hclFile?: string
   condition?: string
   priority?: number
   action?: {
@@ -661,6 +666,7 @@ export interface SagaStep {
 
 export interface SagaNodeData extends Record<string, unknown> {
   label: string
+  hclFile?: string
   from?: FlowFrom
   steps: SagaStep[]
   onComplete?: SagaAction
@@ -687,6 +693,7 @@ export interface StateMachineState {
 
 export interface StateMachineNodeData extends Record<string, unknown> {
   label: string
+  hclFile?: string
   initial: string
   states: StateMachineState[]
 }

@@ -37,6 +37,7 @@ function FlowNode({ data, selected }: FlowNodeProps) {
       `}
     >
       <Handle type="target" position={Position.Left} className="w-3 h-3 !bg-neutral-400" />
+      <Handle type="target" position={Position.Top} id="aspect-target" className="w-2.5 h-2.5 !bg-transparent !border-2 !border-neutral-500" />
 
       <div className="flex items-center gap-2 mb-2">
         <ArrowRight className="w-4 h-4 text-indigo-400" />

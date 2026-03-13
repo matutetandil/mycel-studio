@@ -2,18 +2,22 @@ import { useCallback, useMemo, useState } from 'react'
 import { ChevronDown, ChevronUp, AlertTriangle } from 'lucide-react'
 import { useEditorPanelStore } from '../../stores/useEditorPanelStore'
 import { useStudioStore } from '../../stores/useStudioStore'
+import { useProjectStore } from '../../stores/useProjectStore'
 import { generateProject } from '../../utils/hclGenerator'
 import EditorGroupView from './EditorGroup'
 
 export default function EditorPanel() {
   const { panelHeight, isCollapsed, groups, splitDirection, splitRatio, setPanelHeight, toggleCollapse } = useEditorPanelStore()
   const { nodes, edges, serviceConfig, authConfig, envConfig, securityConfig, pluginConfig } = useStudioStore()
+  const projectFiles = useProjectStore(s => s.files)
+  const mycelRoot = useProjectStore(s => s.mycelRoot)
   const [isResizing, setIsResizing] = useState(false)
   const [isSplitResizing, setIsSplitResizing] = useState(false)
 
+  const existingPaths = useMemo(() => new Set(projectFiles.map(f => f.relativePath)), [projectFiles])
   const project = useMemo(
-    () => generateProject(nodes, edges, serviceConfig, authConfig, envConfig, securityConfig, pluginConfig),
-    [nodes, edges, serviceConfig, authConfig, envConfig, securityConfig, pluginConfig]
+    () => generateProject(nodes, edges, serviceConfig, authConfig, envConfig, securityConfig, pluginConfig, mycelRoot, existingPaths),
+    [nodes, edges, serviceConfig, authConfig, envConfig, securityConfig, pluginConfig, mycelRoot, existingPaths]
   )
 
   const handleResizeMouseDown = useCallback((e: React.MouseEvent) => {

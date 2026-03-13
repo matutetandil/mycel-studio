@@ -51,6 +51,7 @@ type ConnectorConfig struct {
 	Name       string
 	Type       string
 	Driver     string
+	SourceFile string
 	Properties map[string]interface{}
 }
 
@@ -168,8 +169,9 @@ type RetryConfig struct {
 
 // TypeConfig represents a type block.
 type TypeConfig struct {
-	Name   string
-	Fields map[string]*FieldConfig
+	Name       string
+	SourceFile string
+	Fields     map[string]*FieldConfig
 }
 
 // FieldConfig represents a field in a type.
@@ -189,13 +191,15 @@ type FieldConfig struct {
 
 // TransformConfig represents a named transform block.
 type TransformConfig struct {
-	Name     string
-	Mappings map[string]string
+	Name       string
+	SourceFile string
+	Mappings   map[string]string
 }
 
 // ValidatorConfig represents a validator block.
 type ValidatorConfig struct {
 	Name       string
+	SourceFile string
 	Type       string
 	Pattern    string
 	Expr       string
@@ -207,6 +211,7 @@ type ValidatorConfig struct {
 // AspectConfig represents an aspect block.
 type AspectConfig struct {
 	Name       string
+	SourceFile string
 	On         []string
 	When       string
 	Condition  string
@@ -360,9 +365,45 @@ func (p *Parser) ParseFile(ctx context.Context, path string) (*Configuration, er
 	return config, nil
 }
 
+// ParseMultipleFiles parses multiple named HCL files and merges the results.
+// Each file is parsed with its own filename so that SourceFile tracking works correctly.
+func (p *Parser) ParseMultipleFiles(ctx context.Context, files map[string]string) (*Configuration, error) {
+	merged := &Configuration{
+		Connectors:  make([]*ConnectorConfig, 0),
+		Flows:       make([]*FlowConfig, 0),
+		Types:       make([]*TypeConfig, 0),
+		Transforms:  make([]*TransformConfig, 0),
+		Validators:  make([]*ValidatorConfig, 0),
+		Aspects:     make([]*AspectConfig, 0),
+		NamedCaches: make([]*NamedCacheConfig, 0),
+	}
+
+	for filename, content := range files {
+		config, err := p.ParseContent(ctx, content, filename)
+		if err != nil {
+			return nil, fmt.Errorf("error in %s: %w", filename, err)
+		}
+		// Merge
+		if config.Service != nil && merged.Service == nil {
+			merged.Service = config.Service
+		}
+		merged.Connectors = append(merged.Connectors, config.Connectors...)
+		merged.Flows = append(merged.Flows, config.Flows...)
+		merged.Types = append(merged.Types, config.Types...)
+		merged.Transforms = append(merged.Transforms, config.Transforms...)
+		merged.Validators = append(merged.Validators, config.Validators...)
+		merged.Aspects = append(merged.Aspects, config.Aspects...)
+		merged.NamedCaches = append(merged.NamedCaches, config.NamedCaches...)
+	}
+
+	return merged, nil
+}
+
 // ParseContent parses HCL content from a string.
 func (p *Parser) ParseContent(ctx context.Context, content string, filename string) (*Configuration, error) {
-	file, diags := p.hclParser.ParseHCL([]byte(content), filename)
+	srcBytes := []byte(content)
+	sourceCache[filename] = srcBytes
+	file, diags := p.hclParser.ParseHCL(srcBytes, filename)
 	if diags.HasErrors() {
 		return nil, fmt.Errorf("HCL parse error: %s", diags.Error())
 	}
@@ -503,9 +544,28 @@ func (p *Parser) ValidateContent(content string, filename string) []ValidationEr
 	// Step 3: Semantic validation
 	connectorNames := make(map[string]bool)
 	flowNames := make(map[string]bool)
+	typeNames := make(map[string]bool)
+	transformNames := make(map[string]bool)
+	aspectNames := make(map[string]bool)
+	validatorNames := make(map[string]bool)
+	sagaNames := make(map[string]bool)
+	stateMachineNames := make(map[string]bool)
 	var referencedConnectors []struct {
 		name string
 		line int
+	}
+
+	// Helper for checking duplicate named blocks
+	checkDuplicate := func(namesMap map[string]bool, blockType, name string, line int) {
+		if namesMap[name] {
+			errors = append(errors, ValidationError{
+				Message:  fmt.Sprintf("Duplicate %s name: %q", blockType, name),
+				File:     filename,
+				Line:     line,
+				Severity: "error",
+			})
+		}
+		namesMap[name] = true
 	}
 
 	for _, block := range bodyContent.Blocks {
@@ -513,15 +573,7 @@ func (p *Parser) ValidateContent(content string, filename string) []ValidationEr
 		case "connector":
 			if len(block.Labels) > 0 {
 				name := block.Labels[0]
-				if connectorNames[name] {
-					errors = append(errors, ValidationError{
-						Message:  fmt.Sprintf("Duplicate connector name: %q", name),
-						File:     filename,
-						Line:     block.DefRange.Start.Line,
-						Severity: "error",
-					})
-				}
-				connectorNames[name] = true
+				checkDuplicate(connectorNames, "connector", name, block.DefRange.Start.Line)
 
 				// Check for required 'type' attribute
 				attrs, _ := block.Body.JustAttributes()
@@ -538,15 +590,7 @@ func (p *Parser) ValidateContent(content string, filename string) []ValidationEr
 		case "flow":
 			if len(block.Labels) > 0 {
 				name := block.Labels[0]
-				if flowNames[name] {
-					errors = append(errors, ValidationError{
-						Message:  fmt.Sprintf("Duplicate flow name: %q", name),
-						File:     filename,
-						Line:     block.DefRange.Start.Line,
-						Severity: "error",
-					})
-				}
-				flowNames[name] = true
+				checkDuplicate(flowNames, "flow", name, block.DefRange.Start.Line)
 
 				// Check flow has 'from' block
 				flowContent, fdiags := block.Body.Content(&hcl.BodySchema{
@@ -615,6 +659,31 @@ func (p *Parser) ValidateContent(content string, filename string) []ValidationEr
 						})
 					}
 				}
+			}
+
+		case "type":
+			if len(block.Labels) > 0 {
+				checkDuplicate(typeNames, "type", block.Labels[0], block.DefRange.Start.Line)
+			}
+		case "transform":
+			if len(block.Labels) > 0 {
+				checkDuplicate(transformNames, "transform", block.Labels[0], block.DefRange.Start.Line)
+			}
+		case "aspect":
+			if len(block.Labels) > 0 {
+				checkDuplicate(aspectNames, "aspect", block.Labels[0], block.DefRange.Start.Line)
+			}
+		case "validator":
+			if len(block.Labels) > 0 {
+				checkDuplicate(validatorNames, "validator", block.Labels[0], block.DefRange.Start.Line)
+			}
+		case "saga":
+			if len(block.Labels) > 0 {
+				checkDuplicate(sagaNames, "saga", block.Labels[0], block.DefRange.Start.Line)
+			}
+		case "state_machine":
+			if len(block.Labels) > 0 {
+				checkDuplicate(stateMachineNames, "state_machine", block.Labels[0], block.DefRange.Start.Line)
 			}
 		}
 	}
@@ -692,31 +761,79 @@ func (p *Parser) parseConnectorBlock(block *hcl.Block) (*ConnectorConfig, error)
 		return nil, fmt.Errorf("connector block requires a name label")
 	}
 
+	// Extract source file from the block's DefRange
+	sourceFile := block.DefRange.Filename
+
 	config := &ConnectorConfig{
 		Name:       block.Labels[0],
+		SourceFile: sourceFile,
 		Properties: make(map[string]interface{}),
 	}
 
-	// Use a permissive schema - capture all attributes
-	attrs, diags := block.Body.JustAttributes()
+	// Use PartialContent to get known attributes while allowing unknown blocks
+	partialContent, remain, diags := block.Body.PartialContent(&hcl.BodySchema{
+		Attributes: []hcl.AttributeSchema{
+			{Name: "type"},
+			{Name: "driver"},
+		},
+	})
 	if diags.HasErrors() {
 		return nil, fmt.Errorf("connector attributes error: %s", diags.Error())
 	}
 
-	for name, attr := range attrs {
+	// Extract type and driver
+	if attr, ok := partialContent.Attributes["type"]; ok {
 		val, _ := attr.Expr.Value(p.evalCtx)
-		switch name {
-		case "type":
-			if val.Type() == cty.String {
-				config.Type = val.AsString()
-			}
-		case "driver":
-			if val.Type() == cty.String {
-				config.Driver = val.AsString()
-			}
-		default:
-			config.Properties[name] = ctyToGo(val)
+		if val.Type() == cty.String {
+			config.Type = val.AsString()
 		}
+	}
+	if attr, ok := partialContent.Attributes["driver"]; ok {
+		val, _ := attr.Expr.Value(p.evalCtx)
+		if val.Type() == cty.String {
+			config.Driver = val.AsString()
+		}
+	}
+
+	// Get remaining attributes (all other fields)
+	remainAttrs, _ := remain.JustAttributes()
+	for name, attr := range remainAttrs {
+		val, _ := attr.Expr.Value(p.evalCtx)
+		if val.IsKnown() && val.Type() != cty.DynamicPseudoType {
+			config.Properties[name] = ctyToGo(val)
+		} else {
+			// Dynamic value (e.g. env()) — extract source expression text
+			config.Properties[name] = extractExprSource(attr.Expr)
+		}
+	}
+
+	// Parse sub-blocks (pool, cors, tls, consumer, producer, etc.) into properties
+	remainContent, _, _ := remain.PartialContent(&hcl.BodySchema{})
+	_ = remainContent // already got attrs above
+
+	// Re-parse remaining body to find blocks
+	// Use a broad schema to capture common sub-block types
+	subBlockTypes := []string{
+		"pool", "cors", "tls", "retry", "consumer", "producer", "publisher",
+		"exchange", "dlq", "sasl", "schema_registry", "profile",
+	}
+	subSchema := &hcl.BodySchema{}
+	for _, bt := range subBlockTypes {
+		subSchema.Blocks = append(subSchema.Blocks, hcl.BlockHeaderSchema{Type: bt})
+	}
+	subContent, _, _ := block.Body.PartialContent(subSchema)
+	for _, subBlock := range subContent.Blocks {
+		subAttrs, _ := subBlock.Body.JustAttributes()
+		subProps := make(map[string]interface{})
+		for k, a := range subAttrs {
+			v, _ := a.Expr.Value(p.evalCtx)
+			if v.IsKnown() && v.Type() != cty.DynamicPseudoType {
+				subProps[k] = ctyToGo(v)
+			} else {
+				subProps[k] = extractExprSource(a.Expr)
+			}
+		}
+		config.Properties[subBlock.Type] = subProps
 	}
 
 	return config, nil
@@ -1198,8 +1315,9 @@ func (p *Parser) parseTypeBlock(block *hcl.Block) (*TypeConfig, error) {
 	}
 
 	config := &TypeConfig{
-		Name:   block.Labels[0],
-		Fields: make(map[string]*FieldConfig),
+		Name:       block.Labels[0],
+		SourceFile: block.DefRange.Filename,
+		Fields:     make(map[string]*FieldConfig),
 	}
 
 	attrs, _ := block.Body.JustAttributes()
@@ -1224,8 +1342,9 @@ func (p *Parser) parseTransformBlock(block *hcl.Block) (*TransformConfig, error)
 	}
 
 	config := &TransformConfig{
-		Name:     block.Labels[0],
-		Mappings: make(map[string]string),
+		Name:       block.Labels[0],
+		SourceFile: block.DefRange.Filename,
+		Mappings:   make(map[string]string),
 	}
 
 	attrs, _ := block.Body.JustAttributes()
@@ -1243,7 +1362,8 @@ func (p *Parser) parseValidatorBlock(block *hcl.Block) (*ValidatorConfig, error)
 	}
 
 	config := &ValidatorConfig{
-		Name: block.Labels[0],
+		Name:       block.Labels[0],
+		SourceFile: block.DefRange.Filename,
 	}
 
 	attrs, _ := block.Body.JustAttributes()
@@ -1278,8 +1398,9 @@ func (p *Parser) parseAspectBlock(block *hcl.Block) (*AspectConfig, error) {
 	}
 
 	config := &AspectConfig{
-		Name: block.Labels[0],
-		On:   make([]string, 0),
+		Name:       block.Labels[0],
+		SourceFile: block.DefRange.Filename,
+		On:         make([]string, 0),
 	}
 
 	content, diags := block.Body.Content(&hcl.BodySchema{
@@ -1439,6 +1560,27 @@ func mergeConfig(dst, src *Configuration) {
 	dst.Validators = append(dst.Validators, src.Validators...)
 	dst.Aspects = append(dst.Aspects, src.Aspects...)
 	dst.NamedCaches = append(dst.NamedCaches, src.NamedCaches...)
+}
+
+// sourceCache stores parsed file/inline content for expression extraction.
+var sourceCache = map[string][]byte{}
+
+// extractExprSource extracts the source text of an HCL expression from cached sources.
+func extractExprSource(expr hcl.Expression) string {
+	rng := expr.Range()
+	if src, ok := sourceCache[rng.Filename]; ok {
+		extracted := rng.SliceBytes(src)
+		return strings.TrimSpace(string(extracted))
+	}
+	// Try reading from file
+	if rng.Filename != "" {
+		content, err := os.ReadFile(rng.Filename)
+		if err == nil {
+			extracted := rng.SliceBytes(content)
+			return strings.TrimSpace(string(extracted))
+		}
+	}
+	return ""
 }
 
 func ctyToGo(val cty.Value) interface{} {

@@ -1,44 +1,20 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useRef } from 'react'
 import { ChevronDown, ChevronRight, ChevronLeft } from 'lucide-react'
 import FileTree from '../FileTree/FileTree'
 import Palette from '../Palette/Palette'
-
-interface CollapsibleSectionProps {
-  title: string
-  defaultExpanded?: boolean
-  children: React.ReactNode
-}
-
-function CollapsibleSection({
-  title,
-  defaultExpanded = true,
-  children,
-}: CollapsibleSectionProps) {
-  const [isExpanded, setIsExpanded] = useState(defaultExpanded)
-
-  return (
-    <div className="border-b border-neutral-800">
-      <button
-        onClick={() => setIsExpanded(!isExpanded)}
-        className="w-full flex items-center gap-1 px-3 py-2 text-xs font-semibold uppercase tracking-wider text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800/50"
-      >
-        {isExpanded ? (
-          <ChevronDown className="w-3 h-3" />
-        ) : (
-          <ChevronRight className="w-3 h-3" />
-        )}
-        {title}
-      </button>
-      {isExpanded && <div className="pb-2">{children}</div>}
-    </div>
-  )
-}
+import { useLayoutStore } from '../../stores/useLayoutStore'
 
 export default function Sidebar() {
+  const [explorerExpanded, setExplorerExpanded] = useState(true)
   const [componentsExpanded, setComponentsExpanded] = useState(true)
-  const [width, setWidth] = useState(280)
-  const [collapsed, setCollapsed] = useState(false)
+  const width = useLayoutStore(s => s.leftWidth)
+  const setWidth = useLayoutStore(s => s.setLeftWidth)
+  const collapsed = useLayoutStore(s => s.leftCollapsed)
+  const setCollapsed = useLayoutStore(s => s.setLeftCollapsed)
   const [isResizing, setIsResizing] = useState(false)
+  const [isSplitResizing, setIsSplitResizing] = useState(false)
+  const [splitRatio, setSplitRatio] = useState(0.5) // Explorer gets this fraction of total height
+  const containerRef = useRef<HTMLDivElement>(null)
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     e.preventDefault()
@@ -60,7 +36,34 @@ export default function Sidebar() {
 
     document.addEventListener('mousemove', handleMouseMove)
     document.addEventListener('mouseup', handleMouseUp)
-  }, [width])
+  }, [width, setWidth])
+
+  const handleSplitMouseDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault()
+    setIsSplitResizing(true)
+
+    const container = containerRef.current
+    if (!container) return
+
+    const handleMouseMove = (e: MouseEvent) => {
+      const rect = container.getBoundingClientRect()
+      const y = e.clientY - rect.top
+      const ratio = y / rect.height
+      setSplitRatio(Math.max(0.15, Math.min(0.85, ratio)))
+    }
+
+    const handleMouseUp = () => {
+      setIsSplitResizing(false)
+      document.removeEventListener('mousemove', handleMouseMove)
+      document.removeEventListener('mouseup', handleMouseUp)
+    }
+
+    document.addEventListener('mousemove', handleMouseMove)
+    document.addEventListener('mouseup', handleMouseUp)
+  }, [])
+
+  // Header height for each section (~32px)
+  const HEADER_H = 32
 
   return (
     <div className="relative flex-shrink-0 h-full">
@@ -78,18 +81,43 @@ export default function Sidebar() {
 
       <div
         style={{ width: collapsed ? 0 : width }}
-        className={`bg-neutral-900 border-r border-neutral-800 overflow-hidden h-full transition-[width] duration-200 ease-in-out ${isResizing ? 'select-none transition-none' : ''}`}
+        className={`bg-neutral-900 border-r border-neutral-800 overflow-hidden h-full transition-[width] duration-200 ease-in-out ${isResizing || isSplitResizing ? 'select-none transition-none' : ''}`}
       >
-        <div style={{ width }} className="flex flex-col h-full">
-          {/* File Tree Section */}
-          <CollapsibleSection title="Explorer" defaultExpanded>
-            <div className="max-h-64 overflow-y-auto">
-              <FileTree />
-            </div>
-          </CollapsibleSection>
+        <div ref={containerRef} style={{ width }} className="flex flex-col h-full">
+          {/* Explorer Section */}
+          <div
+            className="flex flex-col min-h-0 border-b border-neutral-800"
+            style={{
+              height: explorerExpanded && componentsExpanded
+                ? `calc(${splitRatio * 100}% - ${HEADER_H / 2}px)`
+                : explorerExpanded ? '100%' : undefined,
+              flexShrink: explorerExpanded ? undefined : 0,
+            }}
+          >
+            <button
+              onClick={() => setExplorerExpanded(!explorerExpanded)}
+              className="w-full flex items-center gap-1 px-3 py-2 text-xs font-semibold uppercase tracking-wider text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800/50 shrink-0"
+            >
+              {explorerExpanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+              Explorer
+            </button>
+            {explorerExpanded && (
+              <div className="flex-1 min-h-0 overflow-y-auto">
+                <FileTree />
+              </div>
+            )}
+          </div>
 
-          {/* Components Palette Section - fills remaining space with scroll */}
-          <div className="flex-1 min-h-0 flex flex-col border-b border-neutral-800">
+          {/* Resize handle between sections */}
+          {explorerExpanded && componentsExpanded && (
+            <div
+              className="h-1 cursor-ns-resize hover:bg-indigo-500/50 transition-colors shrink-0"
+              onMouseDown={handleSplitMouseDown}
+            />
+          )}
+
+          {/* Components Palette Section */}
+          <div className="flex-1 min-h-0 flex flex-col">
             <button
               onClick={() => setComponentsExpanded(!componentsExpanded)}
               className="w-full flex items-center gap-1 px-3 py-2 text-xs font-semibold uppercase tracking-wider text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800/50 shrink-0"
