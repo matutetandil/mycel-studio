@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import { getFileSystemProvider, getCapabilities, type FSCapabilities } from '../lib/fileSystem'
 import { loadWorkspace, applyWorkspace } from './useWorkspaceStore'
 import { generateProject } from '../utils/hclGenerator'
+import { apiParse, apiConfirm } from '../lib/api'
 
 export interface ProjectFile {
   name: string
@@ -63,6 +64,7 @@ interface ProjectState {
   closeProject: () => void
 
   // Async operations (works with all providers)
+  newProject: () => Promise<boolean>
   openProject: () => Promise<boolean>
   saveProject: () => Promise<boolean>
   createFile: (relativePath: string, content?: string) => Promise<boolean>
@@ -147,6 +149,138 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   },
 
   // Async operations (works with all providers)
+  newProject: async () => {
+    try {
+      set({ isLoading: true, error: null })
+
+      const provider = getFileSystemProvider()
+      const project = await provider.openProject()
+
+      if (!project) {
+        set({ isLoading: false })
+        return false
+      }
+
+      const files: ProjectFile[] = project.files.map((f) => ({
+        name: f.name,
+        path: f.relativePath,
+        relativePath: f.relativePath,
+        content: f.content,
+        isDirty: false,
+      }))
+
+      const hasStudioFile = files.some(f => f.name === '.mycel-studio.json')
+      const hclFiles = files.filter(f => f.name.endsWith('.hcl'))
+      const hasFiles = files.length > 0
+
+      if (hasStudioFile) {
+        // Already a Mycel Studio project — ask if they want to open it instead
+        const open = await apiConfirm(
+          'Project Already Exists',
+          'This directory already contains a Mycel Studio project. Would you like to open it?'
+        )
+        if (open) {
+          set({ isLoading: false })
+          return get().openProject()
+        }
+        set({ isLoading: false })
+        return false
+      }
+
+      if (hasFiles && hclFiles.length > 0) {
+        // Has HCL files but no studio project — ask to import
+        const importExisting = await apiConfirm(
+          'Existing Files Found',
+          'This directory contains HCL configuration files. Would you like to create a Mycel Studio project from these existing files?'
+        )
+        if (!importExisting) {
+          set({ isLoading: false })
+          return false
+        }
+      } else if (hasFiles) {
+        // Has files but no HCL — ask to create project here
+        const proceed = await apiConfirm(
+          'Non-Empty Directory',
+          'This directory contains files but no HCL configurations. Would you like to create a new Mycel Studio project here?'
+        )
+        if (!proceed) {
+          set({ isLoading: false })
+          return false
+        }
+      }
+
+      // Create the studio project file
+      const studioMeta = JSON.stringify({
+        version: '1.0',
+        canvas: { zoom: 1, position: { x: 0, y: 0 } },
+        nodes: {},
+        ui: { theme: 'dark', activeFile: null, expandedPanels: ['fileTree', 'components'] },
+      }, null, 2)
+      await provider.writeFile('.mycel-studio.json', studioMeta)
+
+      // Create config.hcl if it doesn't exist
+      if (!hclFiles.some(f => f.name === 'config.hcl')) {
+        const configHcl = `service {\n  name    = "${project.name}"\n  version = "1.0.0"\n}\n`
+        await provider.writeFile('config.hcl', configHcl)
+        files.push({
+          name: 'config.hcl',
+          path: 'config.hcl',
+          relativePath: 'config.hcl',
+          content: configHcl,
+          isDirty: false,
+        })
+      }
+
+      files.push({
+        name: '.mycel-studio.json',
+        path: '.mycel-studio.json',
+        relativePath: '.mycel-studio.json',
+        content: studioMeta,
+        isDirty: false,
+      })
+
+      // Detect Mycel root
+      const configFile = files.find(f => f.name === 'config.hcl')
+      const mycelRoot = configFile
+        ? configFile.relativePath.replace(/\/?config\.hcl$/, '')
+        : ''
+      const normalizedRoot = mycelRoot ? (mycelRoot.endsWith('/') ? mycelRoot : mycelRoot + '/') : ''
+
+      set({
+        projectPath: provider.getProjectPath(),
+        projectName: project.name,
+        mycelRoot: normalizedRoot,
+        files,
+        metadata: defaultMetadata,
+        activeFile: files.find((f) => f.name.endsWith('.hcl'))?.relativePath ?? null,
+        isLoading: false,
+        capabilities: provider.getCapabilities(),
+      })
+
+      get().refreshGitStatus()
+
+      // Parse existing HCL files into canvas
+      const existingHcl = files.filter(f => f.name.endsWith('.hcl'))
+      if (existingHcl.length > 0) {
+        const fileEntries = existingHcl.map(f => ({ path: f.relativePath, content: f.content }))
+        try {
+          const result = await apiParse({ files: fileEntries })
+          if (result.success && result.project) {
+            const { parseProjectToCanvas } = await import('../hooks/useSync')
+            parseProjectToCanvas(result.project as never)
+          }
+        } catch (err) {
+          console.error('Failed to parse HCL files:', err)
+        }
+      }
+
+      return true
+    } catch (error) {
+      set({ error: String(error), isLoading: false })
+      return false
+    }
+  },
+
   openProject: async () => {
     try {
       set({ isLoading: true, error: null })
@@ -198,18 +332,11 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
           content: f.content,
         }))
         try {
-          const response = await fetch('/api/parse', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ files: fileEntries }),
-          })
-          if (response.ok) {
-            const result = await response.json()
-            if (result.success && result.project) {
-              // Import dynamically to avoid circular deps
-              const { parseProjectToCanvas } = await import('../hooks/useSync')
-              parseProjectToCanvas(result.project)
-            }
+          const result = await apiParse({ files: fileEntries })
+          if (result.success && result.project) {
+            // Import dynamically to avoid circular deps
+            const { parseProjectToCanvas } = await import('../hooks/useSync')
+            parseProjectToCanvas(result.project as never)
           }
         } catch (err) {
           console.error('Failed to parse HCL files:', err)

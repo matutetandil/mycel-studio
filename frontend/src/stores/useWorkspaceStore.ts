@@ -2,6 +2,7 @@
 import { useStudioStore } from './useStudioStore'
 import { useEditorPanelStore, type EditorTab } from './useEditorPanelStore'
 import { useLayoutStore } from './useLayoutStore'
+import { useTerminalStore } from './useTerminalStore'
 import { getFileSystemProvider } from '../lib/fileSystem'
 
 const WORKSPACE_FILE = '.mycel-studio.json'
@@ -25,6 +26,7 @@ export interface WorkspaceState {
     rightWidth: number
     rightCollapsed: boolean
   }
+  terminals?: Array<{ name: string; workDir: string }>
 }
 
 const DEFAULT_WORKSPACE: WorkspaceState = {
@@ -96,6 +98,14 @@ export function applyWorkspace(ws: WorkspaceState) {
   layoutStore.setLeftCollapsed(ws.sidebar.leftCollapsed)
   layoutStore.setRightWidth(ws.sidebar.rightWidth)
   layoutStore.setRightCollapsed(ws.sidebar.rightCollapsed)
+
+  // Restore terminals
+  if (ws.terminals && ws.terminals.length > 0) {
+    const termStore = useTerminalStore.getState()
+    for (const saved of ws.terminals) {
+      termStore.createTerminal(saved.workDir)
+    }
+  }
 }
 
 // Build workspace JSON from current state
@@ -120,6 +130,13 @@ export function buildWorkspace(
   const activeGroup = editorStore.groups.find(g => g.id === editorStore.activeGroupId)
   const activeTab = activeGroup?.activeTabId || null
 
+  // Collect terminal state
+  const terminalStore = useTerminalStore.getState()
+  const terminals = terminalStore.terminals.map(t => ({
+    name: t.name,
+    workDir: t.workDir,
+  }))
+
   return {
     version: '1.0',
     canvas: canvasViewport
@@ -138,6 +155,7 @@ export function buildWorkspace(
       rightWidth: layout.rightWidth,
       rightCollapsed: layout.rightCollapsed,
     },
+    terminals: terminals.length > 0 ? terminals : undefined,
   }
 }
 

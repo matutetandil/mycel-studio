@@ -837,8 +837,13 @@ function generateAspectHCL(node: StudioNode): string {
   if (data.action) {
     lines.push('')
     lines.push('  action {')
-    lines.push(`    connector = "${data.action.connector}"`)
-    if (data.action.target) lines.push(`    target    = "${data.action.target}"`)
+    if (data.action.flow) {
+      lines.push(`    flow = "${data.action.flow}"`)
+    } else if (data.action.connector) {
+      lines.push(`    connector = "${data.action.connector}"`)
+      if (data.action.operation) lines.push(`    operation = "${data.action.operation}"`)
+      if (data.action.target) lines.push(`    target    = "${data.action.target}"`)
+    }
     if (data.action.transform && Object.keys(data.action.transform).length > 0) {
       lines.push('')
       lines.push('    transform {')
@@ -872,6 +877,29 @@ function generateAspectHCL(node: StudioNode): string {
       lines.push(`    patterns = [${data.invalidate.patterns.map(p => `"${p}"`).join(', ')}]`)
     }
     lines.push('  }')
+  }
+
+  // Response block (v1.13.0, for after aspects)
+  if (data.response) {
+    const hasHeaders = data.response.headers && Object.keys(data.response.headers).length > 0
+    const hasFields = data.response.fields && Object.keys(data.response.fields).length > 0
+    if (hasHeaders || hasFields) {
+      lines.push('')
+      lines.push('  response {')
+      if (hasHeaders) {
+        lines.push('    headers = {')
+        for (const [key, value] of Object.entries(data.response.headers!)) {
+          lines.push(`      ${key} = "${value}"`)
+        }
+        lines.push('    }')
+      }
+      if (hasFields) {
+        for (const [key, value] of Object.entries(data.response.fields!)) {
+          lines.push(`    ${key} = "${value}"`)
+        }
+      }
+      lines.push('  }')
+    }
   }
 
   lines.push('}')

@@ -63,8 +63,20 @@ function AspectNode({ data, selected }: AspectNodeProps) {
 
       {/* Show what the aspect does */}
       {data.action && (
-        <div className="mt-1 px-2 py-1 bg-blue-900/20 border border-blue-700/30 rounded text-xs text-blue-300 truncate">
-          Action → {data.action.connector}{data.action.target ? ` (${data.action.target})` : ''}
+        <div className={`mt-1 px-2 py-1 rounded text-xs truncate ${
+          data.action.flow
+            ? 'bg-emerald-900/20 border border-emerald-700/30 text-emerald-300'
+            : 'bg-blue-900/20 border border-blue-700/30 text-blue-300'
+        }`}>
+          {data.action.flow
+            ? <>Flow → {data.action.flow}</>
+            : <>Action → {data.action.connector}{data.action.target ? ` (${data.action.target})` : ''}</>
+          }
+        </div>
+      )}
+      {data.response && (
+        <div className="mt-1 px-2 py-1 bg-green-900/20 border border-green-700/30 rounded text-xs text-green-300 truncate">
+          Response enrichment
         </div>
       )}
       {data.cache && (

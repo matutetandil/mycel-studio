@@ -1408,13 +1408,25 @@ function AspectProperties({
   // Action section
   const action = data.action || { connector: '', target: '' }
   const hasAction = !!data.action
+  const actionMode: 'connector' | 'flow' = data.action?.flow ? 'flow' : 'connector'
 
-  const updateAction = (updates: Partial<typeof action>) => {
+  const updateAction = (updates: Partial<AspectNodeData['action']>) => {
     onChange({ action: { ...action, ...updates } })
+  }
+
+  const setActionMode = (mode: 'connector' | 'flow') => {
+    if (mode === 'flow') {
+      onChange({ action: { flow: '', transform: action.transform } })
+    } else {
+      onChange({ action: { connector: '', target: '', transform: action.transform } })
+    }
   }
 
   // Action transform fields
   const actionFields = data.action?.transform || {}
+
+  // Response section (v1.13.0, for after aspects)
+  const hasResponse = !!data.response
 
   // Invalidation section
   const invalidate = data.invalidate
@@ -1572,21 +1584,67 @@ function AspectProperties({
           </div>
           {hasAction && (
             <div className="space-y-2">
-              <select
-                value={action.connector}
-                onChange={(e) => updateAction({ connector: e.target.value })}
-                className={inputClass + ' text-xs'}
-              >
-                <option value="">Select connector...</option>
-                {nodes
-                  .filter(n => n.type === 'connector')
-                  .map(n => {
-                    const cd = n.data as ConnectorNodeData
-                    const name = cd.label.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '')
-                    return <option key={n.id} value={name}>{cd.label} ({cd.connectorType})</option>
-                  })}
-              </select>
-              <input type="text" value={action.target} onChange={(e) => updateAction({ target: e.target.value })} placeholder="target (table, operation)" className={inputClass + ' text-xs'} />
+              {/* Mode toggle: Connector vs Flow */}
+              <div className="flex gap-1">
+                <button
+                  onClick={() => setActionMode('connector')}
+                  className={`flex-1 px-2 py-1 text-xs rounded border transition-colors ${
+                    actionMode === 'connector'
+                      ? 'bg-blue-600/20 border-blue-500/50 text-blue-300'
+                      : 'border-neutral-700 text-neutral-400 hover:text-neutral-200'
+                  }`}
+                >
+                  Connector
+                </button>
+                <button
+                  onClick={() => setActionMode('flow')}
+                  className={`flex-1 px-2 py-1 text-xs rounded border transition-colors ${
+                    actionMode === 'flow'
+                      ? 'bg-emerald-600/20 border-emerald-500/50 text-emerald-300'
+                      : 'border-neutral-700 text-neutral-400 hover:text-neutral-200'
+                  }`}
+                >
+                  Flow
+                </button>
+              </div>
+
+              {actionMode === 'connector' ? (
+                <>
+                  <select
+                    value={action.connector || ''}
+                    onChange={(e) => updateAction({ connector: e.target.value })}
+                    className={inputClass + ' text-xs'}
+                  >
+                    <option value="">Select connector...</option>
+                    {nodes
+                      .filter(n => n.type === 'connector')
+                      .map(n => {
+                        const cd = n.data as ConnectorNodeData
+                        const name = cd.label.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_-]/g, '')
+                        return <option key={n.id} value={name}>{cd.label} ({cd.connectorType})</option>
+                      })}
+                  </select>
+                  <input type="text" value={action.operation || ''} onChange={(e) => updateAction({ operation: e.target.value || undefined })} placeholder="operation (optional)" className={inputClass + ' text-xs font-mono'} />
+                  <input type="text" value={action.target || ''} onChange={(e) => updateAction({ target: e.target.value || undefined })} placeholder="target (table, resource)" className={inputClass + ' text-xs'} />
+                </>
+              ) : (
+                <>
+                  <select
+                    value={action.flow || ''}
+                    onChange={(e) => updateAction({ flow: e.target.value })}
+                    className={inputClass + ' text-xs'}
+                  >
+                    <option value="">Select flow...</option>
+                    {flowNames.map(name => (
+                      <option key={name} value={name}>{name}</option>
+                    ))}
+                  </select>
+                  <p className="text-[10px] text-neutral-500">
+                    The flow receives the transform output as its input. Errors are soft failures (warning logged, main flow unaffected).
+                  </p>
+                </>
+              )}
+
               <TransformPopupButton
                 fields={actionFields}
                 onSave={(fields) => updateAction({ transform: fields })}
@@ -1658,6 +1716,55 @@ function AspectProperties({
                 const val = e.target.value.trim()
                 onChange({ invalidate: { ...invalidate!, patterns: val ? val.split(',').map(s => s.trim()) : undefined } })
               }} placeholder="patterns (comma-separated globs)" className={inputClass + ' text-xs font-mono'} />
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Response enrichment (for after aspects, v1.13.0) */}
+      {data.when === 'after' && (
+        <div className="p-3 bg-neutral-800/50 rounded-md space-y-2">
+          <div className="flex items-center justify-between">
+            <label className="text-xs font-medium text-neutral-400">Response Enrichment</label>
+            {!hasResponse ? (
+              <button onClick={() => onChange({ response: { fields: {} } })} className="text-xs text-green-400 hover:text-green-300">
+                + Add
+              </button>
+            ) : (
+              <button onClick={() => onChange({ response: undefined })} className="text-xs text-red-400 hover:text-red-300">
+                Remove
+              </button>
+            )}
+          </div>
+          {hasResponse && (
+            <div className="space-y-2">
+              <p className="text-[10px] text-neutral-500">
+                Inject fields into every response row. CEL expressions with <code className="text-amber-400">result.data</code>, <code className="text-amber-400">input.*</code>
+              </p>
+              <TransformPopupButton
+                fields={data.response?.fields}
+                onSave={(fields) => onChange({ response: { ...data.response, fields: fields || {} } })}
+                label="Response Fields"
+              />
+              <div>
+                <label className="block text-[10px] text-neutral-500 mb-1">Headers (key=value, one per line)</label>
+                <textarea
+                  value={data.response?.headers ? Object.entries(data.response.headers).map(([k, v]) => `${k}=${v}`).join('\n') : ''}
+                  onChange={(e) => {
+                    const headers: Record<string, string> = {}
+                    e.target.value.split('\n').filter(l => l.trim()).forEach(line => {
+                      const eqIdx = line.indexOf('=')
+                      if (eqIdx > 0) {
+                        headers[line.slice(0, eqIdx).trim()] = line.slice(eqIdx + 1).trim()
+                      }
+                    })
+                    onChange({ response: { ...data.response, headers: Object.keys(headers).length > 0 ? headers : undefined } })
+                  }}
+                  placeholder="Deprecation=true&#10;Sunset=Thu, 01 Jun 2026"
+                  rows={2}
+                  className={inputClass + ' text-xs font-mono resize-none'}
+                />
+              </div>
             </div>
           )}
         </div>

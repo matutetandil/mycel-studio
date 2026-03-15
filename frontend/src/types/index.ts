@@ -627,8 +627,10 @@ export interface AspectNodeData extends Record<string, unknown> {
   condition?: string
   priority?: number
   action?: {
-    connector: string
-    target: string
+    connector?: string
+    flow?: string
+    operation?: string
+    target?: string
     transform?: Record<string, string>
   }
   cache?: FlowCache
@@ -636,6 +638,10 @@ export interface AspectNodeData extends Record<string, unknown> {
     storage: string
     keys?: string[]
     patterns?: string[]
+  }
+  response?: {
+    headers?: Record<string, string>
+    fields?: Record<string, string>
   }
 }
 

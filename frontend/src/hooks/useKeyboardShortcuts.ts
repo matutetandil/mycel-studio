@@ -2,6 +2,7 @@ import { useEffect, useCallback, useState } from 'react'
 import { useStudioStore } from '../stores/useStudioStore'
 import { useProjectStore } from '../stores/useProjectStore'
 import { useEditorPanelStore } from '../stores/useEditorPanelStore'
+import EditorPanel from '../components/EditorPanel/EditorPanel'
 
 export function useKeyboardShortcuts() {
   const { undo, redo, copyNode, pasteNode, duplicateNode, selectedNodeId, removeNode } = useStudioStore()
@@ -11,18 +12,26 @@ export function useKeyboardShortcuts() {
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
+      const mod = e.metaKey || e.ctrlKey
+
+      // Toggle terminal: Ctrl/Cmd+` — works from anywhere (including Monaco/xterm)
+      if (mod && e.key === '`') {
+        e.preventDefault()
+        EditorPanel.switchToTerminal()
+        return
+      }
+
       const target = e.target as HTMLElement
       // Skip if typing in an input/textarea/contentEditable
       if (
         target.tagName === 'INPUT' ||
         target.tagName === 'TEXTAREA' ||
         target.isContentEditable ||
-        target.closest('.monaco-editor')
+        target.closest('.monaco-editor') ||
+        target.closest('.xterm')
       ) {
         return
       }
-
-      const mod = e.metaKey || e.ctrlKey
 
       // Undo: Ctrl/Cmd+Z
       if (mod && !e.shiftKey && e.key === 'z') {

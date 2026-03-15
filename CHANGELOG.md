@@ -2,6 +2,61 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.0.0] - Wails Desktop App + Aspect Enhancements
+
+### Added
+
+- **Wails v2 desktop application:**
+  - Native macOS app (10MB binary) with embedded WebView
+  - Native file system access via Go `os` package (no more browser File System Access API limitations)
+  - Native git integration via system `git` command
+  - `OpenDirectoryDialog()` — native macOS folder picker
+  - `ReadDirectoryTree()` — recursive directory scan with binary/large file filtering
+  - `ReadFile()` / `WriteFile()` / `DeleteFile()` / `CreateDirectory()` — full CRUD
+  - `GetGitStatus()` / `GetGitBranch()` / `GetGitFileStatuses()` — git porcelain parsing
+  - `ParseHCL()` / `GenerateHCL()` / `ValidateHCL()` — Go parser exposed as IPC bindings
+
+- **Dual-mode architecture:**
+  - `main.go` — Wails desktop entry point (embeds frontend via `//go:embed`)
+  - `cmd/server/main.go` — Docker HTTP server entry point (no embed, separate binary)
+  - Both share the same `parser/`, `handlers/`, `models/` packages
+
+- **API abstraction layer (`lib/api.ts`):**
+  - Detects runtime (Wails IPC vs HTTP) via `window.go` presence
+  - `apiParse()` / `apiGenerate()` — transparent routing to Go bindings or HTTP endpoints
+  - No static imports of Wails bindings (avoids build failures in browser mode)
+
+- **Wails filesystem provider (`lib/fileSystem/wailsFS.ts`):**
+  - Implements `FileSystemProvider` interface using Wails Go bindings
+  - Auto-detected by factory when running as desktop app
+  - Full git status support via native git
+
+- **Aspect flow actions (Mycel v1.12.3):**
+  - Aspects can now invoke flows: `action { flow = "name" }` (mutually exclusive with `connector`)
+  - Flow selector dropdown in AspectProperties (populated from canvas flow nodes)
+  - Operation field for connector-based actions
+  - Virtual edges from aspect to targeted flow (green dashed lines)
+  - AspectNode shows "Flow → name" (green) vs "Action → connector" (blue)
+
+- **Aspect response enrichment (Mycel v1.13.0):**
+  - `response {}` block for `after` aspects with headers and CEL field expressions
+  - Response enrichment section in AspectProperties (only shown for `after` aspects)
+  - HCL generation: `response { headers { ... } field = "expr" }`
+
+### Changed
+
+- **Go module restructured:** `github.com/mycel-studio/backend` → `mycel-studio` at project root
+- `useSync.ts` — Uses `apiParse`/`apiGenerate` instead of direct `fetch()` calls
+- `useProjectStore.ts` — Uses `apiParse` instead of direct `fetch()` calls
+- `fileSystem/index.ts` — Factory now checks for Wails runtime before browser/fallback
+- `tsconfig.app.json` — `erasableSyntaxOnly: false` to support Wails-generated namespace syntax
+- `.gitignore` — Added `build/bin/`, `frontend/src/wailsjs/`
+
+### Removed
+
+- `server.go` at root level (redundant with `cmd/server/main.go`)
+- `MYCEL_MODE` environment variable check in `main.go`
+
 ## [0.15.0] - File-as-Source-of-Truth Architecture
 
 ### Added

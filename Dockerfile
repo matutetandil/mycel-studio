@@ -12,13 +12,16 @@ RUN npm run build
 # Build backend
 FROM golang:1.22-alpine AS backend-builder
 
-WORKDIR /app/backend
+WORKDIR /app
 
-COPY backend/go.mod backend/go.sum ./
+COPY go.mod go.sum ./
 RUN go mod download
 
-COPY backend/ ./
-RUN CGO_ENABLED=0 GOOS=linux go build -o server .
+COPY cmd/ ./cmd/
+COPY parser/ ./parser/
+COPY handlers/ ./handlers/
+COPY models/ ./models/
+RUN CGO_ENABLED=0 GOOS=linux go build -o server ./cmd/server
 
 # Final image
 FROM alpine:3.19
@@ -28,7 +31,7 @@ RUN apk add --no-cache ca-certificates
 WORKDIR /app
 
 # Copy backend binary
-COPY --from=backend-builder /app/backend/server .
+COPY --from=backend-builder /app/server .
 
 # Copy frontend build
 COPY --from=frontend-builder /app/frontend/dist ./static

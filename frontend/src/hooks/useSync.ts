@@ -13,8 +13,7 @@ import {
   type StudioNode,
   DEFAULT_CONNECTOR_DIRECTIONS,
 } from '../types'
-
-const API_BASE = '/api'
+import { apiParse, apiGenerate } from '../lib/api'
 
 // Types for API responses
 interface ParsedProject {
@@ -77,9 +76,10 @@ interface ParsedProject {
     when: string
     condition?: string
     priority?: number
-    action?: { connector: string; target: string; transform?: Record<string, string> }
+    action?: { connector?: string; flow?: string; operation?: string; target?: string; transform?: Record<string, string> }
     cache?: { storage: string; key: string; ttl: string }
     invalidate?: { storage: string; keys?: string[]; patterns?: string[] }
+    response?: { headers?: Record<string, string>; fields?: Record<string, string> }
   }>
   namedCaches: Array<{ name: string; storage: string; key: string; ttl: string }>
 }
@@ -149,22 +149,14 @@ export function useSync() {
     try {
       setIsSyncing(true)
 
-      const response = await fetch(`${API_BASE}/parse`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content }),
-      })
+      const result = await apiParse({ content })
 
-      if (!response.ok) {
-        const error = await response.json()
-        console.error('Parse error:', error)
+      if (!result.success || !result.project) {
+        if (result.errors) console.error('Parse error:', result.errors)
         return
       }
 
-      const result = await response.json()
-      if (!result.success || !result.project) return
-
-      const { newNodes, newEdges } = convertProjectToNodes(result.project)
+      const { newNodes, newEdges } = convertProjectToNodes(result.project as unknown as ParsedProject)
       setNodes(newNodes)
       setEdges(newEdges)
     } catch (error) {
@@ -182,25 +174,13 @@ export function useSync() {
       setIsSyncing(true)
 
       const project = convertNodesToProject(nodes)
-      const request: GenerateRequest = {
-        project,
-        singleFile: true,
-      }
 
-      const response = await fetch(`${API_BASE}/generate`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(request),
-      })
+      const result = await apiGenerate({ project, singleFile: true })
 
-      if (!response.ok) {
-        const error = await response.json()
-        console.error('Generate error:', error)
+      if (!result.success || !result.files || result.files.length === 0) {
+        if (result.errors) console.error('Generate error:', result.errors)
         return
       }
-
-      const result = await response.json()
-      if (!result.success || !result.files || result.files.length === 0) return
 
       // Update the target file or the first HCL file
       const fileToUpdate = targetFile || files.find(f => f.name.endsWith('.hcl'))?.relativePath
@@ -442,6 +422,7 @@ function convertProjectToNodes(project: ParsedProject): {
       action: asp.action,
       cache: asp.cache,
       invalidate: asp.invalidate,
+      response: asp.response,
     }
     newNodes.push({
       id: `aspect-${asp.name}`,

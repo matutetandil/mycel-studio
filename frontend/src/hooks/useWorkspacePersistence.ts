@@ -5,6 +5,7 @@ import { useProjectStore } from '../stores/useProjectStore'
 import { useStudioStore } from '../stores/useStudioStore'
 import { useEditorPanelStore } from '../stores/useEditorPanelStore'
 import { useLayoutStore } from '../stores/useLayoutStore'
+import { useTerminalStore } from '../stores/useTerminalStore'
 import { saveWorkspace } from '../stores/useWorkspaceStore'
 
 export function useWorkspacePersistence() {
@@ -17,6 +18,7 @@ export function useWorkspacePersistence() {
   const leftCollapsed = useLayoutStore(s => s.leftCollapsed)
   const rightWidth = useLayoutStore(s => s.rightWidth)
   const rightCollapsed = useLayoutStore(s => s.rightCollapsed)
+  const terminalCount = useTerminalStore(s => s.terminals.length)
 
   const { getViewport } = useReactFlow()
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -50,6 +52,7 @@ export function useWorkspacePersistence() {
     leftCollapsed,
     rightWidth,
     rightCollapsed,
+    terminalCount,
     debouncedSave,
   ])
 

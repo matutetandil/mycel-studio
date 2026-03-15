@@ -81,7 +81,7 @@ interface MenuBarProps {
 
 export default function MenuBar({ onShowShortcuts, onShowTemplates }: MenuBarProps) {
   const { theme, toggleTheme } = useThemeStore()
-  const { projectName, files, isLoading, gitBranch, capabilities, openProject, saveProject, closeProject } = useProjectStore()
+  const { projectName, files, isLoading, gitBranch, capabilities, newProject, openProject, saveProject, closeProject } = useProjectStore()
   const { undo, redo, copyNode, pasteNode, duplicateNode, selectedNodeId, clipboard } = useStudioStore()
   const historyStore = useHistoryStore()
 
@@ -90,7 +90,7 @@ export default function MenuBar({ onShowShortcuts, onShowTemplates }: MenuBarPro
   // Get open label based on provider
   const getOpenLabel = () => {
     if (capabilities.canOpenFolder) {
-      return 'Open Folder...'
+      return 'Open Project...'
     }
     return 'Import ZIP...'
   }
@@ -107,10 +107,16 @@ export default function MenuBar({ onShowShortcuts, onShowTemplates }: MenuBarPro
     label: 'File',
     items: [
       {
+        label: 'New Project...',
+        shortcut: 'Ctrl+Shift+N',
+        onClick: () => newProject(),
+      },
+      {
         label: 'New from Template...',
         shortcut: 'Ctrl+N',
         onClick: onShowTemplates,
       },
+      { separator: true },
       {
         label: getOpenLabel(),
         shortcut: 'Ctrl+O',

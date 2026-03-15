@@ -20,7 +20,7 @@ export interface FSCapabilities {
   canWatchChanges: boolean
   canGetGitStatus: boolean
   persistsAcrossSessions: boolean
-  providerName: 'browser' | 'fallback'
+  providerName: 'browser' | 'fallback' | 'wails'
 }
 
 export interface FileSystemProvider {

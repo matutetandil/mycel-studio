@@ -209,6 +209,32 @@ export default function Canvas() {
           })
         }
       }
+
+      // Aspect → action flow edge (v1.12.3)
+      const actionFlow = aspectData.action?.flow
+      if (actionFlow) {
+        const flowName = actionFlow.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_-]/g, '')
+        const targetFlow = flowNodes.find(fn => {
+          const fd = fn.data as FlowNodeData
+          const name = fd.label.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_-]/g, '')
+          return name === flowName
+        })
+        if (targetFlow) {
+          virtualEdges.push({
+            id: `aspect-flow-action-${aspectNode.id}-${targetFlow.id}`,
+            source: aspectNode.id,
+            sourceHandle: 'action',
+            target: targetFlow.id,
+            targetHandle: 'aspect-target',
+            type: 'smoothstep',
+            data: { when: aspectData.when },
+            selectable: false,
+            deletable: false,
+            animated: true,
+            style: { stroke: '#10b981', strokeWidth: 1.5 },
+          })
+        }
+      }
     }
 
     return virtualEdges

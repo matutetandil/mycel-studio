@@ -4,6 +4,7 @@
 import type { FileSystemProvider, FSCapabilities, FSProject, FSProjectFile } from './types'
 import { BrowserFileSystem, isBrowserFSAvailable } from './browserFS'
 import { FallbackFileSystem } from './fallbackFS'
+import { WailsFileSystem, isWailsRuntime } from './wailsFS'
 
 export type { FileSystemProvider, FSCapabilities, FSProject, FSProjectFile }
 
@@ -14,7 +15,9 @@ let providerInstance: FileSystemProvider | null = null
 export function getFileSystemProvider(): FileSystemProvider {
   if (providerInstance) return providerInstance
 
-  if (isBrowserFSAvailable()) {
+  if (isWailsRuntime()) {
+    providerInstance = new WailsFileSystem()
+  } else if (isBrowserFSAvailable()) {
     providerInstance = new BrowserFileSystem()
   } else {
     providerInstance = new FallbackFileSystem()
@@ -36,3 +39,4 @@ export function getCapabilities(): FSCapabilities {
 // Convenience exports
 export { BrowserFileSystem, isBrowserFSAvailable } from './browserFS'
 export { FallbackFileSystem } from './fallbackFS'
+export { WailsFileSystem } from './wailsFS'

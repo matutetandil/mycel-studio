@@ -4,8 +4,12 @@ vendor/
 
 # Build outputs
 frontend/dist/
+build/bin/
 backend/server
 backend/backend
+
+# Wails generated bindings
+frontend/src/wailsjs/
 
 # IDE
 .idea/
