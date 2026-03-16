@@ -198,6 +198,8 @@ export default function EditorGroupView({ groupId, isSecondary }: EditorGroupPro
   const debugStoppedAt = useDebugStore(s => s.stoppedAt)
   const debugBreakpoints = useDebugStore(s => s.breakpoints)
   const decorationsRef = useRef<string[]>([])
+  const hoverDecoRef = useRef<string[]>([])
+  const [hoveredLine, setHoveredLine] = useState<number | null>(null)
 
   // Map HCL lines to breakpointable stages
   const lineStageMap = useMemo(() => {
@@ -205,68 +207,92 @@ export default function EditorGroupView({ groupId, isSecondary }: EditorGroupPro
     return buildLineStageMap(activeFile.content, activeFile.path)
   }, [activeFile?.content, activeFile?.path, nodes])
 
-  // Apply breakpoint and stopped-at decorations to Monaco editor
+  // Set of lines that have breakpoints (for decoration logic)
+  const breakpointLines = useMemo(() => {
+    const lines = new Set<number>()
+    for (const [line, info] of lineStageMap) {
+      const flowBps = debugBreakpoints.get(info.flow)
+      if (flowBps) {
+        const hasBp = flowBps.some(bp => bp.stage === info.stage && (bp.ruleIndex === -1 || bp.ruleIndex === info.ruleIndex))
+        if (hasBp) lines.add(line)
+      }
+    }
+    return lines
+  }, [lineStageMap, debugBreakpoints])
+
+  // Find the stopped-at line
+  const stoppedLine = useMemo(() => {
+    if (!debugStoppedAt) return null
+    for (const [line, info] of lineStageMap) {
+      if (info.flow === debugStoppedAt.flow && info.stage === debugStoppedAt.stage) {
+        if (debugStoppedAt.rule && info.ruleIndex === debugStoppedAt.rule.index) return line
+        if (!debugStoppedAt.rule && info.ruleIndex === -1) return line
+      }
+    }
+    return null
+  }, [lineStageMap, debugStoppedAt])
+
+  // Apply breakpoint and stopped-at decorations on line numbers (JetBrains-style)
   const applyDecorations = useCallback(() => {
     const ed = editorRef.current
     if (!ed) return
 
     const newDecorations: editor.IModelDeltaDecoration[] = []
 
-    // Breakpoint decorations (red circles in gutter)
-    for (const [line, info] of lineStageMap) {
-      const flowBps = debugBreakpoints.get(info.flow)
-      if (flowBps) {
-        const hasBp = flowBps.some(bp => bp.stage === info.stage && (bp.ruleIndex === -1 || bp.ruleIndex === info.ruleIndex))
-        if (hasBp) {
-          newDecorations.push({
-            range: { startLineNumber: line, startColumn: 1, endLineNumber: line, endColumn: 1 },
-            options: {
-              isWholeLine: true,
-              glyphMarginClassName: 'debug-breakpoint-glyph',
-              className: 'debug-breakpoint-line',
-            },
-          })
-        }
-      }
+    // Breakpoint decorations — red circle replacing line number
+    for (const line of breakpointLines) {
+      const isStopped = stoppedLine === line
+      newDecorations.push({
+        range: { startLineNumber: line, startColumn: 1, endLineNumber: line, endColumn: 1 },
+        options: {
+          isWholeLine: true,
+          lineNumberClassName: isStopped ? 'debug-stopped-bp-linenum' : 'debug-bp-linenum',
+          className: isStopped ? 'debug-stopped-line' : 'debug-breakpoint-line',
+        },
+      })
     }
 
-    // Stopped-at decoration (yellow arrow in gutter)
-    if (debugStoppedAt) {
-      for (const [line, info] of lineStageMap) {
-        if (info.flow === debugStoppedAt.flow && info.stage === debugStoppedAt.stage) {
-          // If stopped at a specific rule, highlight that line; otherwise highlight stage header
-          if (debugStoppedAt.rule && info.ruleIndex === debugStoppedAt.rule.index) {
-            newDecorations.push({
-              range: { startLineNumber: line, startColumn: 1, endLineNumber: line, endColumn: 1 },
-              options: {
-                isWholeLine: true,
-                glyphMarginClassName: 'debug-stopped-glyph',
-                className: 'debug-stopped-line',
-              },
-            })
-            break
-          } else if (!debugStoppedAt.rule && info.ruleIndex === -1) {
-            newDecorations.push({
-              range: { startLineNumber: line, startColumn: 1, endLineNumber: line, endColumn: 1 },
-              options: {
-                isWholeLine: true,
-                glyphMarginClassName: 'debug-stopped-glyph',
-                className: 'debug-stopped-line',
-              },
-            })
-            break
-          }
-        }
-      }
+    // Stopped-at line without breakpoint — yellow arrow replacing line number
+    if (stoppedLine && !breakpointLines.has(stoppedLine)) {
+      newDecorations.push({
+        range: { startLineNumber: stoppedLine, startColumn: 1, endLineNumber: stoppedLine, endColumn: 1 },
+        options: {
+          isWholeLine: true,
+          lineNumberClassName: 'debug-stopped-linenum',
+          className: 'debug-stopped-line',
+        },
+      })
     }
 
     decorationsRef.current = ed.deltaDecorations(decorationsRef.current, newDecorations)
-  }, [lineStageMap, debugBreakpoints, debugStoppedAt])
+  }, [breakpointLines, stoppedLine])
+
+  // Apply hover decoration — faded red circle on breakpointable line
+  const applyHoverDecoration = useCallback(() => {
+    const ed = editorRef.current
+    if (!ed) return
+
+    const newDeco: editor.IModelDeltaDecoration[] = []
+    if (hoveredLine && lineStageMap.has(hoveredLine) && !breakpointLines.has(hoveredLine) && stoppedLine !== hoveredLine) {
+      newDeco.push({
+        range: { startLineNumber: hoveredLine, startColumn: 1, endLineNumber: hoveredLine, endColumn: 1 },
+        options: {
+          lineNumberClassName: 'debug-bp-hover-linenum',
+        },
+      })
+    }
+    hoverDecoRef.current = ed.deltaDecorations(hoverDecoRef.current, newDeco)
+  }, [hoveredLine, lineStageMap, breakpointLines, stoppedLine])
 
   // Re-apply decorations when debug state changes
   useEffect(() => {
     applyDecorations()
   }, [applyDecorations])
+
+  // Re-apply hover decoration
+  useEffect(() => {
+    applyHoverDecoration()
+  }, [applyHoverDecoration])
 
   if (!group) return null
 
@@ -319,9 +345,9 @@ export default function EditorGroupView({ groupId, isSecondary }: EditorGroupPro
             beforeMount={setupMonaco}
             onMount={(monacoEditor) => {
               editorRef.current = monacoEditor
-              // Breakpoint click handler on glyph margin
+              // Breakpoint click handler on line numbers
               monacoEditor.onMouseDown((e) => {
-                if (e.target.type === 2 /* GUTTER_GLYPH_MARGIN */ || e.target.type === 3 /* GUTTER_LINE_NUMBERS */) {
+                if (e.target.type === 3 /* GUTTER_LINE_NUMBERS */) {
                   const lineNumber = e.target.position?.lineNumber
                   if (lineNumber) {
                     const info = lineStageMap.get(lineNumber)
@@ -330,6 +356,18 @@ export default function EditorGroupView({ groupId, isSecondary }: EditorGroupPro
                     }
                   }
                 }
+              })
+              // Hover tracking for faded breakpoint hint
+              monacoEditor.onMouseMove((e) => {
+                if (e.target.type === 3 /* GUTTER_LINE_NUMBERS */) {
+                  const lineNumber = e.target.position?.lineNumber ?? null
+                  setHoveredLine(lineNumber)
+                } else {
+                  setHoveredLine(null)
+                }
+              })
+              monacoEditor.onMouseLeave(() => {
+                setHoveredLine(null)
               })
               applyDecorations()
             }}
@@ -347,7 +385,7 @@ export default function EditorGroupView({ groupId, isSecondary }: EditorGroupPro
               automaticLayout: true,
               wordWrap: 'on',
               padding: { top: 8 },
-              glyphMargin: true,
+              glyphMargin: false,
             }}
           />
         ) : (

@@ -312,7 +312,7 @@ export default function FileTree() {
 
   const getOpenLabel = () => {
     if (capabilities.canOpenFolder) {
-      return 'Open Folder...'
+      return 'Open Project...'
     }
     return 'Import ZIP...'
   }
