@@ -60,13 +60,12 @@ func (m *PTYManager) CreateTerminal(cols, rows int, workDir string) (string, err
 		}
 	}
 
-	cmd := exec.Command(shell)
+	cmd := exec.Command(shell, "-l")
 	cmd.Env = append(os.Environ(),
 		"TERM=xterm-256color",
 		"SHELL="+shell,
 		"LANG=en_US.UTF-8",
 		"LC_ALL=en_US.UTF-8",
-		"PATH=/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin",
 	)
 	// Only use absolute paths for working directory
 	home, _ := os.UserHomeDir()

@@ -6,6 +6,7 @@ import { useAutoSave } from './hooks/useAutoSave'
 import { useWorkspacePersistence } from './hooks/useWorkspacePersistence'
 import { useDebugSync } from './hooks/useDebugSync'
 import { useNativeMenu } from './hooks/useNativeMenu'
+import { useGitPolling } from './hooks/useGitPolling'
 import { isWailsRuntime } from './lib/api'
 import MenuBar from './components/MenuBar/MenuBar'
 import Sidebar from './components/Sidebar/Sidebar'
@@ -15,6 +16,7 @@ import EditorPanel from './components/EditorPanel'
 import ShortcutsDialog from './components/ShortcutsDialog'
 import TemplateGallery from './components/TemplateGallery'
 import AboutDialog from './components/AboutDialog'
+import StatusBar from './components/StatusBar'
 import { useProjectStore } from './stores/useProjectStore'
 import { useStudioStore } from './stores/useStudioStore'
 import { useEditorPanelStore } from './stores/useEditorPanelStore'
@@ -30,6 +32,7 @@ function AppInner() {
   useAutoSave()
   useWorkspacePersistence()
   useDebugSync()
+  useGitPolling()
 
   const isDesktop = isWailsRuntime()
 
@@ -89,6 +92,9 @@ function AppInner() {
         {/* Right sidebar - Properties */}
         <Properties />
       </div>
+
+      {/* Status Bar */}
+      <StatusBar />
 
       {/* Dialogs */}
       <ShortcutsDialog isOpen={showShortcuts} onClose={() => setShowShortcuts(false)} />

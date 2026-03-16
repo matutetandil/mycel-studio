@@ -110,4 +110,21 @@ export async function apiConfirm(title: string, message: string): Promise<boolea
   return window.confirm(message)
 }
 
+// Get file content from git HEAD (for diff decorations)
+export async function apiGetGitFileContent(projectPath: string, filePath: string): Promise<string> {
+  const app = getWailsApp()
+  if (app) {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const result = await (app as any).GetGitFileContent(projectPath, filePath)
+      return result || ''
+    } catch {
+      return ''
+    }
+  }
+
+  // Browser/Docker mode: not supported (would need isomorphic-git readBlob)
+  return ''
+}
+
 export { isWailsRuntime }

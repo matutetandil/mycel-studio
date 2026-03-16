@@ -2,6 +2,27 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.4.0] - Status Bar, Git Gutter & Terminal Fix
+
+### Added
+
+- **Status bar** at the bottom of the window (IntelliJ-style):
+  - Shows current git branch (left) and project name (right)
+  - Minimal 24px height, ready for additional status indicators
+
+- **Git status auto-refresh** via polling (every 3 seconds):
+  - File tree indicators (U/M/A/D) now update automatically after external git operations
+  - No more stale status after `git add`, `commit`, etc.
+
+- **Monaco git gutter decorations:**
+  - Green bar for added lines, blue for modified, red triangle for deleted
+  - Computes line-by-line diff against git HEAD content
+  - Updates in real-time as you edit files
+
+### Fixed
+
+- **Terminal not showing prompt**: Shell now starts as login shell (`-l`) and inherits full system PATH instead of a hardcoded subset
+
 ## [1.3.0] - CI/CD & Installer
 
 ### Added

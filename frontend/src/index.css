@@ -142,3 +142,24 @@ body {
 .debug-stopped-line {
   background: rgba(245, 158, 11, 0.15);
 }
+
+/* Git gutter decorations — colored bars in the lines decorations margin */
+.git-gutter-added {
+  background: #22c55e;
+  width: 3px !important;
+  margin-left: 3px;
+}
+
+.git-gutter-modified {
+  background: #3b82f6;
+  width: 3px !important;
+  margin-left: 3px;
+}
+
+.git-gutter-deleted {
+  width: 0 !important;
+  margin-left: 3px;
+  border-left: 3px solid #ef4444;
+  border-top: 4px solid #ef4444;
+  border-bottom: 4px solid transparent;
+}

@@ -78,6 +78,18 @@ func (a *App) GetGitFileStatuses(path string) (map[string]string, error) {
 	return statuses, nil
 }
 
+// GetGitFileContent returns the content of a file as it exists in the HEAD commit.
+// Returns empty string if the file is not tracked or if there's an error.
+func (a *App) GetGitFileContent(projectPath string, filePath string) string {
+	cmd := exec.Command("git", "show", "HEAD:"+filePath)
+	cmd.Dir = projectPath
+	out, err := cmd.Output()
+	if err != nil {
+		return ""
+	}
+	return string(out)
+}
+
 // GetGitStatus returns full git status for a project directory.
 func (a *App) GetGitStatus(path string) (*FSGitStatus, error) {
 	if !a.IsGitRepo(path) {

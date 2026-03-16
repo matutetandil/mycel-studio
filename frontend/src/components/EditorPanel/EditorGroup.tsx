@@ -8,6 +8,8 @@ import { useStudioStore } from '../../stores/useStudioStore'
 import { useProjectStore } from '../../stores/useProjectStore'
 import { useDebugStore } from '../../stores/useDebugStore'
 import { generateProject, type GeneratedFile } from '../../utils/hclGenerator'
+import { computeLineDiff, type LineDiffResult } from '../../utils/lineDiff'
+import { apiGetGitFileContent } from '../../lib/api'
 import TabBar from './TabBar'
 import JSZip from 'jszip'
 
@@ -165,8 +167,11 @@ export default function EditorGroupView({ groupId, isSecondary }: EditorGroupPro
   const setRevealLine = useEditorPanelStore(s => s.setRevealLine)
   const updateFile = useProjectStore(s => s.updateFile)
   const projectName = useProjectStore(s => s.projectName)
+  const projectPath = useProjectStore(s => s.projectPath)
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null)
   const [copied, setCopied] = useState(false)
+  const gitDecoRef = useRef<string[]>([])
+  const [gitDiff, setGitDiff] = useState<LineDiffResult | null>(null)
 
   const existingPaths = useMemo(() => new Set(projectFiles.map(f => f.relativePath)), [projectFiles])
   const project = useMemo(
@@ -294,6 +299,68 @@ export default function EditorGroupView({ groupId, isSecondary }: EditorGroupPro
     applyHoverDecoration()
   }, [applyHoverDecoration])
 
+  // Fetch git HEAD content and compute line diff
+  useEffect(() => {
+    if (!activeFile?.path || !projectPath || !isRealFile) {
+      setGitDiff(null)
+      return
+    }
+
+    let cancelled = false
+    apiGetGitFileContent(projectPath, activeFile.path).then(headContent => {
+      if (cancelled) return
+      if (!headContent) {
+        // New file (not in git) — all lines are "added"
+        const lines = (activeFile.content || '').split('\n')
+        setGitDiff({
+          added: lines.map((_, i) => i + 1),
+          modified: [],
+          deleted: [],
+        })
+      } else {
+        setGitDiff(computeLineDiff(headContent, activeFile.content || ''))
+      }
+    })
+
+    return () => { cancelled = true }
+  }, [activeFile?.path, activeFile?.content, projectPath, isRealFile])
+
+  // Apply git diff gutter decorations
+  const applyGitDecorations = useCallback(() => {
+    const ed = editorRef.current
+    if (!ed) return
+
+    const decos: editor.IModelDeltaDecoration[] = []
+
+    if (gitDiff) {
+      for (const line of gitDiff.added) {
+        decos.push({
+          range: { startLineNumber: line, startColumn: 1, endLineNumber: line, endColumn: 1 },
+          options: { linesDecorationsClassName: 'git-gutter-added' },
+        })
+      }
+      for (const line of gitDiff.modified) {
+        decos.push({
+          range: { startLineNumber: line, startColumn: 1, endLineNumber: line, endColumn: 1 },
+          options: { linesDecorationsClassName: 'git-gutter-modified' },
+        })
+      }
+      for (const line of gitDiff.deleted) {
+        const ln = Math.max(line, 1)
+        decos.push({
+          range: { startLineNumber: ln, startColumn: 1, endLineNumber: ln, endColumn: 1 },
+          options: { linesDecorationsClassName: 'git-gutter-deleted' },
+        })
+      }
+    }
+
+    gitDecoRef.current = ed.deltaDecorations(gitDecoRef.current, decos)
+  }, [gitDiff])
+
+  useEffect(() => {
+    applyGitDecorations()
+  }, [applyGitDecorations])
+
   if (!group) return null
 
   const handleCopy = async () => {
@@ -370,6 +437,7 @@ export default function EditorGroupView({ groupId, isSecondary }: EditorGroupPro
                 setHoveredLine(null)
               })
               applyDecorations()
+              applyGitDecorations()
             }}
             onChange={(value) => {
               if (value !== undefined && isRealFile) {
