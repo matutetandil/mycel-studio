@@ -2,7 +2,7 @@ import type { LucideIcon } from 'lucide-react'
 import type { ConnectorDirection } from '../types'
 
 // Field types that the generic property renderer supports
-export type FieldType = 'string' | 'number' | 'boolean' | 'password' | 'select' | 'text'
+export type FieldType = 'string' | 'number' | 'boolean' | 'password' | 'select' | 'text' | 'file'
 
 export interface FieldDefinition {
   key: string
@@ -20,6 +20,8 @@ export interface FieldDefinition {
   defaultValue?: unknown
   // Help text shown below the field
   helpText?: string
+  // For 'file' type: allowed extensions (e.g., ['.html', '.htm'])
+  fileExtensions?: string[]
 }
 
 export interface DriverDefinition {

@@ -2,6 +2,49 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.2.0] - Connector Alignment, File Picker & README Rewrite
+
+### Added
+
+- **File picker field type** for connector properties:
+  - New `file` field type in connector definition system
+  - Text input + Browse button that lists project files filtered by extension
+  - Open in Editor button to edit selected template files in Monaco
+  - Only shows files from the open project (relative to `config.hcl` root)
+
+- **PDF connector aligned with Mycel v1.14.3:**
+  - `template` field (HTML file picker, `.html/.htm`)
+  - `page_size` (A4/Letter/Legal), `font`, margins (`margin_left/top/right`), `output_dir`
+  - Removed non-existent `template_dir`/`default_template` fields
+
+- **Email connector aligned with Mycel v1.14.3:**
+  - `template` field (HTML file picker, `.html/.htm`) at connector config level
+  - `from_name`, `reply_to` common fields
+  - SMTP: `timeout`, `pool_size`
+  - SendGrid: `endpoint`, `timeout`
+  - SES: `configuration_set`, `timeout`
+
+- **File connector CSV options:**
+  - `lines` format option
+  - `csv_delimiter` (comma/tab/semicolon/pipe), `csv_comment`, `csv_skip_rows`, `csv_no_header`, `csv_trim_space`
+  - All CSV fields conditionally visible when format is `csv`
+
+- **README rewrite** following Eclipse Theia format:
+  - Centered header with badges (PRs Welcome, Buy Me a Coffee)
+  - Table of contents, screenshot, architecture diagram
+  - Accurate feature tables (26 connectors, 12 flow blocks)
+  - Updated project structure reflecting Wails dual-mode architecture
+
+- **Buy Me a Coffee badge** in README header
+
+### Changed
+
+- Wails upgraded from v2.9.3 to v2.11.0
+- Native macOS About dialog shows version and buymeacoffee URL as text
+- `FieldType` union extended with `'file'`
+- `FieldDefinition` extended with `fileExtensions` property
+- Screenshot moved from `icons/` to `docs/`
+
 ## [1.1.0] - About Dialog, Missing Features & Breakpoint Styling
 
 ### Added

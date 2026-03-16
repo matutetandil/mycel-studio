@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react'
 import { createPortal } from 'react-dom'
-import { ChevronLeft, ChevronRight as ChevronRightIcon, GripVertical, Plus, Trash2, Variable, Type, Pencil, X, Check, Lock } from 'lucide-react'
+import { ChevronLeft, ChevronRight as ChevronRightIcon, GripVertical, Plus, Trash2, Variable, Type, Pencil, X, Check, Lock, FolderOpen, FileText } from 'lucide-react'
 import { useStudioStore } from '../../stores/useStudioStore'
 import { useLayoutStore } from '../../stores/useLayoutStore'
 import type { ConnectorNodeData, ConnectorProfile, ConnectorProfileConfig, FlowNodeData, FlowTo, FlowTransform, ConnectorDirection, RestOperation, GraphQLOperation, ConnectorOperation, TypeNodeData, TypeFieldDefinition, ValidatorNodeData, TransformNodeData, AspectNodeData, SagaNodeData, SagaStep, SagaAction, StateMachineNodeData, StateMachineState, StateMachineTransition, AuthConfig, AuthPreset, JwtAlgorithm, MfaRequirement, MfaMethod, AuthSocialProvider, EnvVariable, SecuritySanitizer, PluginDefinition } from '../../types'
@@ -9,6 +9,7 @@ import GraphQLOperationsEditor from './GraphQLOperationsEditor'
 import { getConnector, type FieldDefinition } from '../../connectors'
 import { getAllValidatorTypes, getValidatorType } from '../../validators'
 import { useProjectStore } from '../../stores/useProjectStore'
+import { useEditorPanelStore } from '../../stores/useEditorPanelStore'
 import { TransformEditor } from '../FlowConfig'
 import { Wand2 } from 'lucide-react'
 
@@ -119,6 +120,129 @@ function EnvVarSelector({
   )
 }
 
+// File picker that shows project files filtered by extension
+function FileFieldRenderer({
+  field,
+  value,
+  onChange,
+  inputClass,
+}: {
+  field: FieldDefinition
+  value: unknown
+  onChange: (key: string, val: unknown) => void
+  inputClass: string
+}) {
+  const [showPicker, setShowPicker] = useState(false)
+  const { files, mycelRoot } = useProjectStore()
+  const { openFile } = useEditorPanelStore()
+  const dropdownRef = useRef<HTMLDivElement>(null)
+
+  // Filter project files by allowed extensions
+  const matchingFiles = useMemo(() => {
+    if (!files.length) return []
+    const exts = field.fileExtensions || []
+    return files
+      .filter(f => {
+        if (!exts.length) return true
+        const lower = f.relativePath.toLowerCase()
+        return exts.some(ext => lower.endsWith(ext))
+      })
+      .map(f => {
+        // Make path relative to mycelRoot
+        const rel = mycelRoot && f.relativePath.startsWith(mycelRoot)
+          ? './' + f.relativePath.slice(mycelRoot.length)
+          : './' + f.relativePath
+        return { path: rel, fullPath: f.relativePath }
+      })
+      .sort((a, b) => a.path.localeCompare(b.path))
+  }, [files, mycelRoot, field.fileExtensions])
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    if (!showPicker) return
+    const handler = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setShowPicker(false)
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [showPicker])
+
+  const currentValue = value != null ? String(value) : ''
+
+  // Open the file in the editor panel
+  const handleOpenInEditor = () => {
+    if (!currentValue) return
+    // Find the matching project file
+    const match = matchingFiles.find(f => f.path === currentValue)
+    if (match) {
+      const fileName = match.fullPath.split('/').pop() || match.fullPath
+      openFile(match.fullPath, fileName)
+    }
+  }
+
+  return (
+    <div>
+      <label className="block text-xs font-medium text-neutral-400 mb-1">{field.label}</label>
+      <div className="relative" ref={dropdownRef}>
+        <div className="flex gap-1">
+          <input
+            type="text"
+            value={currentValue}
+            onChange={(e) => onChange(field.key, e.target.value || undefined)}
+            placeholder={field.placeholder}
+            className={inputClass + ' flex-1 pr-8'}
+          />
+          <button
+            onClick={() => setShowPicker(!showPicker)}
+            className="px-2 py-2 bg-neutral-700 hover:bg-neutral-600 border border-neutral-600 rounded-md transition-colors"
+            title="Browse project files"
+          >
+            <FolderOpen className="w-4 h-4 text-neutral-300" />
+          </button>
+          {currentValue && (
+            <button
+              onClick={handleOpenInEditor}
+              className="px-2 py-2 bg-neutral-700 hover:bg-neutral-600 border border-neutral-600 rounded-md transition-colors"
+              title="Open in editor"
+            >
+              <FileText className="w-4 h-4 text-neutral-300" />
+            </button>
+          )}
+        </div>
+        {showPicker && (
+          <div className="absolute z-50 mt-1 w-full max-h-48 overflow-y-auto bg-neutral-800 border border-neutral-600 rounded-md shadow-lg">
+            {matchingFiles.length === 0 ? (
+              <div className="px-3 py-2 text-xs text-neutral-500">
+                {files.length === 0
+                  ? 'Open a project to browse files'
+                  : `No ${field.fileExtensions?.join('/') || ''} files found in project`}
+              </div>
+            ) : (
+              matchingFiles.map(f => (
+                <button
+                  key={f.fullPath}
+                  onClick={() => {
+                    onChange(field.key, f.path)
+                    setShowPicker(false)
+                  }}
+                  className={`w-full text-left px-3 py-1.5 text-xs hover:bg-neutral-700 transition-colors ${
+                    f.path === currentValue ? 'bg-indigo-900/30 text-indigo-300' : 'text-neutral-300'
+                  }`}
+                >
+                  {f.path}
+                </button>
+              ))
+            )}
+          </div>
+        )}
+      </div>
+      {field.helpText && <p className="text-xs text-neutral-500 mt-1">{field.helpText}</p>}
+    </div>
+  )
+}
+
 // Generic field renderer for connector properties
 function FieldRenderer({
   field,
@@ -225,6 +349,17 @@ function FieldRenderer({
           {field.helpText && <p className="text-xs text-neutral-500 mt-1">{field.helpText}</p>}
         </div>
       )
+
+    case 'file': {
+      return (
+        <FileFieldRenderer
+          field={field}
+          value={value}
+          onChange={onChange}
+          inputClass={inputClass}
+        />
+      )
+    }
 
     default: {
       // string, number, password — all support env var toggle

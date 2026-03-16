@@ -894,6 +894,7 @@ En vez de escribir HCL manualmente, el usuario:
 - **Homebrew Cask:** Crear fórmula para distribución macOS
 - **Mycel v1.12.1 compatibility:** Aspect patterns → flow names, unique name validation para todos los tipos
 - **Mycel v1.12.2 compatibility:** Structured error object in on_error aspects
+- **Mycel v1.14.3 compatibility:** PDF connector `template` field (currently uses `template_dir`/`default_template`), email connector `template` field (renamed from `template_file`). Template is now at connector config level, not flow transform
 - **Mycel LSP:** Cuando esté listo, integrar via monaco-languageclient + WebSocket (Phase 9.5)
 - **Cleanup:** Remover directorio `backend/` (código migrado a raíz)
 - **Low priority:** Rate limiting UI, HTML email templates, file upload docs, binary responses

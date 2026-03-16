@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 **Mycel Studio** is a visual editor for creating Mycel microservice configurations.
 It generates HCL2 files that Mycel (the runtime) interprets.
 
-**Related project:** `/Users/matute/Documents/Personal/MYCEL` - The Mycel runtime (Go), currently at v1.12.0
+**Related project:** `/Users/matute/Documents/Personal/MYCEL` - The Mycel runtime (Go), currently at v1.14.3
 
 ## Tech Stack
 
@@ -140,7 +140,7 @@ flow "process" {
 | Saga | Multi-step rectangle with compensation arrows |
 | State Machine | Circle diagram with transitions |
 
-## Connector Types (25)
+## Connector Types (26)
 
 | Type | Icon | Config |
 |------|------|--------|
@@ -163,12 +163,13 @@ flow "process" {
 | `elasticsearch` | Search icon | url, auth |
 | `oauth` | Login icon | provider, client_id, scopes |
 | `soap` | SOAP icon | driver (client/server), endpoint, namespace, version (1.1/1.2), wsdl |
-| `email` | Mail icon | driver (smtp/sendgrid/ses) |
+| `email` | Mail icon | driver (smtp/sendgrid/ses), template |
 | `slack` | Slack icon | webhook_url or token + channel |
 | `discord` | Discord icon | webhook_url |
 | `sms` | Phone icon | provider (twilio) |
 | `push` | Bell icon | provider (fcm/apns) |
 | `webhook` | Hook icon | url, method |
+| `pdf` | PDF icon | template, page_size, font, margins, output_dir |
 
 ## Commands
 
@@ -234,10 +235,11 @@ For HCL2 structure and connector details, see:
 
 See `ROADMAP.md` for the full implementation plan (8 phases) and `TODO.md` for the detailed feature backlog.
 
-Key gaps vs Mycel runtime (v1.12.0):
+Key gaps vs Mycel runtime (v1.14.3):
 - **CRITICAL — Response block semantics:** Studio's ResponseEditor generates HTTP status/headers/body. Mycel v1.12.0 `response` block is CEL transforms of output (`input.*`, `output.*`). Must rewrite
 - **CRITICAL — Echo flows:** Studio requires `to` block. Mycel v1.12.0 allows flows without `to` (echo flows)
 - **Status code overrides:** `http_status_code`/`grpc_status_code` in response block
+- **Template in connector config** (v1.14.3): PDF and email connectors accept `template` at config level (not in flow transform)
 - Batch processing, sagas, state machines, long-running workflows
 - Auth UI, environment variables
 - Security system (sanitization, WASM sanitizers)
@@ -245,3 +247,4 @@ Key gaps vs Mycel runtime (v1.12.0):
 - Format declarations (JSON/XML at connector/flow/step level)
 - File watch mode, CSV/TSV enhanced I/O
 - Debugging (trace, breakpoints, dry-run, DAP)
+- Studio Debug Protocol (WebSocket JSON-RPC 2.0 at `:9090/debug`)

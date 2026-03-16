@@ -1,6 +1,6 @@
 # Mycel Studio - Roadmap
 
-Cross-referenced against Mycel runtime v1.14.1 documentation (docs/reference/configuration.md, docs/core-concepts/, docs/connectors/, docs/guides/, examples/).
+Cross-referenced against Mycel runtime v1.14.3 documentation (docs/reference/configuration.md, docs/core-concepts/, docs/connectors/, docs/guides/, examples/).
 
 Last updated: 2026-03-16
 
@@ -87,6 +87,8 @@ These need fixing regardless of new features:
 | v1.13.0 | Distributed rate limiting (Redis-backed `storage` on `rate_limit`) | Not implemented |
 | v1.14.0 | Studio Debug Protocol (WebSocket JSON-RPC 2.0 at `:9090/debug`) | Not implemented |
 | v1.14.1 | Source fan-out (multiple flows from same connector+operation) | Not implemented |
+| v1.14.2 | Bugfixes only (aspect metadata, cache hit types, MongoDB ID) | Not applicable (runtime-only) |
+| v1.14.3 | Template in connector config: PDF `template` attribute, email `template` attribute (renamed from `template_file`) | ⚠️ Studio PDF connector uses `template_dir`/`default_template` — must update to `template`. Email properties need `template` field |
 
 ### HCL2 Syntax Compliance
 
@@ -533,18 +535,34 @@ connector "redis_events" {
 
 **UI:** Add `redis` as a third driver option in the queue connector properties (alongside `rabbitmq` and `kafka`). Show `channels` and `patterns` fields when `redis` driver is selected. Message metadata: `_channel`, `_pattern`.
 
-### 6.6 — PDF Connector (NEW in v1.13.0)
+### 6.6 — PDF Connector (NEW in v1.13.0, updated v1.14.3)
 **Priority: Medium** — HTML-to-PDF generation via templates.
 
 ```hcl
-connector "pdf" {
-  type = "pdf"
+connector "invoice_pdf" {
+  type      = "pdf"
+  template  = "./templates/invoice.html"
+  page_size = "A4"
+  font      = "Helvetica"
+  output_dir = "./pdfs"
 }
 ```
 
+| Config | Type | Description |
+|--------|------|-------------|
+| `template` | string | Default HTML template file path (can be overridden per-request via payload) |
+| `page_size` | string | `A4`, `Letter`, `Legal` (default: A4) |
+| `font` | string | Default font family (default: Helvetica) |
+| `margin_left/top/right` | number | Margins in mm (default: 15) |
+| `output_dir` | string | Default output directory for `save` operation |
+
 Operations: `generate` (returns binary bytes for HTTP response) and `save` (writes to file). Templates use Go `text/template` syntax with HTML. Supports h1-h6, p, table, strong/em, ul/ol, hr, img, basic CSS.
 
-**UI:** Add `pdf` to connector palette (output-only direction). Template file path configuration. Binary response handling flows should show the `_binary` + `_content_type` pattern in transform editor.
+**Template resolution order:** payload `template` field > connector config `template` > flow `to.target` fallback.
+
+**UI:** Add `pdf` to connector palette (output-only direction). Properties panel should include `template` field (file path). Binary response handling flows should show the `_binary` + `_content_type` pattern in transform editor.
+
+⚠️ **Studio v1.1.0 uses `template_dir`/`default_template`** — must update to single `template` field per Mycel v1.14.3.
 
 ### 6.7 — Connector Profiles
 **Priority: Low** — Multiple backends with fallback chain.
@@ -773,25 +791,37 @@ rate_limit {
 
 **UI:** In global config editor, add optional `storage` field (connector dropdown, Redis-type only) to rate_limit section.
 
-### 7.11 — HTML Email Templates (NEW in v1.13.0)
+### 7.11 — HTML Email Templates (NEW in v1.13.0, updated v1.14.3)
 **Priority: Low** — Go template rendering for email connector.
 
 ```hcl
-connector "email" {
-  type   = "email"
-  driver = "smtp"
-  # ...
+connector "order_email" {
+  type     = "email"
+  driver   = "smtp"
+  host     = "${SMTP_HOST}"
+  port     = 587
+  template = "./templates/order_confirmation.html"
 }
 
-# In flow transform:
-transform {
-  template_file = "'templates/welcome.html'"
-  to            = "input.email"
-  subject       = "'Welcome!'"
+# Flow only sends business data — template is in connector config
+flow "send_confirmation" {
+  from { ... }
+  transform {
+    to      = "[{'email': input.email}]"
+    subject = "'Order confirmed'"
+    Name    = "input.customer_name"
+    Total   = "string(input.total)"
+  }
+  to {
+    connector = "order_email"
+    operation = "send"
+  }
 }
 ```
 
-**UI:** In email connector flows, add `template_file` field. Optionally show template preview.
+**v1.14.3 change:** Template path moved from flow payload to connector config (`template` attribute). Field renamed from `template_file` to `template` for consistency with PDF connector. Per-email override still supported via `template` in payload.
+
+**UI:** Add `template` field to email connector properties panel (file path input). Remove `template_file` from flow transform context — template is now infrastructure config, not business data.
 
 ### 7.12 — WASM & Plugins
 **Priority: Low** — Custom functions and connector types.
@@ -851,7 +881,7 @@ Hover provider with block docs, connector type descriptions, CEL function signat
 | **3** | Fix Foundations | ~~HCL2 syntax fix~~, ~~step blocks~~, ~~filter~~, ~~multi-to~~, ~~response editor~~, ~~error handling updates~~, ~~dedupe~~, ~~remove phantom features~~, idempotency, async, fan-out, file upload, flow invocation from aspects, response enrichment | — |
 | **4** | Types & Validation | Type editor, validators, type refs in flows | Phase 3 |
 | **5** | Reusability | Named transforms, aspects (incl. on_error), named operations | Phase 4 |
-| **6** | ~~Missing Connectors~~ | ~~Notifications (6), real-time (3), specialized (3 incl. SOAP), MQTT, FTP/SFTP, Redis Pub/Sub~~, PDF connector + connector profiles (pending) | ~~—~~ ✅ v0.5.0 |
+| **6** | ~~Missing Connectors~~ | ~~Notifications (6), real-time (3), specialized (3 incl. SOAP), MQTT, FTP/SFTP, Redis Pub/Sub~~, PDF connector (⚠️ update `template` field per v1.14.3) + connector profiles (pending) | ~~—~~ ✅ v0.5.0 |
 | **7** | Enterprise Features | Batch processing, sagas, state machines, long-running workflows, auth UI, environments, security, plugins, mocks, WASM, **debug protocol**, distributed rate limiting, HTML email templates | Phase 5 |
 | **8** | ~~UX Polish~~ | ~~Undo/redo, copy/paste, shortcuts, templates~~, auto-save, runtime validation | ~~Any~~ ✅ v0.10.0 (core items) |
 | **9** | ~~Monaco IDE~~ | ~~HCL syntax highlighting, autocompletion, real-time validation, hover~~ + LSP (pending) | ~~Any~~ ✅ v0.11.0 (core items) |

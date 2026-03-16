@@ -10,25 +10,41 @@ export const pdf: ConnectorDefinition = {
   defaultDirection: 'output',
   fields: [
     {
-      key: 'template_dir',
-      label: 'Template Directory',
-      type: 'string',
-      placeholder: './templates',
-      helpText: 'Directory containing HTML templates for PDF generation',
+      key: 'template', label: 'HTML Template', type: 'file',
+      placeholder: './templates/invoice.html',
+      helpText: 'Default HTML template file path (Go text/template syntax). Can be overridden per-request via payload.',
+      fileExtensions: ['.html', '.htm'],
     },
     {
-      key: 'default_template',
-      label: 'Default Template',
-      type: 'string',
-      placeholder: 'invoice.html',
-      helpText: 'Default HTML template file (Go text/template syntax)',
+      key: 'page_size', label: 'Page Size', type: 'select',
+      options: [
+        { value: 'A4', label: 'A4' },
+        { value: 'Letter', label: 'Letter' },
+        { value: 'Legal', label: 'Legal' },
+      ],
+      helpText: 'Page size for generated PDFs',
     },
     {
-      key: 'output_dir',
-      label: 'Output Directory',
-      type: 'string',
-      placeholder: './output',
-      helpText: 'Directory for saved PDF files (used with "save" operation)',
+      key: 'font', label: 'Font', type: 'string',
+      placeholder: 'Helvetica',
+      helpText: 'Default font family',
+    },
+    {
+      key: 'margin_left', label: 'Margin Left (mm)', type: 'number',
+      placeholder: '15',
+    },
+    {
+      key: 'margin_top', label: 'Margin Top (mm)', type: 'number',
+      placeholder: '15',
+    },
+    {
+      key: 'margin_right', label: 'Margin Right (mm)', type: 'number',
+      placeholder: '15',
+    },
+    {
+      key: 'output_dir', label: 'Output Directory', type: 'string',
+      placeholder: '.',
+      helpText: 'Default output directory for the "save" operation',
     },
   ],
 }
