@@ -70,7 +70,8 @@ jobs:
         if: runner.os == 'macOS'
         run: |
           cd build/bin
-          ditto -c -k --keepParent MycelStudio.app ${{ matrix.artifact }}.zip
+          ls -la
+          ditto -c -k --keepParent mycel-studio.app ${{ matrix.artifact }}.zip
 
       - name: Rename Linux binary
         if: runner.os == 'Linux'
