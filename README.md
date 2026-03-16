@@ -6,6 +6,7 @@
 
 <p>Design data pipelines visually, generate production-ready HCL, and debug in real time.</p>
 
+[![Latest Release](https://img.shields.io/github/v/release/matutetandil/mycel-studio?label=release&color=blue)](https://github.com/matutetandil/mycel-studio/releases/latest)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 [![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-support-yellow?logo=buymeacoffee&logoColor=white)](https://buymeacoffee.com/matutetandil)
 
@@ -19,7 +20,6 @@
 - [Getting Started](#getting-started)
 - [Features](#features)
 - [Scope](#scope)
-- [Architecture](#architecture)
 - [Contributing](#contributing)
 - [Feedback](#feedback)
 - [Documentation](#documentation)
@@ -29,7 +29,7 @@
 
 Mycel Studio is a desktop and web IDE for creating [Mycel](https://github.com/matutetandil/mycel) microservice configurations. Instead of writing [HCL2](https://github.com/hashicorp/hcl) by hand, you drag connectors and flows onto a canvas, wire them together, and Studio generates the configuration files.
 
-It ships as a **native macOS app** (via [Wails](https://wails.io/)) and as a **Docker image** for browser-based editing.
+It ships as a **cross-platform desktop app** for macOS, Windows, and Linux (via [Wails](https://wails.io/)) and as a **Docker image** for browser-based editing.
 
 <div align="center"><img src="docs/screenshot.png" width="80%" /></div>
 
@@ -40,8 +40,17 @@ It ships as a **native macOS app** (via [Wails](https://wails.io/)) and as a **D
   curl -fsSL https://raw.githubusercontent.com/matutetandil/mycel-studio/main/install.sh | bash
   ```
   On macOS this installs the `.app` to `~/Applications` and removes the quarantine flag automatically.
+  On Linux it installs the binary to `/usr/local/bin/mycel-studio`.
 
-- **Download binaries** &mdash; Grab the latest build for your platform from [Releases](https://github.com/matutetandil/mycel-studio/releases).
+- **Windows** &mdash; Download `MycelStudio-windows-amd64.exe` (or `arm64`) from [Releases](https://github.com/matutetandil/mycel-studio/releases/latest) and run it directly. Optionally move it to a folder in your `PATH`.
+
+- **Download binaries** &mdash; Grab the latest build for your platform from [Releases](https://github.com/matutetandil/mycel-studio/releases/latest):
+
+  | Platform | amd64 | arm64 |
+  |----------|-------|-------|
+  | macOS | `MycelStudio-darwin-amd64.zip` | `MycelStudio-darwin-arm64.zip` |
+  | Linux | `MycelStudio-linux-amd64` | `MycelStudio-linux-arm64` |
+  | Windows | `MycelStudio-windows-amd64.exe` | `MycelStudio-windows-arm64.exe` |
 
 - **Docker (browser)** &mdash; Run the web version in a container:
   ```bash
@@ -51,9 +60,8 @@ It ships as a **native macOS app** (via [Wails](https://wails.io/)) and as a **D
 
 - **Build from source**
   ```bash
-  # Desktop app
+  # Desktop app (requires Go, Node.js, and Wails CLI)
   make build
-  open build/bin/MycelStudio.app   # macOS
 
   # Development (hot-reload)
   make dev
@@ -132,53 +140,9 @@ Mycel Studio aims to:
 - Provide a visual alternative to hand-writing Mycel HCL configurations
 - Support the full Mycel feature set (connectors, flows, types, validators, transforms, aspects, sagas, state machines)
 - Generate valid, production-ready HCL2 that the Mycel runtime can execute
-- Work as both a native desktop IDE and a browser-based editor
+- Work as a native desktop IDE (macOS, Windows, Linux) and a browser-based editor
 
 Read the [Roadmap](ROADMAP.md) for planned features and the [Changelog](CHANGELOG.md) for version history.
-
-## Architecture
-
-Mycel Studio is a **dual-mode application**:
-
-| Mode | Entry Point | Frontend | Backend |
-|------|-------------|----------|---------|
-| Desktop (Wails) | `main.go` | Embedded via `//go:embed` | Go bindings over IPC |
-| Docker (HTTP) | `cmd/server/main.go` | Static files | Go HTTP server |
-
-Both modes share the same Go packages (`parser/`, `handlers/`, `models/`) and the same React frontend.
-
-```
-mycel-studio/
-├── main.go                  # Wails desktop entry point
-├── app.go                   # Wails bindings (parse, generate, validate)
-├── fs.go                    # Native filesystem operations
-├── git.go                   # Native git integration
-├── menu.go                  # macOS application menu
-├── debug.go                 # Debug/DAP support
-├── cmd/server/              # Docker HTTP server entry point
-├── parser/                  # HCL parser (hashicorp/hcl/v2)
-├── handlers/                # HTTP/IPC handlers
-├── models/                  # Data models
-├── frontend/
-│   └── src/
-│       ├── components/      # React components (Canvas, Nodes, Properties, etc.)
-│       ├── connectors/      # Connector registry (26 definitions)
-│       ├── flow-blocks/     # Flow block registry (12 definitions)
-│       ├── validators/      # Validator registry (3 definitions)
-│       ├── monaco/          # HCL language support for Monaco
-│       ├── stores/          # Zustand state management
-│       ├── hooks/           # React hooks
-│       └── lib/             # File system abstraction, git, API layer
-├── Dockerfile
-└── docker-compose.yml
-```
-
-### Tech Stack
-
-- **Frontend:** React 18, TypeScript, React Flow, Tailwind CSS, Monaco Editor, Zustand
-- **Backend:** Go, Wails v2
-- **Build:** Vite
-- **Deployment:** Wails (macOS), Docker (web)
 
 ## Contributing
 
@@ -197,9 +161,10 @@ Read below how to join the project, propose new features, and improve the codeba
 ## Documentation
 
 - [Mycel Runtime Documentation](https://github.com/matutetandil/mycel) &mdash; HCL syntax, connectors, flows
+- [Architecture](docs/ARCHITECTURE.md) &mdash; Project structure and tech stack
 - [Changelog](CHANGELOG.md) &mdash; Version history
 - [Roadmap](ROADMAP.md) &mdash; Planned features and known gaps
 
 ## License
 
-- [EPL-2.0 OR GPL-2.0-only WITH Classpath-exception-2.0](LICENSE)
+[MIT](LICENSE)
