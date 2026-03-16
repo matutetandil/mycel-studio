@@ -655,8 +655,19 @@ function FlowProperties({
         <p className="text-xs text-neutral-500 mt-1">HCL file where this flow is generated</p>
       </div>
 
-      {/* Source (From) */}
-      <div className="p-3 bg-neutral-800/50 rounded-md space-y-3">
+      {/* Internal flow toggle */}
+      <label className="flex items-center gap-2 cursor-pointer">
+        <input
+          type="checkbox"
+          checked={!!data.isInternal}
+          onChange={(e) => onChange({ isInternal: e.target.checked || undefined })}
+          className="rounded border-neutral-600 bg-neutral-800 text-indigo-500 focus:ring-indigo-500"
+        />
+        <span className="text-xs text-neutral-400">Internal flow (no <code className="text-neutral-300">from</code> block — invocable from aspects only)</span>
+      </label>
+
+      {/* Source (From) — hidden for internal flows */}
+      {!data.isInternal && <div className="p-3 bg-neutral-800/50 rounded-md space-y-3">
         <div className="flex items-center gap-2 text-xs text-neutral-400 flex-wrap">
           <span className="font-medium">FROM</span>
           {sourceData ? (
@@ -720,7 +731,7 @@ function FlowProperties({
           />
           <p className="text-xs text-neutral-500 mt-1">Skip events where condition is false</p>
         </div>
-      </div>
+      </div>}
 
       {/* Targets (To) - Multi-to support */}
       {toTargets.map((to, idx) => {

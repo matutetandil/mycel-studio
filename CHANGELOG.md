@@ -2,6 +2,57 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.1.0] - About Dialog, Missing Features & Breakpoint Styling
+
+### Added
+
+- **Custom About dialog (`AboutDialog.tsx`):**
+  - Version display (v1.1.0), project description
+  - Clickable Buy Me a Coffee button (amber styled with heart icon)
+  - GitHub and Source Code links
+  - Opens via Help → About Mycel Studio (native macOS menu) or browser menu bar
+
+- **Native macOS menu integration for About:**
+  - `menu.go` emits `menu:show-about` event from Help menu
+  - `useNativeMenu.ts` listens for event and triggers React dialog
+  - `App.tsx` manages dialog state for both native and browser modes
+
+- **Idempotency flow block (`flow-blocks/definitions/idempotency.ts`):**
+  - Storage selector, CEL key expression, TTL duration
+  - Auto-generates HCL via simple block registry
+
+- **Async execution flow block (`flow-blocks/definitions/async.ts`):**
+  - Storage selector, TTL duration
+  - Auto-generates HCL via simple block registry
+
+- **PDF connector (`connectors/definitions/pdf.ts`):**
+  - Template directory, default template, output directory
+  - Category: Storage, direction: output
+
+- **Internal flows:**
+  - `isInternal` toggle in FlowProperties
+  - Internal flows skip `from` block in HCL generation
+  - `EyeOff` icon indicator on flow nodes
+
+- **Source fan-out visualization:**
+  - `ConnectorNode` detects when multiple flows share the same source connector
+  - Shows `GitFork + count` badge when fanOutCount > 1
+
+- **JetBrains-style breakpoints in Monaco editor:**
+  - Red circle replaces line number (not in glyph margin)
+  - Faded red hint on hover over line numbers
+  - Yellow arrow indicator for stopped-at line
+  - CSS-only implementation via `lineNumberClassName` decorations
+
+### Changed
+
+- `FlowNode.tsx` — Added Fingerprint, Timer, EyeOff indicators
+- `ConnectorNode.tsx` — Added useStore for edge counting, fan-out badge
+- `Properties.tsx` — Added isInternal toggle, conditional FROM section
+- `hclGenerator.ts` — Guard for internal flows, idempotency/async via registry
+- `types/index.ts` — Added FlowIdempotency, FlowAsync, isInternal, pdf connector type
+- `FileTree.tsx` — Changed "Open Folder..." to "Open Project..."
+
 ## [1.0.0] - Wails Desktop App + Aspect Enhancements
 
 ### Added

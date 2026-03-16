@@ -427,8 +427,8 @@ function generateFlowHCL(
     lines.push('')
   }
 
-  // From block
-  if (fromNode && fromNode.type === 'connector') {
+  // From block (skipped for internal flows)
+  if (!data.isInternal && fromNode && fromNode.type === 'connector') {
     const fromData = fromNode.data as ConnectorNodeData
     const connectorName = toIdentifier(fromData.label)
     lines.push('  from {')

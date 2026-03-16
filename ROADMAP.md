@@ -1,8 +1,8 @@
 # Mycel Studio - Roadmap
 
-Cross-referenced against Mycel runtime v1.12.0 documentation (docs/reference/configuration.md, docs/core-concepts/, docs/connectors/, docs/guides/, examples/).
+Cross-referenced against Mycel runtime v1.14.1 documentation (docs/reference/configuration.md, docs/core-concepts/, docs/connectors/, docs/guides/, examples/).
 
-Last updated: 2026-03-11
+Last updated: 2026-03-16
 
 ---
 
@@ -73,6 +73,20 @@ These need fixing regardless of new features:
 | v1.12.0 | Echo flows (no `to` block — return transformed input directly) | ⚠️ Partial — see inconsistency below |
 | v1.12.0 | Response block (CEL transforms applied AFTER destination) | ⚠️ Wrong semantics — see inconsistency below |
 | v1.12.0 | Status code overrides (`http_status_code`, `grpc_status_code` in response) | Not implemented |
+| v1.12.3 | Flow invocation from aspects (`action { flow = "name" }`) | Not implemented |
+| v1.12.3 | Internal flows (no `from` block, invocable from aspects only) | Not implemented |
+| v1.13.0 | PDF connector (HTML templates → PDF, pure Go rendering) | Not implemented |
+| v1.13.0 | Binary HTTP responses (`_binary` + `_content_type` fields) | Not implemented |
+| v1.13.0 | Response enrichment in after aspects (headers + fields via CEL) | Not implemented |
+| v1.13.0 | Idempotency keys (flow-level `idempotency` block: storage, key, ttl) | Not implemented |
+| v1.13.0 | Async execution (flow-level `async` block: HTTP 202 + job polling) | Not implemented |
+| v1.13.0 | Database migrations (`mycel migrate` CLI command) | Not applicable (runtime-only) |
+| v1.13.0 | File upload (multipart/form-data, 32MB max, base64 with metadata) | Not implemented |
+| v1.13.0 | HTML email templates (`template_file` on email connector) | Not implemented |
+| v1.13.0 | Multi-tenancy via request headers (`input.headers` in transforms) | Not implemented |
+| v1.13.0 | Distributed rate limiting (Redis-backed `storage` on `rate_limit`) | Not implemented |
+| v1.14.0 | Studio Debug Protocol (WebSocket JSON-RPC 2.0 at `:9090/debug`) | Not implemented |
+| v1.14.1 | Source fan-out (multiple flows from same connector+operation) | Not implemented |
 
 ### HCL2 Syntax Compliance
 
@@ -237,7 +251,108 @@ error_handling {
 
 **UI:** Three collapsible sections: Retry (attempts, delay, max_delay, backoff), Fallback (connector, target, include_error, transform), Error Response (status, headers, body with CEL expressions).
 
-### 3.6 — Remove `foreach` and `after` from TODO
+### 3.6 — Idempotency Block (NEW in v1.13.0)
+**Priority: Medium** — Prevent duplicate execution of flows.
+
+```hcl
+flow "create_order" {
+  idempotency {
+    storage = "connector.redis"
+    key     = "input.idempotency_key"
+    ttl     = "24h"
+  }
+  from { ... }
+  to   { ... }
+}
+```
+
+**UI:** Collapsible "Idempotency" section in flow properties. Fields: storage (connector dropdown, cache-type only), key (CEL expression), ttl (duration string).
+
+### 3.7 — Async Execution Block (NEW in v1.13.0)
+**Priority: Medium** — Asynchronous flow execution with job polling.
+
+```hcl
+flow "generate_report" {
+  async {
+    storage = "connector.redis"
+    ttl     = "1h"
+  }
+  from { ... }
+  to   { ... }
+}
+```
+
+Returns HTTP 202 with `job_id`. Mycel auto-registers `GET /jobs/{job_id}` polling endpoint.
+
+**UI:** Toggle "Async mode" in flow properties. Fields: storage (connector dropdown), ttl (duration). Visual indicator (async badge) on flow node.
+
+### 3.8 — Source Fan-Out (NEW in v1.14.1)
+**Priority: Medium** — Multiple flows sharing the same `from` connector+operation.
+
+```hcl
+# Both flows trigger on POST /orders
+flow "save_order" {
+  from { connector = "api", operation = "POST /orders" }
+  to   { connector = "db",  target = "orders" }
+}
+
+flow "notify_order" {
+  from { connector = "api", operation = "POST /orders" }
+  to   { connector = "slack", operation = "send" }
+}
+```
+
+**Behavior by connector type:**
+- **Request-response** (REST, GraphQL, gRPC, SOAP): First registered flow returns the HTTP response. Additional flows execute concurrently as fire-and-forget.
+- **Event-driven** (MQ, MQTT, CDC): All flows execute in parallel. Message ACKed only after all complete.
+
+**UI:** When multiple flows share the same `from` connector+operation, show a visual "fan-out" indicator on the source connector node. No special editor needed — fan-out is implicit from the configuration.
+
+### 3.9 — File Upload Support (NEW in v1.13.0)
+**Priority: Low** — multipart/form-data handling in REST connector.
+
+Files arrive as base64 with metadata (`filename`, `content_type`, `size`, `data`) in `input.files`. Max 32MB.
+
+**UI:** No special editor needed — just document in flow context variables that `input.files` is available when REST receives multipart uploads.
+
+### 3.10 — Flow Invocation from Aspects (NEW in v1.12.3)
+**Priority: Medium** — Aspects can invoke flows instead of connectors.
+
+```hcl
+aspect "audit" {
+  when = "after"
+  on   = ["create_*"]
+  action {
+    flow = "log_audit"   # connector XOR flow
+  }
+}
+```
+
+Internal flows (no `from` block) are only invocable from aspects.
+
+**UI:** In aspect action editor, add toggle between "Connector" and "Flow" mode. Flow mode shows a dropdown of available flows (including internal flows without `from` block).
+
+### 3.11 — Response Enrichment in After Aspects (NEW in v1.13.0)
+**Priority: Medium** — After aspects can add headers and fields to the HTTP response.
+
+```hcl
+aspect "add_headers" {
+  when = "after"
+  on   = ["get_*"]
+  response {
+    headers {
+      X-Request-Id = "input.request_id"
+    }
+    fields {
+      _metadata = "{ 'processed_at': now() }"
+    }
+  }
+}
+```
+
+**UI:** In after-aspect editor, add optional "Response" section with headers (key-value CEL) and fields (key-value CEL).
+
+### 3.12 — Remove `foreach` and `after` from TODO
 **Priority: Low** — These don't exist in Mycel. Remove references from TODO.md.
 - `foreach` → Replaced by CEL array functions (`map`, `filter`, `sort_by`, etc.)
 - `after` → Replaced by Aspects (Phase 5)
@@ -418,7 +533,20 @@ connector "redis_events" {
 
 **UI:** Add `redis` as a third driver option in the queue connector properties (alongside `rabbitmq` and `kafka`). Show `channels` and `patterns` fields when `redis` driver is selected. Message metadata: `_channel`, `_pattern`.
 
-### 6.6 — Connector Profiles
+### 6.6 — PDF Connector (NEW in v1.13.0)
+**Priority: Medium** — HTML-to-PDF generation via templates.
+
+```hcl
+connector "pdf" {
+  type = "pdf"
+}
+```
+
+Operations: `generate` (returns binary bytes for HTTP response) and `save` (writes to file). Templates use Go `text/template` syntax with HTML. Supports h1-h6, p, table, strong/em, ul/ol, hr, img, basic CSS.
+
+**UI:** Add `pdf` to connector palette (output-only direction). Template file path configuration. Binary response handling flows should show the `_binary` + `_content_type` pattern in transform editor.
+
+### 6.7 — Connector Profiles
 **Priority: Low** — Multiple backends with fallback chain.
 
 ```hcl
@@ -610,7 +738,62 @@ security {
 
 **UI:** File management for `mocks/` directory. JSON editor for mock data files. Toggle mocks per connector.
 
-### 7.9 — WASM & Plugins
+### 7.9 — Studio Debug Protocol (NEW in v1.14.0)
+**Priority: High** — Real-time debugging and pipeline inspection via WebSocket.
+
+Mycel runtime exposes a WebSocket JSON-RPC 2.0 endpoint at `:9090/debug` with:
+
+**Methods (IDE → Runtime):**
+- `debug.attach` / `debug.detach` — Session management
+- `debug.setBreakpoints` — Stage-level + per-CEL-rule breakpoints + conditional
+- `debug.continue` / `debug.next` / `debug.stepInto` — Execution control
+- `debug.evaluate` — Evaluate arbitrary CEL in current context
+- `debug.variables` / `debug.threads` — Inspect state
+- `inspect.flows` / `inspect.flow` / `inspect.connectors` / `inspect.types` / `inspect.transforms` — Read-only inspection
+
+**Events (Runtime → IDE):**
+- `event.stopped` / `event.continued` — Breakpoint hits
+- `event.stageEnter` / `event.stageExit` — Pipeline stage lifecycle
+- `event.ruleEval` — Individual CEL rule evaluation
+- `event.flowStart` / `event.flowEnd` — Request lifecycle
+
+**UI:** This is THE core feature for Mycel Studio — live pipeline visualization, breakpoints on HCL lines, variable inspection, watch expressions. Should power the entire debugging experience (IntelliJ-level quality).
+
+### 7.10 — Distributed Rate Limiting UI (NEW in v1.13.0)
+**Priority: Low** — Redis-backed rate limiting configuration.
+
+```hcl
+rate_limit {
+  requests = 100
+  window   = "1m"
+  burst    = 200
+  storage  = "connector.redis"  # NEW — Redis backend for multi-instance
+}
+```
+
+**UI:** In global config editor, add optional `storage` field (connector dropdown, Redis-type only) to rate_limit section.
+
+### 7.11 — HTML Email Templates (NEW in v1.13.0)
+**Priority: Low** — Go template rendering for email connector.
+
+```hcl
+connector "email" {
+  type   = "email"
+  driver = "smtp"
+  # ...
+}
+
+# In flow transform:
+transform {
+  template_file = "'templates/welcome.html'"
+  to            = "input.email"
+  subject       = "'Welcome!'"
+}
+```
+
+**UI:** In email connector flows, add `template_file` field. Optionally show template preview.
+
+### 7.12 — WASM & Plugins
 **Priority: Low** — Custom functions and connector types.
 
 **UI:** Configuration panel for WASM function modules (file path, exported functions) and plugin registration (source, version). Functions appear in transform expression autocomplete.
@@ -665,11 +848,11 @@ Hover provider with block docs, connector type descriptions, CEL function signat
 
 | Phase | Theme | Items | Depends On |
 |-------|-------|-------|------------|
-| **3** | Fix Foundations | ~~HCL2 syntax fix~~, ~~step blocks~~, ~~filter~~, ~~multi-to~~, ~~response editor~~, ~~error handling updates~~, ~~dedupe~~, ~~remove phantom features~~ | — |
+| **3** | Fix Foundations | ~~HCL2 syntax fix~~, ~~step blocks~~, ~~filter~~, ~~multi-to~~, ~~response editor~~, ~~error handling updates~~, ~~dedupe~~, ~~remove phantom features~~, idempotency, async, fan-out, file upload, flow invocation from aspects, response enrichment | — |
 | **4** | Types & Validation | Type editor, validators, type refs in flows | Phase 3 |
 | **5** | Reusability | Named transforms, aspects (incl. on_error), named operations | Phase 4 |
-| **6** | ~~Missing Connectors~~ | ~~Notifications (6), real-time (3), specialized (3 incl. SOAP), MQTT, FTP/SFTP, Redis Pub/Sub~~ + connector profiles (pending) | ~~—~~ ✅ v0.5.0 |
-| **7** | Enterprise Features | Batch processing, sagas, state machines, long-running workflows, auth UI, environments, security, plugins, mocks, WASM | Phase 5 |
+| **6** | ~~Missing Connectors~~ | ~~Notifications (6), real-time (3), specialized (3 incl. SOAP), MQTT, FTP/SFTP, Redis Pub/Sub~~, PDF connector + connector profiles (pending) | ~~—~~ ✅ v0.5.0 |
+| **7** | Enterprise Features | Batch processing, sagas, state machines, long-running workflows, auth UI, environments, security, plugins, mocks, WASM, **debug protocol**, distributed rate limiting, HTML email templates | Phase 5 |
 | **8** | ~~UX Polish~~ | ~~Undo/redo, copy/paste, shortcuts, templates~~, auto-save, runtime validation | ~~Any~~ ✅ v0.10.0 (core items) |
 | **9** | ~~Monaco IDE~~ | ~~HCL syntax highlighting, autocompletion, real-time validation, hover~~ + LSP (pending) | ~~Any~~ ✅ v0.11.0 (core items) |
 

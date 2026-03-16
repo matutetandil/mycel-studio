@@ -30,6 +30,7 @@ export type ConnectorType =
   | 'sms'
   | 'push'
   | 'webhook'
+  | 'pdf'
 
 export type DatabaseDriver = 'sqlite' | 'postgres' | 'mysql' | 'mongodb'
 export type QueueDriver = 'rabbitmq' | 'kafka'
@@ -71,6 +72,7 @@ export const DEFAULT_CONNECTOR_DIRECTIONS: Record<ConnectorType, ConnectorDirect
   sms: 'output',
   push: 'output',
   webhook: 'output',
+  pdf: 'output',
 }
 
 // REST Connector
@@ -559,6 +561,17 @@ export interface ConnectorNodeData extends Record<string, unknown> {
   hclFile?: string // Original source file path, e.g. 'src/connectors/api.hcl'
 }
 
+export interface FlowIdempotency {
+  storage: string
+  key: string
+  ttl?: string
+}
+
+export interface FlowAsync {
+  storage: string
+  ttl?: string
+}
+
 export interface FlowNodeData extends Record<string, unknown> {
   label: string
   from?: FlowFrom
@@ -576,6 +589,9 @@ export interface FlowNodeData extends Record<string, unknown> {
   require?: FlowRequire
   batch?: FlowBatch
   errorHandling?: FlowErrorHandling
+  idempotency?: FlowIdempotency
+  async?: FlowAsync
+  isInternal?: boolean // Internal flows have no `from` block (invocable from aspects only)
   when?: string
   hclFile?: string // Custom file path, e.g. 'flows/users.hcl'. Default: 'flows/flows.hcl'
 }

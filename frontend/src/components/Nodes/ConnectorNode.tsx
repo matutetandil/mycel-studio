@@ -1,10 +1,11 @@
 import { memo } from 'react'
-import { Handle, Position } from '@xyflow/react'
+import { Handle, Position, useStore } from '@xyflow/react'
 import {
   Globe,
   ArrowRight,
   ArrowLeft,
   ArrowLeftRight,
+  GitFork,
 } from 'lucide-react'
 import type { ConnectorNodeData, ConnectorDirection } from '../../types'
 import { getConnector } from '../../connectors'
@@ -22,11 +23,12 @@ const directionLabels: Record<ConnectorDirection, string> = {
 }
 
 interface ConnectorNodeProps {
+  id: string
   data: ConnectorNodeData
   selected?: boolean
 }
 
-function ConnectorNode({ data, selected }: ConnectorNodeProps) {
+function ConnectorNode({ id, data, selected }: ConnectorNodeProps) {
   const def = getConnector(data.connectorType)
   const Icon = def?.icon || Globe
   const colorClass = def?.color || 'bg-neutral-500'
@@ -36,6 +38,17 @@ function ConnectorNode({ data, selected }: ConnectorNodeProps) {
   // Determine which handles to show based on direction
   const showLeftHandle = direction === 'output' || direction === 'bidirectional'
   const showRightHandle = direction === 'input' || direction === 'bidirectional'
+
+  // Detect fan-out: count how many flow nodes this connector sources
+  const fanOutCount = useStore(s => {
+    if (direction === 'output') return 0 // output connectors don't fan out
+    const outEdges = s.edges.filter(e => e.source === id)
+    const flowTargets = outEdges.filter(e => {
+      const targetNode = s.nodeLookup?.get(e.target)
+      return targetNode && targetNode.type === 'flow'
+    })
+    return flowTargets.length
+  })
 
   return (
     <div
@@ -64,6 +77,12 @@ function ConnectorNode({ data, selected }: ConnectorNodeProps) {
             <span className="text-neutral-600">|</span>
             <DirectionIcon className="w-3 h-3" />
             <span>{directionLabels[direction]}</span>
+            {fanOutCount > 1 && (
+              <span className="flex items-center gap-0.5 ml-1 px-1.5 py-0.5 bg-indigo-900/40 border border-indigo-700/40 rounded text-[10px] text-indigo-400" title={`Fan-out: ${fanOutCount} flows share this source`}>
+                <GitFork className="w-3 h-3" />
+                {fanOutCount}
+              </span>
+            )}
           </div>
         </div>
       </div>

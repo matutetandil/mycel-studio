@@ -1,6 +1,8 @@
+export { async } from './async'
 export { batch } from './batch'
 export { cache } from './cache'
 export { dedupe } from './dedupe'
+export { idempotency } from './idempotency'
 export { lock } from './lock'
 export { semaphore } from './semaphore'
 export { validate } from './validate'

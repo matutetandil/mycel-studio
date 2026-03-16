@@ -862,17 +862,39 @@ En vez de escribir HCL manualmente, el usuario:
   - `.gitignore` — Added `build/bin/`, `frontend/src/wailsjs/`
 - **Próximo paso:** Commit, test desktop app, Homebrew Cask setup
 
+### 2026-03-16 - About Dialog, Missing Features & Breakpoint Styling — v1.1.0
+- **Estado:** ✅ Completado
+- **About Dialog personalizado:**
+  - `AboutDialog.tsx` — Diálogo React con versión, descripción, botón Buy Me a Coffee clickeable
+  - `menu.go` — Custom App submenu con `menu:show-about` event (Help menu)
+  - `useNativeMenu.ts` — `onShowAbout` callback
+  - `App.tsx` — Estado `showAbout`, wired a menú nativo y browser
+  - Wails v2.9.3 limitación: no se puede customizar el submenu nativo del App, About va en Help
+- **JetBrains-style breakpoints:**
+  - Pelota roja reemplaza número de línea (no en glyph margin)
+  - Hover hint desvanecido, flecha amarilla para stopped-at
+  - CSS via `lineNumberClassName` decorations, alineado a derecha
+- **Features faltantes implementados:**
+  - `idempotency` flow block (storage, key CEL, TTL)
+  - `async` flow block (storage, TTL)
+  - `pdf` connector (template_dir, default_template, output_dir)
+  - Internal flows (`isInternal` toggle, skip `from` block)
+  - Source fan-out visualization (GitFork badge en ConnectorNode)
+- **Indicadores en FlowNode:** Fingerprint (idempotency), Timer (async), EyeOff (internal)
+- **Build:** ✅ Wails build exitoso
+- **Próximo paso:** Commit, testear About dialog en desktop app
+
 ---
 
 ## Próximos pasos (pendientes para siguiente sesión)
 
-### Todas las fases principales COMPLETADAS (3-9) + UX Polish + Connector Alignment + Desktop App
+### Todas las fases principales COMPLETADAS (3-9) + UX Polish + Connector Alignment + Desktop App + v1.1.0
 
 ### Pendientes (por prioridad):
-- **Test desktop app:** Run `wails dev` para test interactivo, verificar filesystem nativo y git
 - **Homebrew Cask:** Crear fórmula para distribución macOS
 - **Mycel v1.12.1 compatibility:** Aspect patterns → flow names, unique name validation para todos los tipos
-- **Mycel v1.12.2 compatibility:** Structured error object in on_error aspects, internal flows (no `from` block)
+- **Mycel v1.12.2 compatibility:** Structured error object in on_error aspects
 - **Mycel LSP:** Cuando esté listo, integrar via monaco-languageclient + WebSocket (Phase 9.5)
 - **Cleanup:** Remover directorio `backend/` (código migrado a raíz)
+- **Low priority:** Rate limiting UI, HTML email templates, file upload docs, binary responses
 - CDC: tables field

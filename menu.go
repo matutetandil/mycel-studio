@@ -11,7 +11,7 @@ import (
 func (a *App) buildMenu() *menu.Menu {
 	appMenu := menu.NewMenu()
 
-	// macOS App menu (About, Services, Hide, Quit)
+	// macOS App menu — standard role (About, Hide, Unhide, Quit)
 	appMenu.Append(menu.AppMenu())
 
 	// File menu

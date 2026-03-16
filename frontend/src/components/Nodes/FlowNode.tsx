@@ -1,6 +1,6 @@
 import { memo } from 'react'
 import { Handle, Position } from '@xyflow/react'
-import { ArrowRight, Clock, Shield, Bug } from 'lucide-react'
+import { ArrowRight, Clock, Shield, Bug, Fingerprint, Timer, EyeOff } from 'lucide-react'
 import { getNodeIndicators } from '../../flow-blocks'
 import { useDebugStore } from '../../stores/useDebugStore'
 import { toIdentifier } from '../../utils/hclGenerator'
@@ -28,6 +28,9 @@ function FlowNode({ data, selected }: FlowNodeProps) {
   const hasEnrich = data.enrich && data.enrich.length > 0
   const hasCache = !!data.cache
   const hasFilter = !!(data.from?.filter)
+  const hasIdempotency = !!data.idempotency
+  const hasAsync = !!data.async
+  const isInternal = !!data.isInternal
 
   // Support both old format (fromOperation/toTarget) and new format (from/to objects)
   const fromOperation = data.from?.operation || (data as Record<string, unknown>).fromOperation as string | undefined
@@ -64,6 +67,9 @@ function FlowNode({ data, selected }: FlowNodeProps) {
           <span className="w-2 h-2 bg-green-400 rounded-full animate-pulse" title={`Running: ${activeThread.stage}`} />
         )}
         <div className="flex items-center gap-1 ml-auto">
+          {isInternal && <span title="Internal (no from block)"><EyeOff className="w-3.5 h-3.5 text-neutral-400" /></span>}
+          {hasAsync && <span title="Async execution"><Timer className="w-3.5 h-3.5 text-sky-400" /></span>}
+          {hasIdempotency && <span title="Idempotent"><Fingerprint className="w-3.5 h-3.5 text-violet-400" /></span>}
           {hasSchedule && <span title="Scheduled"><Clock className="w-3.5 h-3.5 text-orange-400" /></span>}
           {/* Registry-driven block indicators */}
           {indicators.map(block => {

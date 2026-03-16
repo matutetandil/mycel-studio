@@ -77,9 +77,10 @@ function MenuDropdown({ label, items }: MenuItemProps) {
 interface MenuBarProps {
   onShowShortcuts?: () => void
   onShowTemplates?: () => void
+  onShowAbout?: () => void
 }
 
-export default function MenuBar({ onShowShortcuts, onShowTemplates }: MenuBarProps) {
+export default function MenuBar({ onShowShortcuts, onShowTemplates, onShowAbout }: MenuBarProps) {
   const { theme, toggleTheme } = useThemeStore()
   const { projectName, files, isLoading, gitBranch, capabilities, newProject, openProject, saveProject, closeProject } = useProjectStore()
   const { undo, redo, copyNode, pasteNode, duplicateNode, selectedNodeId, clipboard } = useStudioStore()
@@ -166,7 +167,7 @@ export default function MenuBar({ onShowShortcuts, onShowTemplates }: MenuBarPro
       { label: 'Documentation', onClick: () => window.open('https://github.com/matutetandil/mycel', '_blank') },
       { label: 'Keyboard Shortcuts', shortcut: 'Ctrl+/', onClick: onShowShortcuts },
       { separator: true },
-      { label: 'About Mycel Studio', onClick: () => {} },
+      { label: 'About Mycel Studio', onClick: onShowAbout },
     ],
   }
 

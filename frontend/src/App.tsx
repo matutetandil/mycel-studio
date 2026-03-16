@@ -1,5 +1,5 @@
 import { ReactFlowProvider } from '@xyflow/react'
-import { useEffect, useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useThemeStore } from './stores/useThemeStore'
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts'
 import { useAutoSave } from './hooks/useAutoSave'
@@ -14,6 +14,7 @@ import Properties from './components/Properties/Properties'
 import EditorPanel from './components/EditorPanel'
 import ShortcutsDialog from './components/ShortcutsDialog'
 import TemplateGallery from './components/TemplateGallery'
+import AboutDialog from './components/AboutDialog'
 import { useProjectStore } from './stores/useProjectStore'
 import { useStudioStore } from './stores/useStudioStore'
 import { useEditorPanelStore } from './stores/useEditorPanelStore'
@@ -22,6 +23,7 @@ import EditorPanelComponent from './components/EditorPanel/EditorPanel'
 function AppInner() {
   const { theme, toggleTheme } = useThemeStore()
   const { showShortcuts, setShowShortcuts, showTemplates, setShowTemplates } = useKeyboardShortcuts()
+  const [showAbout, setShowAbout] = useState(false)
   const { newProject, openProject, saveProject, closeProject } = useProjectStore()
   const { undo, redo, duplicateNode } = useStudioStore()
   const { toggleCollapse } = useEditorPanelStore()
@@ -62,6 +64,7 @@ function AppInner() {
         <MenuBar
           onShowShortcuts={() => setShowShortcuts(true)}
           onShowTemplates={() => setShowTemplates(true)}
+          onShowAbout={() => setShowAbout(true)}
         />
       )}
 
@@ -90,6 +93,7 @@ function AppInner() {
       {/* Dialogs */}
       <ShortcutsDialog isOpen={showShortcuts} onClose={() => setShowShortcuts(false)} />
       <TemplateGallery isOpen={showTemplates} onClose={() => setShowTemplates(false)} />
+      <AboutDialog isOpen={showAbout} onClose={() => setShowAbout(false)} />
     </div>
   )
 }

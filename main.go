@@ -31,10 +31,10 @@ func main() {
 			app,
 		},
 		Mac: &mac.Options{
-			TitleBar:             mac.TitleBarDefault(),
+			TitleBar: mac.TitleBarDefault(),
 			About: &mac.AboutInfo{
-				Title:   "Mycel Studio",
-				Message: "Visual editor for Mycel microservice configurations",
+				Title:   "Mycel Studio v1.1.0",
+				Message: "Visual editor for Mycel microservice configurations.\n\nDesign your data pipelines visually, generate production-ready HCL, and debug them in real time.\n\nSupport: https://buymeacoffee.com/matutetandil",
 			},
 		},
 	})
