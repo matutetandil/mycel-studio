@@ -35,11 +35,13 @@ It ships as a **native macOS app** (via [Wails](https://wails.io/)) and as a **D
 
 ## Getting Started
 
-- **macOS Desktop App** &mdash; Download the latest release from [Releases](https://github.com/matutetandil/mycel-studio/releases), or build from source:
+- **macOS / Linux (one-liner)**
   ```bash
-  wails build
-  open build/bin/mycel-studio.app
+  curl -fsSL https://raw.githubusercontent.com/matutetandil/mycel-studio/main/install.sh | bash
   ```
+  On macOS this installs the `.app` to `~/Applications` and removes the quarantine flag automatically.
+
+- **Download binaries** &mdash; Grab the latest build for your platform from [Releases](https://github.com/matutetandil/mycel-studio/releases).
 
 - **Docker (browser)** &mdash; Run the web version in a container:
   ```bash
@@ -47,13 +49,14 @@ It ships as a **native macOS app** (via [Wails](https://wails.io/)) and as a **D
   # Open http://localhost:8080
   ```
 
-- **Development** &mdash; Run frontend and backend separately:
+- **Build from source**
   ```bash
-  # Frontend (http://localhost:5173)
-  cd frontend && npm install && npm run dev
+  # Desktop app
+  make build
+  open build/bin/MycelStudio.app   # macOS
 
-  # Desktop (hot-reload)
-  wails dev
+  # Development (hot-reload)
+  make dev
   ```
 
 ## Features

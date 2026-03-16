@@ -2,6 +2,24 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.3.0] - CI/CD & Installer
+
+### Added
+
+- **GitHub Actions release workflow** (`.github/workflows/release.yml`):
+  - Triggered on `v*` tags
+  - Builds for 6 platforms: macOS (amd64/arm64), Linux (amd64/arm64), Windows (amd64/arm64)
+  - Uses Wails build with version injection from package.json
+  - Creates GitHub Release with auto-generated release notes and all binaries
+
+- **One-liner installer script** (`install.sh`):
+  - macOS: downloads `.app` zip, extracts to `~/Applications`, removes quarantine flag (`xattr -cr`)
+  - Linux: downloads binary to `/usr/local/bin/mycel-studio`
+  - Auto-detects OS and architecture (amd64/arm64)
+  - Fetches latest release from GitHub API
+
+- **Updated README** with installation instructions (one-liner, releases, Docker, build from source)
+
 ## [1.2.0] - Connector Alignment, File Picker & README Rewrite
 
 ### Added
