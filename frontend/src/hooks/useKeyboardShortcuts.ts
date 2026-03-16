@@ -2,6 +2,7 @@ import { useEffect, useCallback, useState } from 'react'
 import { useStudioStore } from '../stores/useStudioStore'
 import { useProjectStore } from '../stores/useProjectStore'
 import { useEditorPanelStore } from '../stores/useEditorPanelStore'
+import { useDebugStore } from '../stores/useDebugStore'
 import EditorPanel from '../components/EditorPanel/EditorPanel'
 
 export function useKeyboardShortcuts() {
@@ -18,6 +19,24 @@ export function useKeyboardShortcuts() {
       if (mod && e.key === '`') {
         e.preventDefault()
         EditorPanel.switchToTerminal()
+        return
+      }
+
+      // Debug shortcuts — work from anywhere
+      const debugState = useDebugStore.getState()
+      if (e.key === 'F5' && debugState.status === 'connected' && debugState.stoppedAt) {
+        e.preventDefault()
+        debugState.debugContinue()
+        return
+      }
+      if (e.key === 'F10' && debugState.status === 'connected' && debugState.stoppedAt) {
+        e.preventDefault()
+        debugState.debugNext()
+        return
+      }
+      if (e.key === 'F11' && debugState.status === 'connected' && debugState.stoppedAt) {
+        e.preventDefault()
+        debugState.debugStepInto()
         return
       }
 

@@ -14,9 +14,10 @@ import (
 
 // App struct holds application state and provides Wails bindings.
 type App struct {
-	ctx        context.Context
-	parser     *studioparser.Parser
-	ptyManager *PTYManager
+	ctx         context.Context
+	parser      *studioparser.Parser
+	ptyManager  *PTYManager
+	debugClient *DebugClient
 }
 
 // NewApp creates a new App instance.
@@ -36,6 +37,9 @@ func (a *App) Startup(ctx context.Context) {
 // Shutdown is called when the Wails app is closing.
 func (a *App) Shutdown(ctx context.Context) {
 	a.ptyManager.Shutdown()
+	if a.debugClient != nil {
+		a.debugClient.Disconnect()
+	}
 }
 
 // CreateTerminal spawns a new terminal session and returns its ID.

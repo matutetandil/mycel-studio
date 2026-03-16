@@ -1,14 +1,16 @@
 import { useCallback, useMemo, useState } from 'react'
-import { ChevronDown, ChevronUp, AlertTriangle, FileCode, Terminal } from 'lucide-react'
+import { ChevronDown, ChevronUp, AlertTriangle, FileCode, Terminal, Bug } from 'lucide-react'
 import { useEditorPanelStore } from '../../stores/useEditorPanelStore'
 import { useStudioStore } from '../../stores/useStudioStore'
 import { useProjectStore } from '../../stores/useProjectStore'
 import { useTerminalStore } from '../../stores/useTerminalStore'
+import { useDebugStore } from '../../stores/useDebugStore'
 import { generateProject } from '../../utils/hclGenerator'
 import EditorGroupView from './EditorGroup'
 import TerminalPanel from './TerminalPanel'
+import DebugPanel from '../DebugPanel/DebugPanel'
 
-type PanelTab = 'editor' | 'terminal'
+type PanelTab = 'editor' | 'terminal' | 'debug'
 
 export default function EditorPanel() {
   const { panelHeight, isCollapsed, groups, splitDirection, splitRatio, setPanelHeight, toggleCollapse } = useEditorPanelStore()
@@ -16,6 +18,8 @@ export default function EditorPanel() {
   const projectFiles = useProjectStore(s => s.files)
   const mycelRoot = useProjectStore(s => s.mycelRoot)
   const terminalCount = useTerminalStore(s => s.terminals.length)
+  const debugStatus = useDebugStore(s => s.status)
+  const debugStopped = useDebugStore(s => s.stoppedAt)
   const [isResizing, setIsResizing] = useState(false)
   const [isSplitResizing, setIsSplitResizing] = useState(false)
   const [activePanel, setActivePanel] = useState<PanelTab>('editor')
@@ -105,10 +109,21 @@ export default function EditorPanel() {
     }
   }, [activePanel, isCollapsed, toggleCollapse])
 
-  // Expose switchToTerminal globally for keyboard shortcut
+  // When toggling debug from keyboard/event, switch to debug panel
+  const switchToDebug = useCallback(() => {
+    if (activePanel !== 'debug') {
+      setActivePanel('debug')
+    }
+    if (isCollapsed) {
+      toggleCollapse()
+    }
+  }, [activePanel, isCollapsed, toggleCollapse])
+
+  // Expose switch methods globally for keyboard shortcut access
   useMemo(() => {
     EditorPanel.switchToTerminal = switchToTerminal
-  }, [switchToTerminal])
+    EditorPanel.switchToDebug = switchToDebug
+  }, [switchToTerminal, switchToDebug])
 
   const hasErrors = project.errors.length > 0
 
@@ -169,6 +184,22 @@ export default function EditorPanel() {
                 <span className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 bg-green-600 text-white text-[8px] font-bold rounded-full flex items-center justify-center">
                   {terminalCount}
                 </span>
+              )}
+            </button>
+            <button
+              onClick={() => handlePanelTabClick('debug')}
+              title="Debug"
+              className={`relative w-8 h-8 flex items-center justify-center rounded transition-colors ${
+                activePanel === 'debug' && !isCollapsed
+                  ? 'bg-neutral-800 text-white border-l-2 border-amber-500'
+                  : 'text-neutral-500 hover:text-neutral-300 hover:bg-neutral-800'
+              }`}
+            >
+              <Bug className="w-4 h-4" />
+              {debugStatus === 'connected' && (
+                <span className={`absolute -top-0.5 -right-0.5 w-3 h-3 rounded-full ${
+                  debugStopped ? 'bg-amber-500 animate-pulse' : 'bg-green-500'
+                }`} />
               )}
             </button>
           </div>
@@ -234,6 +265,14 @@ export default function EditorPanel() {
               >
                 <TerminalPanel />
               </div>
+
+              {/* Debug view */}
+              <div
+                className="absolute inset-0"
+                style={{ display: activePanel === 'debug' ? undefined : 'none' }}
+              >
+                <DebugPanel />
+              </div>
             </div>
           </div>
         </div>
@@ -242,5 +281,6 @@ export default function EditorPanel() {
   )
 }
 
-// Static reference for keyboard shortcut access
+// Static references for keyboard shortcut access
 EditorPanel.switchToTerminal = () => {}
+EditorPanel.switchToDebug = () => {}

@@ -219,13 +219,22 @@ type AspectConfig struct {
 	Action     *AspectActionConfig
 	Cache      *CacheBlockConfig
 	Invalidate *InvalidateConfig
+	Response   *AspectResponseConfig
 }
 
 // AspectActionConfig represents action block in aspect.
 type AspectActionConfig struct {
 	Connector string
+	Flow      string
+	Operation string
 	Target    string
 	Transform map[string]string
+}
+
+// AspectResponseConfig represents response block in aspect (v1.13.0).
+type AspectResponseConfig struct {
+	Headers map[string]string
+	Fields  map[string]string
 }
 
 // InvalidateConfig represents invalidate block.
@@ -1414,6 +1423,7 @@ func (p *Parser) parseAspectBlock(block *hcl.Block) (*AspectConfig, error) {
 			{Type: "action"},
 			{Type: "cache"},
 			{Type: "invalidate"},
+			{Type: "response"},
 		},
 	})
 	if diags.HasErrors() {
@@ -1454,19 +1464,67 @@ func (p *Parser) parseAspectBlock(block *hcl.Block) (*AspectConfig, error) {
 			action := &AspectActionConfig{
 				Transform: make(map[string]string),
 			}
-			attrs, _ := nested.Body.JustAttributes()
-			for name, attr := range attrs {
-				val, _ := attr.Expr.Value(p.evalCtx)
-				if val.Type() != cty.String {
-					continue
+			// Parse action with potential nested transform block
+			actionContent, actionDiags := nested.Body.Content(&hcl.BodySchema{
+				Attributes: []hcl.AttributeSchema{
+					{Name: "connector"},
+					{Name: "flow"},
+					{Name: "operation"},
+					{Name: "target"},
+				},
+				Blocks: []hcl.BlockHeaderSchema{
+					{Type: "transform"},
+				},
+			})
+			if actionDiags.HasErrors() {
+				// Fallback: parse as flat attributes (old format)
+				attrs, _ := nested.Body.JustAttributes()
+				for name, attr := range attrs {
+					val, _ := attr.Expr.Value(p.evalCtx)
+					if val.Type() != cty.String {
+						continue
+					}
+					switch name {
+					case "connector":
+						action.Connector = val.AsString()
+					case "flow":
+						action.Flow = val.AsString()
+					case "operation":
+						action.Operation = val.AsString()
+					case "target":
+						action.Target = val.AsString()
+					default:
+						action.Transform[name] = val.AsString()
+					}
 				}
-				switch name {
-				case "connector":
-					action.Connector = val.AsString()
-				case "target":
-					action.Target = val.AsString()
-				default:
-					action.Transform[name] = val.AsString()
+			} else {
+				for name, attr := range actionContent.Attributes {
+					val, _ := attr.Expr.Value(p.evalCtx)
+					if val.Type() != cty.String {
+						continue
+					}
+					switch name {
+					case "connector":
+						action.Connector = val.AsString()
+					case "flow":
+						action.Flow = val.AsString()
+					case "operation":
+						action.Operation = val.AsString()
+					case "target":
+						action.Target = val.AsString()
+					}
+				}
+				// Parse nested transform block
+				for _, tBlock := range actionContent.Blocks {
+					if tBlock.Type == "transform" {
+						tAttrs, _ := tBlock.Body.JustAttributes()
+						for tName, tAttr := range tAttrs {
+							tVal, _ := tAttr.Expr.Value(p.evalCtx)
+							if tVal.Type() == cty.String {
+								action.Transform[tName] = tVal.AsString()
+							}
+						}
+					}
 				}
 			}
 			config.Action = action
@@ -1512,6 +1570,54 @@ func (p *Parser) parseAspectBlock(block *hcl.Block) (*AspectConfig, error) {
 				}
 			}
 			config.Invalidate = inv
+
+		case "response":
+			resp := &AspectResponseConfig{
+				Headers: make(map[string]string),
+				Fields:  make(map[string]string),
+			}
+			respContent, respDiags := nested.Body.Content(&hcl.BodySchema{
+				Attributes: []hcl.AttributeSchema{
+					{Name: "headers"},
+				},
+				Blocks: []hcl.BlockHeaderSchema{},
+			})
+			if respDiags.HasErrors() {
+				// Fallback: treat all as fields
+				attrs, _ := nested.Body.JustAttributes()
+				for name, attr := range attrs {
+					val, _ := attr.Expr.Value(p.evalCtx)
+					if val.Type() == cty.String {
+						resp.Fields[name] = val.AsString()
+					}
+				}
+			} else {
+				// Parse headers attribute (map)
+				if headersAttr, ok := respContent.Attributes["headers"]; ok {
+					hVal, _ := headersAttr.Expr.Value(p.evalCtx)
+					if hVal.Type().IsObjectType() || hVal.Type().IsMapType() {
+						for it := hVal.ElementIterator(); it.Next(); {
+							k, v := it.Element()
+							if v.Type() == cty.String {
+								resp.Headers[k.AsString()] = v.AsString()
+							}
+						}
+					}
+				}
+				// Remaining attributes are CEL field expressions
+				// Re-parse with JustAttributes to get all
+				allAttrs, _ := nested.Body.JustAttributes()
+				for name, attr := range allAttrs {
+					if name == "headers" {
+						continue
+					}
+					val, _ := attr.Expr.Value(p.evalCtx)
+					if val.Type() == cty.String {
+						resp.Fields[name] = val.AsString()
+					}
+				}
+			}
+			config.Response = resp
 		}
 	}
 

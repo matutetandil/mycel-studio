@@ -4,6 +4,7 @@ go 1.22.0
 
 require (
 	github.com/creack/pty v1.1.24
+	github.com/gorilla/websocket v1.5.3
 	github.com/hashicorp/hcl/v2 v2.22.0
 	github.com/rs/cors v1.10.1
 	github.com/wailsapp/wails/v2 v2.9.3

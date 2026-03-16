@@ -304,6 +304,8 @@ func convertToStudioProject(config *parser.Configuration, basePath string) *mode
 		if asp.Action != nil {
 			aspectConfig.Action = &models.AspectAction{
 				Connector: asp.Action.Connector,
+				Flow:      asp.Action.Flow,
+				Operation: asp.Action.Operation,
 				Target:    asp.Action.Target,
 				Transform: asp.Action.Transform,
 			}
@@ -322,6 +324,13 @@ func convertToStudioProject(config *parser.Configuration, basePath string) *mode
 				Storage:  asp.Invalidate.Storage,
 				Keys:     asp.Invalidate.Keys,
 				Patterns: asp.Invalidate.Patterns,
+			}
+		}
+
+		if asp.Response != nil {
+			aspectConfig.Response = &models.AspectResponse{
+				Headers: asp.Response.Headers,
+				Fields:  asp.Response.Fields,
 			}
 		}
 

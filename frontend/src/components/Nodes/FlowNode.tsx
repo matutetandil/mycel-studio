@@ -1,7 +1,9 @@
 import { memo } from 'react'
 import { Handle, Position } from '@xyflow/react'
-import { ArrowRight, Clock, Shield } from 'lucide-react'
+import { ArrowRight, Clock, Shield, Bug } from 'lucide-react'
 import { getNodeIndicators } from '../../flow-blocks'
+import { useDebugStore } from '../../stores/useDebugStore'
+import { toIdentifier } from '../../utils/hclGenerator'
 import type { FlowNodeData } from '../../types'
 
 interface FlowNodeProps {
@@ -12,6 +14,13 @@ interface FlowNodeProps {
 const indicators = getNodeIndicators()
 
 function FlowNode({ data, selected }: FlowNodeProps) {
+  const debugStatus = useDebugStore(s => s.status)
+  const threads = useDebugStore(s => s.threads)
+  const stoppedAt = useDebugStore(s => s.stoppedAt)
+
+  const flowName = toIdentifier(data.label)
+  const activeThread = debugStatus === 'connected' ? threads.find(t => t.flowName === flowName) : null
+  const isPausedHere = stoppedAt?.flow === flowName
   const hasTransform = data.transform && data.transform.fields && Object.keys(data.transform.fields).length > 0
   const hasSchedule = !!data.when
   const hasRequire = !!data.require
@@ -32,8 +41,11 @@ function FlowNode({ data, selected }: FlowNodeProps) {
   return (
     <div
       className={`
-        px-4 py-3 rounded-lg bg-neutral-800 border-2 shadow-md min-w-[180px]
-        ${selected ? 'border-indigo-500 shadow-lg shadow-indigo-500/20' : 'border-neutral-700'}
+        px-4 py-3 rounded-lg bg-neutral-800 border-2 shadow-md min-w-[180px] transition-all duration-300
+        ${selected ? 'border-indigo-500 shadow-lg shadow-indigo-500/20'
+          : isPausedHere ? 'border-amber-500 shadow-lg shadow-amber-500/30'
+          : activeThread ? 'border-green-500/60 shadow-md shadow-green-500/20'
+          : 'border-neutral-700'}
       `}
     >
       <Handle type="target" position={Position.Left} className="w-3 h-3 !bg-neutral-400" />
@@ -42,6 +54,15 @@ function FlowNode({ data, selected }: FlowNodeProps) {
       <div className="flex items-center gap-2 mb-2">
         <ArrowRight className="w-4 h-4 text-indigo-400" />
         <span className="font-semibold text-neutral-100">{data.label}</span>
+        {isPausedHere && (
+          <span className="flex items-center gap-1 px-1.5 py-0.5 bg-amber-900/50 border border-amber-700/50 rounded text-[10px] text-amber-400 font-medium animate-pulse">
+            <Bug className="w-3 h-3" />
+            {stoppedAt?.stage}
+          </span>
+        )}
+        {activeThread && !isPausedHere && (
+          <span className="w-2 h-2 bg-green-400 rounded-full animate-pulse" title={`Running: ${activeThread.stage}`} />
+        )}
         <div className="flex items-center gap-1 ml-auto">
           {hasSchedule && <span title="Scheduled"><Clock className="w-3.5 h-3.5 text-orange-400" /></span>}
           {/* Registry-driven block indicators */}

@@ -204,13 +204,22 @@ type AspectConfig struct {
 	Action     *AspectAction          `json:"action,omitempty"`
 	Cache      *CacheBlock            `json:"cache,omitempty"`
 	Invalidate *AspectInvalidate      `json:"invalidate,omitempty"`
+	Response   *AspectResponse        `json:"response,omitempty"`
 }
 
 // AspectAction represents an action block inside aspect.
 type AspectAction struct {
-	Connector string            `json:"connector"`
-	Target    string            `json:"target"`
+	Connector string            `json:"connector,omitempty"`
+	Flow      string            `json:"flow,omitempty"`
+	Operation string            `json:"operation,omitempty"`
+	Target    string            `json:"target,omitempty"`
 	Transform map[string]string `json:"transform,omitempty"`
+}
+
+// AspectResponse represents a response block inside aspect (v1.13.0).
+type AspectResponse struct {
+	Headers map[string]string `json:"headers,omitempty"`
+	Fields  map[string]string `json:"fields,omitempty"`
 }
 
 // AspectInvalidate represents an invalidate block inside aspect.

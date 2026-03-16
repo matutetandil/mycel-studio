@@ -4,6 +4,7 @@ import { useThemeStore } from './stores/useThemeStore'
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts'
 import { useAutoSave } from './hooks/useAutoSave'
 import { useWorkspacePersistence } from './hooks/useWorkspacePersistence'
+import { useDebugSync } from './hooks/useDebugSync'
 import { useNativeMenu } from './hooks/useNativeMenu'
 import { isWailsRuntime } from './lib/api'
 import MenuBar from './components/MenuBar/MenuBar'
@@ -26,6 +27,7 @@ function AppInner() {
   const { toggleCollapse } = useEditorPanelStore()
   useAutoSave()
   useWorkspacePersistence()
+  useDebugSync()
 
   const isDesktop = isWailsRuntime()
 

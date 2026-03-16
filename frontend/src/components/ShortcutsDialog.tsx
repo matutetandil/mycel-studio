@@ -23,6 +23,12 @@ const shortcuts = [
     { keys: 'Click + Drag', action: 'Pan canvas' },
     { keys: 'Right-click flow', action: 'Flow block menu' },
   ]},
+  { category: 'Debug', items: [
+    { keys: 'F5', action: 'Continue' },
+    { keys: 'F10', action: 'Step Over (next stage)' },
+    { keys: 'F11', action: 'Step Into (per CEL rule)' },
+    { keys: 'Click gutter', action: 'Toggle breakpoint' },
+  ]},
 ]
 
 interface ShortcutsDialogProps {
