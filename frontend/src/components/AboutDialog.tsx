@@ -1,6 +1,7 @@
 import { X, Heart, ExternalLink } from 'lucide-react'
 
-const VERSION = '1.2.0'
+declare const __APP_VERSION__: string
+const VERSION = __APP_VERSION__
 
 interface AboutDialogProps {
   isOpen: boolean

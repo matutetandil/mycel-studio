@@ -12,6 +12,9 @@ import (
 //go:embed all:frontend/dist
 var assets embed.FS
 
+// Version is set at build time via -ldflags from package.json
+var version = "dev"
+
 func main() {
 	app := NewApp()
 
@@ -33,7 +36,7 @@ func main() {
 		Mac: &mac.Options{
 			TitleBar: mac.TitleBarDefault(),
 			About: &mac.AboutInfo{
-				Title:   "Mycel Studio v1.2.0",
+				Title:   "Mycel Studio v" + version,
 				Message: "Visual editor for Mycel microservice configurations.\n\nDesign your data pipelines visually, generate production-ready HCL, and debug them in real time.\n\nSupport: https://buymeacoffee.com/matutetandil",
 			},
 		},
