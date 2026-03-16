@@ -70,6 +70,7 @@ interface ProjectState {
   createFile: (relativePath: string, content?: string) => Promise<boolean>
   createDirectory: (relativePath: string) => Promise<boolean>
   deleteFile: (relativePath: string) => Promise<boolean>
+  renameFile: (oldPath: string, newPath: string) => Promise<boolean>
   refreshGitStatus: () => Promise<void>
 }
 
@@ -539,6 +540,37 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
         set({
           files: files.filter((f) => f.relativePath !== relativePath),
           activeFile: activeFile === relativePath ? null : activeFile,
+        })
+      }
+
+      return success
+    } catch (error) {
+      set({ error: String(error) })
+      return false
+    }
+  },
+
+  renameFile: async (oldPath: string, newPath: string) => {
+    const { files, activeFile, projectName } = get()
+
+    if (!projectName) {
+      set({ error: 'No project open' })
+      return false
+    }
+
+    try {
+      const provider = getFileSystemProvider()
+      const success = await provider.renameFile(oldPath, newPath)
+
+      if (success) {
+        const newName = newPath.split('/').pop() || newPath
+        set({
+          files: files.map((f) =>
+            f.relativePath === oldPath
+              ? { ...f, name: newName, path: newPath, relativePath: newPath }
+              : f
+          ),
+          activeFile: activeFile === oldPath ? newPath : activeFile,
         })
       }
 

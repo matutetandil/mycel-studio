@@ -178,6 +178,16 @@ func (a *App) DeleteFile(path string) error {
 	return os.Remove(path)
 }
 
+// RenameFile renames (moves) a file or directory.
+func (a *App) RenameFile(oldPath, newPath string) error {
+	// Create parent directory of newPath if needed
+	dir := filepath.Dir(newPath)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return fmt.Errorf("failed to create directory: %w", err)
+	}
+	return os.Rename(oldPath, newPath)
+}
+
 // FileExists checks if a path exists.
 func (a *App) FileExists(path string) bool {
 	_, err := os.Stat(path)

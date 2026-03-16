@@ -152,6 +152,17 @@ export class FallbackFileSystem implements FileSystemProvider {
     return true
   }
 
+  async renameFile(oldPath: string, newPath: string): Promise<boolean> {
+    if (!this.project) return false
+
+    const file = this.project.files.find((f) => f.relativePath === oldPath)
+    if (!file) return false
+
+    file.relativePath = newPath
+    file.name = newPath.split('/').pop() || newPath
+    return true
+  }
+
   async readFile(relativePath: string): Promise<string | null> {
     if (!this.project) return null
 

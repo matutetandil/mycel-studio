@@ -210,6 +210,27 @@ export class BrowserFileSystem implements FileSystemProvider {
     }
   }
 
+  async renameFile(oldPath: string, newPath: string): Promise<boolean> {
+    if (!this.directoryHandle) return false
+
+    try {
+      // Read old file content
+      const content = await this.readFile(oldPath)
+      if (content === null) return false
+
+      // Write to new path
+      await this.writeFile(newPath, content)
+
+      // Delete old file
+      await this.deleteFile(oldPath)
+
+      return true
+    } catch (error) {
+      console.error('Failed to rename file:', error)
+      return false
+    }
+  }
+
   async readFile(relativePath: string): Promise<string | null> {
     if (!this.directoryHandle) return null
 

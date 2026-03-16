@@ -85,6 +85,16 @@ export class WailsFileSystem implements FileSystemProvider {
     return true
   }
 
+  async renameFile(oldPath: string, newPath: string): Promise<boolean> {
+    if (!this.projectPath) return false
+
+    const app = getApp()
+    const fullOldPath = `${this.projectPath}/${oldPath}`
+    const fullNewPath = `${this.projectPath}/${newPath}`
+    await app.RenameFile(fullOldPath, fullNewPath)
+    return true
+  }
+
   async readFile(relativePath: string): Promise<string | null> {
     if (!this.projectPath) return null
 

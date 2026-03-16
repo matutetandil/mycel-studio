@@ -828,17 +828,51 @@ En vez de escribir HCL manualmente, el usuario:
 - **Build:** ✅ TypeScript + Go + Docker build exitosos
 - **Docker:** ✅ Running en http://localhost:8080
 
+### 2026-03-15 - Wails Desktop App Migration — v1.0.0
+- **Estado:** ✅ Completado
+- **Decisión arquitectónica:**
+  - Migración de web-only Docker a Wails v2 desktop app + Docker (dual-mode)
+  - Wails comparte backend Go existente, sin duplicación de lógica
+  - `main.go` = desktop (Wails + embed), `cmd/server/main.go` = Docker HTTP server
+- **Go code restructurado:**
+  - `app.go` — Wails bindings: ParseHCL, GenerateHCL, ValidateHCL (delegados a handlers)
+  - `fs.go` — Native filesystem: OpenDirectoryDialog, ReadDirectoryTree, ReadFile, WriteFile, etc.
+  - `git.go` — Native git via `os/exec`: IsGitRepo, GetGitBranch, GetGitFileStatuses, GetGitStatus
+  - `server.go` eliminado (redundante con `cmd/server/main.go`)
+  - Module renombrado a `mycel-studio` en raíz del proyecto
+  - `parser/`, `handlers/`, `models/` como paquetes Go en raíz
+- **Frontend integración:**
+  - `lib/api.ts` — Detección runtime (`window.go`), routing transparent Wails IPC vs HTTP fetch
+  - `lib/fileSystem/wailsFS.ts` — FileSystemProvider nativo via Wails bindings
+  - `lib/fileSystem/index.ts` — Factory con detección Wails > BrowserFS > Fallback
+  - `useSync.ts` — Migrado de fetch() directo a apiParse/apiGenerate
+  - `useProjectStore.ts` — Migrado de fetch() directo a apiParse
+- **Aspect v1.12.3/v1.13.0 cambios aplicados:**
+  - Flow invocation: `action { flow = "name" }` (mutually exclusive con connector)
+  - Response enrichment: `response { headers {...} field = "expr" }` para `after` aspects
+  - Virtual edges aspect→flow (green dashed)
+  - Parser actualizado con flow/operation/response en aspects
+- **Build:**
+  - ✅ `wails build` — 10MB binary en `build/bin/mycel-studio.app`
+  - ✅ `docker compose up --build` — HTTP server funcional en :8080
+  - ✅ Frontend tsc + Vite build exitosos
+- **Config changes:**
+  - `tsconfig.app.json` — `erasableSyntaxOnly: false` (Wails generates namespaces)
+  - `wails.json` — `wailsjsdir: "frontend/src"` (corrected path)
+  - `.gitignore` — Added `build/bin/`, `frontend/src/wailsjs/`
+- **Próximo paso:** Commit, test desktop app, Homebrew Cask setup
+
 ---
 
 ## Próximos pasos (pendientes para siguiente sesión)
 
-### Todas las fases principales COMPLETADAS (3-9) + UX Polish + Connector Alignment
+### Todas las fases principales COMPLETADAS (3-9) + UX Polish + Connector Alignment + Desktop App
 
 ### Pendientes (por prioridad):
+- **Test desktop app:** Run `wails dev` para test interactivo, verificar filesystem nativo y git
+- **Homebrew Cask:** Crear fórmula para distribución macOS
 - **Mycel v1.12.1 compatibility:** Aspect patterns → flow names, unique name validation para todos los tipos
-- **Mycel v1.12.2-1.12.3 compatibility:**
-  - Structured error object in on_error aspects (`error.code`, `error.message`, `error.type`) — update aspect property hints
-  - Flow invocation from aspects: `action { flow = "name" }` — AspectProperties needs `flow` field (mutually exclusive with `connector`), UI radio/toggle to choose between connector action and flow action
-  - Internal flows (no `from` block) — Studio should allow creating flows without a source connector
-- **Mycel LSP:** Mycel runtime próximo paso es un LSP — cuando esté listo, integrar via monaco-languageclient + WebSocket (Phase 9.5)
+- **Mycel v1.12.2 compatibility:** Structured error object in on_error aspects, internal flows (no `from` block)
+- **Mycel LSP:** Cuando esté listo, integrar via monaco-languageclient + WebSocket (Phase 9.5)
+- **Cleanup:** Remover directorio `backend/` (código migrado a raíz)
 - CDC: tables field

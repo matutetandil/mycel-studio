@@ -39,6 +39,9 @@ export interface FileSystemProvider {
   // Delete a file
   deleteFile(relativePath: string): Promise<boolean>
 
+  // Rename/move a file
+  renameFile(oldPath: string, newPath: string): Promise<boolean>
+
   // Read a single file
   readFile(relativePath: string): Promise<string | null>
 

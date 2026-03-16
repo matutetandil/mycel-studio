@@ -9,13 +9,17 @@ import {
   FolderPlus,
   Package,
   AlertTriangle,
+  Pencil,
+  Trash2,
+  FolderInput,
 } from 'lucide-react'
-import { useState, useMemo, useEffect, useRef } from 'react'
+import { useState, useMemo, useEffect, useRef, useCallback } from 'react'
 import { useProjectStore, type ProjectFile } from '../../stores/useProjectStore'
 import { useStudioStore } from '../../stores/useStudioStore'
 import { useEditorPanelStore } from '../../stores/useEditorPanelStore'
 import { generateProject, toIdentifier, type GeneratedFile } from '../../utils/hclGenerator'
 import type { ConnectorNodeData, FlowNodeData } from '../../types'
+import ContextMenu, { type ContextMenuItem } from '../ContextMenu'
 
 const gitStatusColors: Record<string, string> = {
   clean: 'text-neutral-500',
@@ -42,9 +46,15 @@ interface FileItemProps {
   isActive: boolean
   onClick: () => void
   isGenerated?: boolean
+  onContextMenu?: (e: React.MouseEvent) => void
+  isEditing?: boolean
+  editName?: string
+  onEditChange?: (name: string) => void
+  onEditCommit?: () => void
+  onEditCancel?: () => void
 }
 
-function FileItem({ file, isActive, onClick, isGenerated }: FileItemProps) {
+function FileItem({ file, isActive, onClick, isGenerated, onContextMenu, isEditing, editName, onEditChange, onEditCommit, onEditCancel }: FileItemProps) {
   const projectFile = file as ProjectFile
   const statusColor = gitStatusColors[projectFile.gitStatus || 'clean']
   const statusIcon = gitStatusIcons[projectFile.gitStatus || 'clean']
@@ -52,17 +62,34 @@ function FileItem({ file, isActive, onClick, isGenerated }: FileItemProps) {
   return (
     <button
       onClick={onClick}
+      onContextMenu={onContextMenu}
       className={`
         w-full flex items-center gap-2 px-2 py-1 text-sm rounded
         ${isActive ? 'bg-indigo-600 text-white' : 'hover:bg-neutral-800 text-neutral-300'}
       `}
     >
       <FileCode className={`w-4 h-4 shrink-0 ${isGenerated ? 'text-indigo-400' : 'text-amber-500'}`} />
-      <span className="flex-1 text-left truncate">{file.name}</span>
-      {projectFile.isDirty && (
+      {isEditing ? (
+        <input
+          autoFocus
+          value={editName}
+          onChange={(e) => onEditChange?.(e.target.value)}
+          onBlur={() => onEditCommit?.()}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') onEditCommit?.()
+            if (e.key === 'Escape') onEditCancel?.()
+            e.stopPropagation()
+          }}
+          onClick={(e) => e.stopPropagation()}
+          className="flex-1 bg-neutral-700 text-white text-sm px-1 py-0 rounded border border-neutral-600 outline-none min-w-0"
+        />
+      ) : (
+        <span className="flex-1 text-left truncate">{file.name}</span>
+      )}
+      {!isEditing && projectFile.isDirty && (
         <Circle className="w-2 h-2 fill-current text-amber-500" />
       )}
-      {statusIcon && (
+      {!isEditing && statusIcon && (
         <span className={`text-xs font-medium ${statusColor}`}>
           {statusIcon}
         </span>
@@ -85,10 +112,12 @@ function openFileInEditor(filePath: string, revealLine?: number) {
 }
 
 export default function FileTree() {
-  const { projectName, files, activeFile, setActiveFile, openProject, createFile, createDirectory, capabilities, mycelRoot } = useProjectStore()
+  const { projectName, files, activeFile, setActiveFile, openProject, createFile, createDirectory, deleteFile, renameFile, capabilities, mycelRoot } = useProjectStore()
   const { nodes, edges, selectedNodeId, serviceConfig, authConfig, envConfig, securityConfig, pluginConfig } = useStudioStore()
   const editorActiveTabId = useEditorPanelStore(s => s.groups.find(g => g.id === s.activeGroupId)?.activeTabId || null)
   const [isExpanded, setIsExpanded] = useState(true)
+  const [fileContextMenu, setFileContextMenu] = useState<{ x: number; y: number; path: string; name: string } | null>(null)
+  const [editingFile, setEditingFile] = useState<{ path: string; newName: string } | null>(null)
 
   // Generate project from canvas — pass mycelRoot and existing file paths so generator
   // prefixes correctly and skips files that already exist on disk
@@ -167,6 +196,80 @@ export default function FileTree() {
       }
     }
   }, [selectedNodeId, nodes, projectName, setActiveFile, generatedProject])
+
+  const handleFileContextMenu = useCallback((e: React.MouseEvent, path: string, name: string) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setFileContextMenu({ x: e.clientX, y: e.clientY, path, name })
+  }, [])
+
+  const handleStartRename = useCallback((path: string, name: string) => {
+    setEditingFile({ path, newName: name })
+  }, [])
+
+  const handleCommitRename = useCallback(async () => {
+    if (!editingFile || !editingFile.newName.trim()) {
+      setEditingFile(null)
+      return
+    }
+    const oldPath = editingFile.path
+    const parts = oldPath.split('/')
+    parts[parts.length - 1] = editingFile.newName.trim()
+    const newPath = parts.join('/')
+
+    if (newPath !== oldPath) {
+      await renameFile(oldPath, newPath)
+      // Update editor tab if open
+      const fileName = editingFile.newName.trim()
+      useEditorPanelStore.getState().renameTab(oldPath, newPath, fileName)
+    }
+    setEditingFile(null)
+  }, [editingFile, renameFile])
+
+  const handleMoveFile = useCallback(async (path: string) => {
+    const newPath = prompt('Move to (relative path):', path)
+    if (newPath && newPath.trim() !== path) {
+      const success = await renameFile(path, newPath.trim())
+      if (success) {
+        const fileName = newPath.trim().split('/').pop() || newPath.trim()
+        useEditorPanelStore.getState().renameTab(path, newPath.trim(), fileName)
+      }
+    }
+  }, [renameFile])
+
+  const handleDeleteFile = useCallback(async (path: string) => {
+    const confirmed = confirm(`Delete "${path}"?`)
+    if (confirmed) {
+      await deleteFile(path)
+      // Close editor tab if open
+      const editorStore = useEditorPanelStore.getState()
+      for (const group of editorStore.groups) {
+        if (group.tabs.some(t => t.filePath === path)) {
+          editorStore.closeTab(group.id, path)
+        }
+      }
+    }
+  }, [deleteFile])
+
+  const fileContextMenuItems: ContextMenuItem[] = fileContextMenu ? [
+    {
+      label: 'Rename',
+      icon: <Pencil className="w-3.5 h-3.5" />,
+      onClick: () => handleStartRename(fileContextMenu.path, fileContextMenu.name),
+    },
+    {
+      label: 'Move...',
+      icon: <FolderInput className="w-3.5 h-3.5" />,
+      onClick: () => handleMoveFile(fileContextMenu.path),
+    },
+    { label: '', separator: true, onClick: () => {} },
+    {
+      label: 'Delete',
+      icon: <Trash2 className="w-3.5 h-3.5" />,
+      onClick: () => handleDeleteFile(fileContextMenu.path),
+      danger: true,
+    },
+  ] : []
 
   const handleNewFile = () => {
     const fileName = prompt('Enter file path (e.g., flows/users.hcl):')
@@ -266,7 +369,17 @@ export default function FileTree() {
 
       {isExpanded && (
         <div className="pl-2">
-          <FileTreeNode node={tree} activeFile={currentActiveFile} onFileClick={handleFileClick} isRoot />
+          <FileTreeNode
+            node={tree}
+            activeFile={currentActiveFile}
+            onFileClick={handleFileClick}
+            onContextMenu={handleFileContextMenu}
+            editingFile={editingFile}
+            onEditChange={(name) => setEditingFile(prev => prev ? { ...prev, newName: name } : null)}
+            onEditCommit={handleCommitRename}
+            onEditCancel={() => setEditingFile(null)}
+            isRoot
+          />
 
           <div className="flex gap-1 mt-1 px-1">
             <button
@@ -287,6 +400,16 @@ export default function FileTree() {
             </button>
           </div>
         </div>
+      )}
+
+      {/* File context menu */}
+      {fileContextMenu && (
+        <ContextMenu
+          x={fileContextMenu.x}
+          y={fileContextMenu.y}
+          items={fileContextMenuItems}
+          onClose={() => setFileContextMenu(null)}
+        />
       )}
     </div>
   )
@@ -440,11 +563,21 @@ function FileTreeNode({
   node,
   activeFile,
   onFileClick,
+  onContextMenu,
+  editingFile,
+  onEditChange,
+  onEditCommit,
+  onEditCancel,
   isRoot,
 }: {
   node: TreeNode
   activeFile: string | null
   onFileClick: (path: string) => void
+  onContextMenu?: (e: React.MouseEvent, path: string, name: string) => void
+  editingFile?: { path: string; newName: string } | null
+  onEditChange?: (name: string) => void
+  onEditCommit?: () => void
+  onEditCancel?: () => void
   isRoot?: boolean
 }) {
   const [isExpanded, setIsExpanded] = useState(true)
@@ -453,20 +586,30 @@ function FileTreeNode({
   const sortedDirs = [...node.children.entries()].sort((a, b) => a[0].localeCompare(b[0]))
   const sortedFiles = [...node.files].sort((a, b) => a.name.localeCompare(b.name))
 
+  const renderFile = (file: ProjectFile) => (
+    <FileItem
+      key={file.relativePath}
+      file={file}
+      isActive={activeFile === file.relativePath}
+      onClick={() => onFileClick(file.relativePath)}
+      onContextMenu={onContextMenu ? (e) => onContextMenu(e, file.relativePath, file.name) : undefined}
+      isEditing={editingFile?.path === file.relativePath}
+      editName={editingFile?.path === file.relativePath ? editingFile.newName : undefined}
+      onEditChange={onEditChange}
+      onEditCommit={onEditCommit}
+      onEditCancel={onEditCancel}
+    />
+  )
+
+  const childProps = { activeFile, onFileClick, onContextMenu, editingFile, onEditChange, onEditCommit, onEditCancel }
+
   if (isRoot) {
     return (
       <>
         {sortedDirs.map(([name, child]) => (
-          <FileTreeNode key={name} node={child} activeFile={activeFile} onFileClick={onFileClick} />
+          <FileTreeNode key={name} node={child} {...childProps} />
         ))}
-        {sortedFiles.map((file) => (
-          <FileItem
-            key={file.relativePath}
-            file={file}
-            isActive={activeFile === file.relativePath}
-            onClick={() => onFileClick(file.relativePath)}
-          />
-        ))}
+        {sortedFiles.map(renderFile)}
       </>
     )
   }
@@ -484,16 +627,9 @@ function FileTreeNode({
       {isExpanded && (
         <div className="pl-4">
           {sortedDirs.map(([name, child]) => (
-            <FileTreeNode key={name} node={child} activeFile={activeFile} onFileClick={onFileClick} />
+            <FileTreeNode key={name} node={child} {...childProps} />
           ))}
-          {sortedFiles.map((file) => (
-            <FileItem
-              key={file.relativePath}
-              file={file}
-              isActive={activeFile === file.relativePath}
-              onClick={() => onFileClick(file.relativePath)}
-            />
-          ))}
+          {sortedFiles.map(renderFile)}
         </div>
       )}
     </div>
