@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"mycel-studio/handlers"
 	"mycel-studio/models"
@@ -18,6 +19,7 @@ type App struct {
 	parser      *studioparser.Parser
 	ptyManager  *PTYManager
 	debugClient *DebugClient
+	updater     *Updater
 }
 
 // NewApp creates a new App instance.
@@ -25,6 +27,7 @@ func NewApp() *App {
 	return &App{
 		parser:     studioparser.NewParser(),
 		ptyManager: NewPTYManager(),
+		updater:    NewUpdater(version),
 	}
 }
 
@@ -32,6 +35,20 @@ func NewApp() *App {
 func (a *App) Startup(ctx context.Context) {
 	a.ctx = ctx
 	a.ptyManager.SetApp(a)
+	a.updater.app = a
+	a.updater.cleanupOldBinary()
+
+	// Check for updates periodically (first check after 3s, then every hour)
+	go func() {
+		time.Sleep(3 * time.Second)
+		for {
+			info, err := a.updater.CheckForUpdates()
+			if err == nil && info.Available {
+				wailsRuntime.EventsEmit(a.ctx, "updater:update-available", info)
+			}
+			time.Sleep(1 * time.Hour)
+		}
+	}()
 }
 
 // Shutdown is called when the Wails app is closing.

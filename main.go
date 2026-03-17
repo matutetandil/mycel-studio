@@ -32,6 +32,7 @@ func main() {
 		OnShutdown: app.Shutdown,
 		Bind: []interface{}{
 			app,
+			app.updater,
 		},
 		Mac: &mac.Options{
 			TitleBar: mac.TitleBarDefault(),

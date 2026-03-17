@@ -17,6 +17,7 @@ import ShortcutsDialog from './components/ShortcutsDialog'
 import TemplateGallery from './components/TemplateGallery'
 import AboutDialog from './components/AboutDialog'
 import StatusBar from './components/StatusBar'
+import UpdateNotification from './components/UpdateNotification'
 import { useProjectStore } from './stores/useProjectStore'
 import { useStudioStore } from './stores/useStudioStore'
 import { useEditorPanelStore } from './stores/useEditorPanelStore'
@@ -71,7 +72,8 @@ function AppInner() {
         />
       )}
 
-      {/* No title bar spacer needed — native macOS title bar handles it */}
+      {/* Update notification banner */}
+      <UpdateNotification />
 
       {/* Main content */}
       <div className="flex-1 flex overflow-hidden">

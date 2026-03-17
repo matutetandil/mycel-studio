@@ -106,8 +106,13 @@ jobs:
         with:
           path: artifacts
 
-      - name: List artifacts
-        run: find artifacts -type f
+      - name: Generate checksums
+        run: |
+          cd artifacts
+          find . -type f | while read f; do
+            sha256sum "$f" | sed "s|./[^/]*/||"
+          done > ../checksums.txt
+          cat ../checksums.txt
 
       - name: Create release
         uses: softprops/action-gh-release@v2
@@ -115,3 +120,4 @@ jobs:
           generate_release_notes: true
           files: |
             artifacts/**/*
+            checksums.txt

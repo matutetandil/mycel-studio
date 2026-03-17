@@ -70,6 +70,10 @@ func (a *App) buildMenu() *menu.Menu {
 		wailsRuntime.EventsEmit(a.ctx, "menu:show-shortcuts")
 	})
 	helpMenu.AddSeparator()
+	helpMenu.AddText("Check for Updates...", nil, func(_ *menu.CallbackData) {
+		wailsRuntime.EventsEmit(a.ctx, "menu:check-updates")
+	})
+	helpMenu.AddSeparator()
 	helpMenu.AddText("Documentation", nil, func(_ *menu.CallbackData) {
 		wailsRuntime.BrowserOpenURL(a.ctx, "https://github.com/mycelframework/mycel")
 	})

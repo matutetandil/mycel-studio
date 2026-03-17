@@ -1,7 +1,6 @@
 import { useState, useMemo, useRef, useEffect, useCallback } from 'react'
 import MonacoEditor from '@monaco-editor/react'
 import type { editor } from 'monaco-editor'
-import { FileCode } from 'lucide-react'
 import { setupMonaco } from '../../monaco'
 import { useEditorPanelStore } from '../../stores/useEditorPanelStore'
 import { useStudioStore } from '../../stores/useStudioStore'
@@ -10,56 +9,9 @@ import { useDebugStore } from '../../stores/useDebugStore'
 import { generateProject, type GeneratedFile } from '../../utils/hclGenerator'
 import { computeLineDiff, type LineDiffResult } from '../../utils/lineDiff'
 import { apiGetGitFileContent } from '../../lib/api'
+import { getFileTypeInfo, getLanguageForFile } from '../../utils/fileIcons'
 import TabBar from './TabBar'
 import JSZip from 'jszip'
-
-const LANGUAGE_MAP: Record<string, string> = {
-  '.hcl': 'hcl', '.json': 'json', '.yaml': 'yaml', '.yml': 'yaml',
-  '.ts': 'typescript', '.tsx': 'typescript', '.js': 'javascript', '.jsx': 'javascript',
-  '.go': 'go', '.py': 'python', '.rb': 'ruby', '.rs': 'rust', '.java': 'java',
-  '.php': 'php', '.sql': 'sql', '.css': 'css', '.scss': 'scss', '.less': 'less',
-  '.html': 'html', '.xml': 'xml', '.svg': 'xml',
-  '.md': 'markdown', '.sh': 'shell', '.bash': 'shell', '.zsh': 'shell',
-  '.graphql': 'graphql', '.gql': 'graphql',
-  '.env': 'plaintext', '.txt': 'plaintext', '.toml': 'plaintext',
-  '.cfg': 'ini', '.conf': 'ini', '.ini': 'ini',
-  '.proto': 'protobuf', '.csv': 'plaintext',
-  '.dockerfile': 'dockerfile', '.c': 'c', '.cpp': 'cpp', '.h': 'c',
-  '.swift': 'swift', '.kt': 'kotlin', '.lua': 'lua', '.r': 'r',
-  '.tf': 'hcl', '.tfvars': 'hcl',
-}
-
-// File names (without extension) that map to specific languages
-const FILENAME_MAP: Record<string, string> = {
-  'dockerfile': 'dockerfile',
-  'makefile': 'makefile',
-  'gemfile': 'ruby',
-  'rakefile': 'ruby',
-  'cmakelists.txt': 'cmake',
-  '.gitignore': 'plaintext',
-  '.editorconfig': 'ini',
-  '.dockerignore': 'plaintext',
-}
-
-function getLanguageForFile(name: string): string {
-  const lower = name.toLowerCase()
-  // Check full filename first (e.g., Dockerfile, Makefile)
-  if (FILENAME_MAP[lower]) return FILENAME_MAP[lower]
-  // Check by extension — try the last part after the last dot
-  const dotIdx = lower.lastIndexOf('.')
-  if (dotIdx >= 0) {
-    const ext = lower.slice(dotIdx)
-    if (LANGUAGE_MAP[ext]) return LANGUAGE_MAP[ext]
-    // For compound extensions like .local, .example — try the part before
-    const base = lower.slice(0, dotIdx)
-    const prevDot = base.lastIndexOf('.')
-    if (prevDot >= 0) {
-      const baseExt = base.slice(prevDot)
-      if (LANGUAGE_MAP[baseExt]) return LANGUAGE_MAP[baseExt]
-    }
-  }
-  return 'plaintext'
-}
 
 interface LineStageInfo {
   flow: string
@@ -459,7 +411,7 @@ export default function EditorGroupView({ groupId, isSecondary }: EditorGroupPro
         ) : (
           <div className="h-full flex items-center justify-center text-neutral-500 text-sm">
             <div className="text-center">
-              <FileCode className="w-10 h-10 mx-auto mb-2 opacity-20" />
+              {(() => { const ft = getFileTypeInfo('untitled.txt'); const Icon = ft.icon; return <Icon className="w-10 h-10 mx-auto mb-2 opacity-20" /> })()}
               <p className="text-xs">Select a file from the Explorer</p>
             </div>
           </div>

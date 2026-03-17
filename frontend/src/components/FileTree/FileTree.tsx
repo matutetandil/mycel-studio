@@ -1,5 +1,4 @@
 import {
-  FileCode,
   ChevronRight,
   ChevronDown,
   FolderOpen,
@@ -20,6 +19,7 @@ import { useEditorPanelStore } from '../../stores/useEditorPanelStore'
 import { generateProject, toIdentifier, type GeneratedFile } from '../../utils/hclGenerator'
 import type { ConnectorNodeData, FlowNodeData } from '../../types'
 import ContextMenu, { type ContextMenuItem } from '../ContextMenu'
+import { getFileTypeInfo, KNOWN_LANGUAGES, setLanguageOverride, getLanguageOverride, removeLanguageOverride } from '../../utils/fileIcons'
 
 const gitStatusColors: Record<string, string> = {
   clean: 'text-neutral-500',
@@ -58,6 +58,8 @@ function FileItem({ file, isActive, onClick, isGenerated, onContextMenu, isEditi
   const projectFile = file as ProjectFile
   const statusColor = gitStatusColors[projectFile.gitStatus || 'clean']
   const statusIcon = gitStatusIcons[projectFile.gitStatus || 'clean']
+  const fileType = getFileTypeInfo(file.name)
+  const FileIcon = fileType.icon
 
   return (
     <button
@@ -68,7 +70,7 @@ function FileItem({ file, isActive, onClick, isGenerated, onContextMenu, isEditi
         ${isActive ? 'bg-indigo-600 text-white' : 'hover:bg-neutral-800 text-neutral-300'}
       `}
     >
-      <FileCode className={`w-4 h-4 shrink-0 ${isGenerated ? 'text-indigo-400' : 'text-amber-500'}`} />
+      <FileIcon className={`w-4 h-4 shrink-0 ${isActive ? 'text-white' : isGenerated ? 'text-indigo-400' : fileType.color}`} />
       {isEditing ? (
         <input
           autoFocus
@@ -261,6 +263,35 @@ export default function FileTree() {
       label: 'Move...',
       icon: <FolderInput className="w-3.5 h-3.5" />,
       onClick: () => handleMoveFile(fileContextMenu.path),
+    },
+    { label: '', separator: true, onClick: () => {} },
+    {
+      label: 'Open as...',
+      onClick: () => {},
+      submenu: (() => {
+        const hasOverride = !!getLanguageOverride(fileContextMenu.name)
+        const reopenFile = () => {
+          const fileName = fileContextMenu.path.split('/').pop() || fileContextMenu.path
+          const store = useEditorPanelStore.getState()
+          store.closeTab(store.activeGroupId, fileContextMenu.path)
+          setTimeout(() => useEditorPanelStore.getState().openFile(fileContextMenu.path, fileName), 50)
+        }
+        const items: ContextMenuItem[] = []
+        if (hasOverride) {
+          items.push({
+            label: 'Reset to auto-detect',
+            onClick: () => { removeLanguageOverride(fileContextMenu.name); reopenFile() },
+          })
+          items.push({ label: '', separator: true, onClick: () => {} })
+        }
+        for (const lang of KNOWN_LANGUAGES) {
+          items.push({
+            label: lang.label,
+            onClick: () => { setLanguageOverride(fileContextMenu.name, lang.id); reopenFile() },
+          })
+        }
+        return items
+      })(),
     },
     { label: '', separator: true, onClick: () => {} },
     {

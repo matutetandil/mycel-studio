@@ -1,9 +1,10 @@
 import { useState, useRef } from 'react'
-import { X, FileCode, Columns2, Rows2, Copy, Check, Download, XCircle } from 'lucide-react'
+import { X, Columns2, Rows2, Copy, Check, Download, XCircle } from 'lucide-react'
 import { useEditorPanelStore, type EditorTab } from '../../stores/useEditorPanelStore'
 import { useStudioStore } from '../../stores/useStudioStore'
 import { toIdentifier } from '../../utils/hclGenerator'
 import type { ConnectorNodeData } from '../../types'
+import { getFileTypeInfo } from '../../utils/fileIcons'
 
 interface TabBarProps {
   groupId: string
@@ -119,7 +120,7 @@ export default function TabBar({ groupId, tabs, activeTabId, isSecondary, onCopy
               ${dragOverIndex === index ? 'border-l-2 border-l-indigo-500' : ''}
             `}
           >
-            <FileCode className="w-3 h-3 text-amber-500 shrink-0" />
+            {(() => { const ft = getFileTypeInfo(tab.fileName); const Icon = ft.icon; return <Icon className={`w-3 h-3 shrink-0 ${activeTabId === tab.id ? ft.color : 'text-neutral-500'}`} /> })()}
             <span className="max-w-32 truncate">{tab.fileName}</span>
             <button
               onClick={(e) => {

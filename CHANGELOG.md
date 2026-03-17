@@ -2,6 +2,25 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.5.0] - Auto-Update System
+
+### Added
+
+- **In-app auto-update system:**
+  - Checks GitHub Releases on startup (after 3s delay)
+  - Notification banner with version info, release notes link, and "Update Now" button
+  - Downloads update with progress bar and SHA-256 checksum verification
+  - Platform-specific installation: replaces `.app` bundle (macOS), binary swap (Linux), rename trick (Windows)
+  - "Restart Now" button to apply update immediately
+  - Manual check via Help → Check for Updates...
+  - Skips check in development builds (`version = "dev"`)
+  - Cleans up leftover `.old` files from previous updates on startup
+
+### Fixed
+
+- **install.sh not upgrading:** Existing `.app` bundle is now removed before extracting (avoids `unzip` interactive prompt). Correct `.app` name (`mycel-studio.app`). Linux binary uses `mv -f` for force overwrite
+- **install.sh checksum verification:** Downloads and verifies SHA-256 checksums from release assets
+
 ## [1.4.0] - Status Bar, Git Gutter & Terminal Fix
 
 ### Added
