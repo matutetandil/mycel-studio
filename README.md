@@ -49,7 +49,7 @@ It ships as a **cross-platform desktop app** for macOS, Windows, and Linux (via 
   | Platform | amd64 | arm64 |
   |----------|-------|-------|
   | macOS | `MycelStudio-darwin-amd64.zip` | `MycelStudio-darwin-arm64.zip` |
-  | Linux | `MycelStudio-linux-amd64` | &mdash; |
+  | Linux | `MycelStudio-linux-amd64` | `MycelStudio-linux-arm64` |
   | Windows | `MycelStudio-windows-amd64.exe` | `MycelStudio-windows-arm64.exe` |
 
 - **Docker (browser)** &mdash; Run the web version in a container:

@@ -23,6 +23,9 @@ jobs:
           - os: ubuntu-22.04
             platform: linux/amd64
             artifact: MycelStudio-linux-amd64
+          - os: ubuntu-22.04-arm
+            platform: linux/arm64
+            artifact: MycelStudio-linux-arm64
           - os: windows-latest
             platform: windows/amd64
             artifact: MycelStudio-windows-amd64.exe
@@ -32,17 +35,17 @@ jobs:
 
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4.2.2
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v5.5.0
         with:
           go-version: '1.23'
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v4.4.0
         with:
-          node-version: '20'
+          node-version: '22'
           cache: 'npm'
           cache-dependency-path: frontend/package-lock.json
 
@@ -83,14 +86,14 @@ jobs:
 
       - name: Upload artifact (macOS)
         if: runner.os == 'macOS'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v4.6.2
         with:
           name: ${{ matrix.artifact }}
           path: build/bin/${{ matrix.artifact }}.zip
 
       - name: Upload artifact (Linux/Windows)
         if: runner.os != 'macOS'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v4.6.2
         with:
           name: ${{ matrix.artifact }}
           path: build/bin/${{ matrix.artifact }}*
@@ -99,10 +102,10 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4.2.2
 
       - name: Download all artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v4.3.0
         with:
           path: artifacts
 
