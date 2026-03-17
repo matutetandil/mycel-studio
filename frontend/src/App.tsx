@@ -7,6 +7,7 @@ import { useWorkspacePersistence } from './hooks/useWorkspacePersistence'
 import { useDebugSync } from './hooks/useDebugSync'
 import { useNativeMenu } from './hooks/useNativeMenu'
 import { useGitPolling } from './hooks/useGitPolling'
+import { useFileToCanvasSync } from './hooks/useFileToCanvasSync'
 import { isWailsRuntime } from './lib/api'
 import MenuBar from './components/MenuBar/MenuBar'
 import Sidebar from './components/Sidebar/Sidebar'
@@ -34,6 +35,7 @@ function AppInner() {
   useWorkspacePersistence()
   useDebugSync()
   useGitPolling()
+  useFileToCanvasSync()
 
   const isDesktop = isWailsRuntime()
 
