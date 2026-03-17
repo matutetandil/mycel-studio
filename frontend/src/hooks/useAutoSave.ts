@@ -21,7 +21,6 @@ export function onAutoSaveStatus(listener: (s: AutoSaveStatus) => void) {
 }
 
 export function useAutoSave() {
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const savingRef = useRef(false)
 
   const trySave = useCallback(async () => {
@@ -39,7 +38,6 @@ export function useAutoSave() {
       const ok = await saveProject()
       setStatus(ok ? 'saved' : 'error')
       if (ok) {
-        // Reset to idle after 2s
         setTimeout(() => setStatus('idle'), 2000)
       }
     } catch {
@@ -50,25 +48,36 @@ export function useAutoSave() {
   }, [])
 
   useEffect(() => {
-    const unsub = useProjectStore.subscribe((state, prev) => {
-      // Only react to file content changes (isDirty)
-      if (state.files === prev.files) return
-      if (!state.projectName) return
+    // Save on window blur (IntelliJ-style: save when switching away)
+    const handleBlur = () => trySave()
 
-      const hasDirty = state.files.some(f => f.isDirty)
-      if (!hasDirty) return
+    // Save on visibility change (tab switch, minimize, etc.)
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') trySave()
+    }
 
-      const debounce = state.metadata?.autoSave?.debounceMs ?? 2000
-      if (!state.metadata?.autoSave?.enabled) return
-
-      // Debounce the save
-      if (timerRef.current) clearTimeout(timerRef.current)
-      timerRef.current = setTimeout(trySave, debounce)
-    })
+    window.addEventListener('blur', handleBlur)
+    document.addEventListener('visibilitychange', handleVisibilityChange)
 
     return () => {
-      unsub()
-      if (timerRef.current) clearTimeout(timerRef.current)
+      window.removeEventListener('blur', handleBlur)
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
     }
+  }, [trySave])
+
+  // Also save on editor tab switch
+  useEffect(() => {
+    const { subscribe } = useProjectStore
+    let prevActiveFile: string | null = null
+
+    const unsub = subscribe((state) => {
+      if (state.activeFile !== prevActiveFile) {
+        // Active file changed — save any pending dirty files
+        if (prevActiveFile !== null) trySave()
+        prevActiveFile = state.activeFile
+      }
+    })
+
+    return unsub
   }, [trySave])
 }

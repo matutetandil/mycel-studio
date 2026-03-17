@@ -3511,7 +3511,7 @@ function EnvProperties() {
 
 function ServiceProperties() {
   const { serviceConfig, updateServiceConfig, nodes } = useStudioStore()
-  const { projectName, metadata, setMetadata } = useProjectStore()
+  // Auto-save is always on (IntelliJ-style)
   const inputClass = "w-full px-3 py-2 text-sm bg-neutral-800 border border-neutral-700 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-white placeholder-neutral-500"
 
   const hasSagas = nodes.some(n => n.type === 'saga')
@@ -3555,19 +3555,7 @@ function ServiceProperties() {
         />
       </div>
 
-      {/* Auto-save — only when a project is open */}
-      {projectName && metadata && (
-        <div className="flex items-center gap-2 pt-2 border-t border-neutral-800">
-          <input
-            type="checkbox"
-            id="auto-save"
-            checked={metadata.autoSave?.enabled ?? false}
-            onChange={(e) => setMetadata({ ...metadata, autoSave: { ...metadata.autoSave, enabled: e.target.checked } })}
-            className="w-4 h-4 text-indigo-600 bg-neutral-800 border-neutral-600 rounded"
-          />
-          <label htmlFor="auto-save" className="text-xs text-neutral-300">Auto-save</label>
-        </div>
-      )}
+      {/* Auto-save is always on (IntelliJ-style: saves on focus loss) */}
 
       {/* Workflow Storage — shown when sagas exist */}
       {hasSagas && (

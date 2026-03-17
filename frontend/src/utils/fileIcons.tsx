@@ -268,3 +268,54 @@ export function getFileTypeInfo(fileName: string): FileTypeInfo {
 export function getLanguageForFile(fileName: string): string {
   return getFileTypeInfo(fileName).language
 }
+
+// File types available in "New File" context menu
+// extension: null means no extension (e.g., Dockerfile, Makefile)
+export interface NewFileType {
+  label: string
+  extension: string | null  // e.g. '.hcl', '.json', null for Dockerfile
+  fileName?: string         // exact filename for types like Dockerfile
+}
+
+export const NEW_FILE_TYPES: NewFileType[] = [
+  { label: 'HCL File', extension: '.hcl' },
+  { label: 'JSON File', extension: '.json' },
+  { label: 'YAML File', extension: '.yaml' },
+  { label: 'TypeScript File', extension: '.ts' },
+  { label: 'JavaScript File', extension: '.js' },
+  { label: 'Go File', extension: '.go' },
+  { label: 'Python File', extension: '.py' },
+  { label: 'SQL File', extension: '.sql' },
+  { label: 'Shell Script', extension: '.sh' },
+  { label: 'HTML File', extension: '.html' },
+  { label: 'CSS File', extension: '.css' },
+  { label: 'Markdown File', extension: '.md' },
+  { label: 'XML File', extension: '.xml' },
+  { label: 'GraphQL File', extension: '.graphql' },
+  { label: 'Protobuf File', extension: '.proto' },
+  { label: 'Environment File', extension: '.env' },
+  { label: 'Dockerfile', extension: null, fileName: 'Dockerfile' },
+  { label: 'Makefile', extension: null, fileName: 'Makefile' },
+  { label: '.gitignore', extension: null, fileName: '.gitignore' },
+  { label: 'Plain Text File', extension: '.txt' },
+]
+
+// Resolve the final filename given a user input and a file type
+export function resolveFileName(input: string, fileType: NewFileType): string {
+  const name = input.trim()
+  if (!name) return ''
+
+  // For fixed filename types (Dockerfile, Makefile, .gitignore)
+  if (fileType.fileName) return fileType.fileName
+
+  // No extension needed
+  if (!fileType.extension) return name
+
+  const ext = fileType.extension // e.g. '.hcl'
+
+  // If user already typed the correct extension, keep it
+  if (name.toLowerCase().endsWith(ext.toLowerCase())) return name
+
+  // Otherwise append the extension
+  return name + ext
+}

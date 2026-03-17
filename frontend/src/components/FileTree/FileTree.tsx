@@ -4,22 +4,23 @@ import {
   FolderOpen,
   Folder,
   Circle,
-  Plus,
-  FolderPlus,
   Package,
   AlertTriangle,
   Pencil,
   Trash2,
   FolderInput,
+  FolderPlus,
+  FilePlus,
 } from 'lucide-react'
 import { useState, useMemo, useEffect, useRef, useCallback } from 'react'
+import { createPortal } from 'react-dom'
 import { useProjectStore, type ProjectFile } from '../../stores/useProjectStore'
 import { useStudioStore } from '../../stores/useStudioStore'
 import { useEditorPanelStore } from '../../stores/useEditorPanelStore'
 import { generateProject, toIdentifier, type GeneratedFile } from '../../utils/hclGenerator'
 import type { ConnectorNodeData, FlowNodeData } from '../../types'
 import ContextMenu, { type ContextMenuItem } from '../ContextMenu'
-import { getFileTypeInfo, KNOWN_LANGUAGES, setLanguageOverride, getLanguageOverride, removeLanguageOverride } from '../../utils/fileIcons'
+import { getFileTypeInfo, KNOWN_LANGUAGES, setLanguageOverride, getLanguageOverride, removeLanguageOverride, NEW_FILE_TYPES, resolveFileName, type NewFileType } from '../../utils/fileIcons'
 
 const gitStatusColors: Record<string, string> = {
   clean: 'text-neutral-500',
@@ -113,13 +114,114 @@ function openFileInEditor(filePath: string, revealLine?: number) {
   }
 }
 
+// Modal dialog for entering new file/folder name
+function NewFileDialog({
+  fileType,
+  dirPath,
+  onConfirm,
+  onCancel,
+}: {
+  fileType: NewFileType | null // null = directory
+  dirPath: string
+  onConfirm: (path: string) => void
+  onCancel: () => void
+}) {
+  const [name, setName] = useState(fileType?.fileName || '')
+  const inputRef = useRef<HTMLInputElement>(null)
+  const isFixedName = !!fileType?.fileName
+
+  useEffect(() => {
+    inputRef.current?.focus()
+    if (isFixedName) {
+      inputRef.current?.select()
+    }
+  }, [isFixedName])
+
+  const handleSubmit = () => {
+    if (!name.trim()) return
+    let finalName: string
+    if (fileType) {
+      finalName = resolveFileName(name, fileType)
+    } else {
+      finalName = name.trim()
+    }
+    const path = dirPath ? `${dirPath}/${finalName}` : finalName
+    onConfirm(path)
+  }
+
+  const preview = name.trim() && fileType ? resolveFileName(name, fileType) : name.trim()
+  const showPreview = fileType && !isFixedName && preview && preview !== name.trim()
+
+  const title = fileType ? `New ${fileType.label}` : 'New Directory'
+  const placeholder = fileType
+    ? (isFixedName ? '' : `Enter name${fileType.extension ? ` (${fileType.extension} auto-added)` : ''}`)
+    : 'Enter directory name'
+
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50"
+      onClick={onCancel}
+      onKeyDown={(e) => { if (e.key === 'Escape') onCancel(); e.stopPropagation() }}
+    >
+      <div
+        className="bg-neutral-800 border border-neutral-700 rounded-lg shadow-xl w-80 p-4"
+        onClick={(e) => e.stopPropagation()}
+        onKeyDown={(e) => e.stopPropagation()}
+      >
+        <h3 className="text-sm font-medium text-white mb-3">{title}</h3>
+        {dirPath && (
+          <p className="text-xs text-neutral-500 mb-2 truncate">
+            in {dirPath}/
+          </p>
+        )}
+        <input
+          ref={inputRef}
+          type="text"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') handleSubmit()
+            if (e.key === 'Escape') onCancel()
+          }}
+          placeholder={placeholder}
+          disabled={isFixedName}
+          className="w-full bg-neutral-900 text-white text-sm px-3 py-2 rounded border border-neutral-600 outline-none focus:border-indigo-500 disabled:opacity-60"
+        />
+        {showPreview && (
+          <p className="text-xs text-neutral-400 mt-1.5">
+            Will create: <span className="text-indigo-400">{preview}</span>
+          </p>
+        )}
+        <div className="flex justify-end gap-2 mt-4">
+          <button
+            onClick={onCancel}
+            className="px-3 py-1.5 text-xs text-neutral-400 hover:text-white rounded hover:bg-neutral-700"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSubmit}
+            disabled={!name.trim()}
+            className="px-3 py-1.5 text-xs bg-indigo-600 hover:bg-indigo-500 text-white rounded disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            Create
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body
+  )
+}
+
 export default function FileTree() {
   const { projectName, files, activeFile, setActiveFile, openProject, createFile, createDirectory, deleteFile, renameFile, capabilities, mycelRoot } = useProjectStore()
   const { nodes, edges, selectedNodeId, serviceConfig, authConfig, envConfig, securityConfig, pluginConfig } = useStudioStore()
   const editorActiveTabId = useEditorPanelStore(s => s.groups.find(g => g.id === s.activeGroupId)?.activeTabId || null)
   const [isExpanded, setIsExpanded] = useState(true)
   const [fileContextMenu, setFileContextMenu] = useState<{ x: number; y: number; path: string; name: string } | null>(null)
+  const [dirContextMenu, setDirContextMenu] = useState<{ x: number; y: number; dirPath: string } | null>(null)
   const [editingFile, setEditingFile] = useState<{ path: string; newName: string } | null>(null)
+  const [newFileDialog, setNewFileDialog] = useState<{ fileType: NewFileType | null; dirPath: string } | null>(null)
 
   // Generate project from canvas — pass mycelRoot and existing file paths so generator
   // prefixes correctly and skips files that already exist on disk
@@ -202,7 +304,15 @@ export default function FileTree() {
   const handleFileContextMenu = useCallback((e: React.MouseEvent, path: string, name: string) => {
     e.preventDefault()
     e.stopPropagation()
+    setDirContextMenu(null)
     setFileContextMenu({ x: e.clientX, y: e.clientY, path, name })
+  }, [])
+
+  const handleDirContextMenu = useCallback((e: React.MouseEvent, dirPath: string) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setFileContextMenu(null)
+    setDirContextMenu({ x: e.clientX, y: e.clientY, dirPath })
   }, [])
 
   const handleStartRename = useCallback((path: string, name: string) => {
@@ -253,6 +363,16 @@ export default function FileTree() {
     }
   }, [deleteFile])
 
+  const handleCreateFile = useCallback(async (path: string) => {
+    await createFile(path)
+    openFileInEditor(path)
+  }, [createFile])
+
+  const handleCreateDirectory = useCallback(async (path: string) => {
+    await createDirectory(path)
+  }, [createDirectory])
+
+  // Build file context menu items
   const fileContextMenuItems: ContextMenuItem[] = fileContextMenu ? [
     {
       label: 'Rename',
@@ -302,19 +422,23 @@ export default function FileTree() {
     },
   ] : []
 
-  const handleNewFile = () => {
-    const fileName = prompt('Enter file path (e.g., flows/users.hcl):')
-    if (fileName?.trim()) {
-      createFile(fileName.trim())
-    }
-  }
-
-  const handleNewFolder = () => {
-    const dirName = prompt('Enter directory path (e.g., flows):')
-    if (dirName?.trim()) {
-      createDirectory(dirName.trim())
-    }
-  }
+  // Build directory context menu items
+  const dirContextMenuItems: ContextMenuItem[] = dirContextMenu ? [
+    {
+      label: 'New File',
+      icon: <FilePlus className="w-3.5 h-3.5" />,
+      onClick: () => {},
+      submenu: NEW_FILE_TYPES.map(ft => ({
+        label: ft.label,
+        onClick: () => setNewFileDialog({ fileType: ft, dirPath: dirContextMenu.dirPath }),
+      })),
+    },
+    {
+      label: 'New Directory',
+      icon: <FolderPlus className="w-3.5 h-3.5" />,
+      onClick: () => setNewFileDialog({ fileType: null, dirPath: dirContextMenu.dirPath }),
+    },
+  ] : []
 
   // Hidden files that shouldn't appear in the tree
   const HIDDEN_FILES = ['.mycel-studio.json']
@@ -391,6 +515,7 @@ export default function FileTree() {
     <div className="text-sm">
       <button
         onClick={() => setIsExpanded(!isExpanded)}
+        onContextMenu={(e) => handleDirContextMenu(e, '')}
         className="w-full flex items-center gap-1 px-2 py-1.5 hover:bg-neutral-800 font-medium"
       >
         {isExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
@@ -405,31 +530,14 @@ export default function FileTree() {
             activeFile={currentActiveFile}
             onFileClick={handleFileClick}
             onContextMenu={handleFileContextMenu}
+            onDirContextMenu={handleDirContextMenu}
             editingFile={editingFile}
             onEditChange={(name) => setEditingFile(prev => prev ? { ...prev, newName: name } : null)}
             onEditCommit={handleCommitRename}
             onEditCancel={() => setEditingFile(null)}
             isRoot
+            parentPath=""
           />
-
-          <div className="flex gap-1 mt-1 px-1">
-            <button
-              onClick={handleNewFile}
-              className="flex-1 flex items-center justify-center gap-1 px-2 py-1 text-xs text-neutral-500 hover:text-neutral-300 hover:bg-neutral-800 rounded"
-              title="New file"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              <span>File</span>
-            </button>
-            <button
-              onClick={handleNewFolder}
-              className="flex-1 flex items-center justify-center gap-1 px-2 py-1 text-xs text-neutral-500 hover:text-neutral-300 hover:bg-neutral-800 rounded"
-              title="New folder"
-            >
-              <FolderPlus className="w-3.5 h-3.5" />
-              <span>Folder</span>
-            </button>
-          </div>
         </div>
       )}
 
@@ -440,6 +548,33 @@ export default function FileTree() {
           y={fileContextMenu.y}
           items={fileContextMenuItems}
           onClose={() => setFileContextMenu(null)}
+        />
+      )}
+
+      {/* Directory context menu */}
+      {dirContextMenu && (
+        <ContextMenu
+          x={dirContextMenu.x}
+          y={dirContextMenu.y}
+          items={dirContextMenuItems}
+          onClose={() => setDirContextMenu(null)}
+        />
+      )}
+
+      {/* New file/folder dialog */}
+      {newFileDialog && (
+        <NewFileDialog
+          fileType={newFileDialog.fileType}
+          dirPath={newFileDialog.dirPath}
+          onConfirm={(path) => {
+            if (newFileDialog.fileType) {
+              handleCreateFile(path)
+            } else {
+              handleCreateDirectory(path)
+            }
+            setNewFileDialog(null)
+          }}
+          onCancel={() => setNewFileDialog(null)}
         />
       )}
     </div>
@@ -595,23 +730,29 @@ function FileTreeNode({
   activeFile,
   onFileClick,
   onContextMenu,
+  onDirContextMenu,
   editingFile,
   onEditChange,
   onEditCommit,
   onEditCancel,
   isRoot,
+  parentPath,
 }: {
   node: TreeNode
   activeFile: string | null
   onFileClick: (path: string) => void
   onContextMenu?: (e: React.MouseEvent, path: string, name: string) => void
+  onDirContextMenu?: (e: React.MouseEvent, dirPath: string) => void
   editingFile?: { path: string; newName: string } | null
   onEditChange?: (name: string) => void
   onEditCommit?: () => void
   onEditCancel?: () => void
   isRoot?: boolean
+  parentPath: string
 }) {
   const [isExpanded, setIsExpanded] = useState(true)
+
+  const dirPath = isRoot ? parentPath : (parentPath ? `${parentPath}/${node.name}` : node.name)
 
   // Sort: directories first, then files
   const sortedDirs = [...node.children.entries()].sort((a, b) => a[0].localeCompare(b[0]))
@@ -632,13 +773,13 @@ function FileTreeNode({
     />
   )
 
-  const childProps = { activeFile, onFileClick, onContextMenu, editingFile, onEditChange, onEditCommit, onEditCancel }
+  const childProps = { activeFile, onFileClick, onContextMenu, onDirContextMenu, editingFile, onEditChange, onEditCommit, onEditCancel }
 
   if (isRoot) {
     return (
       <>
         {sortedDirs.map(([name, child]) => (
-          <FileTreeNode key={name} node={child} {...childProps} />
+          <FileTreeNode key={name} node={child} {...childProps} parentPath={dirPath} />
         ))}
         {sortedFiles.map(renderFile)}
       </>
@@ -649,6 +790,7 @@ function FileTreeNode({
     <div>
       <button
         onClick={() => setIsExpanded(!isExpanded)}
+        onContextMenu={(e) => { if (onDirContextMenu) { e.preventDefault(); e.stopPropagation(); onDirContextMenu(e, dirPath) } }}
         className="w-full flex items-center gap-1 px-2 py-1 hover:bg-neutral-800 text-neutral-400"
       >
         {isExpanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
@@ -658,7 +800,7 @@ function FileTreeNode({
       {isExpanded && (
         <div className="pl-4">
           {sortedDirs.map(([name, child]) => (
-            <FileTreeNode key={name} node={child} {...childProps} />
+            <FileTreeNode key={name} node={child} {...childProps} parentPath={dirPath} />
           ))}
           {sortedFiles.map(renderFile)}
         </div>
