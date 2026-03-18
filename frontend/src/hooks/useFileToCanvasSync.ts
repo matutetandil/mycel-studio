@@ -7,6 +7,7 @@ import { useProjectStore, type ProjectFile } from '../stores/useProjectStore'
 import { apiParse } from '../lib/api'
 import { parseProjectToCanvas } from './useSync'
 import { useStudioStore } from '../stores/useStudioStore'
+import { isSuppressingFileToCanvas, suppressCanvasToFile } from './useCanvasToFileSync'
 
 export function useFileToCanvasSync() {
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -26,6 +27,9 @@ export function useFileToCanvasSync() {
       })
 
       if (!changedHcl) return
+
+      // Skip if the change came from canvas→file sync (avoid loop)
+      if (isSuppressingFileToCanvas()) return
 
       // Debounce re-parse (800ms to avoid parsing on every keystroke)
       if (debounceRef.current) clearTimeout(debounceRef.current)
@@ -52,6 +56,9 @@ export function useFileToCanvasSync() {
       const result = await apiParse({ files: fileEntries })
 
       if (result.success && result.project) {
+        // Suppress canvas→file sync to avoid loop (file→canvas→file)
+        suppressCanvasToFile()
+
         // Preserve existing node positions — only update data, not layout
         const existingNodes = useStudioStore.getState().nodes
         const positionMap = new Map<string, { x: number; y: number }>()

@@ -1529,3 +1529,106 @@ export function generateHCL(nodes: StudioNode[], edges: Edge[], serviceConfig?: 
   const project = generateProject(nodes, edges, serviceConfig, authConfig, envConfig, securityConfig, pluginConfig)
   return project.files.map(f => `# === ${f.path} ===\n${f.content}`).join('\n')
 }
+
+// Generate HCL for a single node (for syncing property changes back to files)
+export function generateNodeHCL(node: StudioNode, allNodes: StudioNode[], edges: Edge[]): string | null {
+  switch (node.type) {
+    case 'connector':
+      return generateConnectorHCL(node)
+    case 'flow': {
+      const nodesMap = new Map(allNodes.map(n => [n.id, n]))
+      return generateFlowHCL(node, edges, nodesMap)
+    }
+    case 'type':
+      return generateTypeHCL(node)
+    case 'validator':
+      return generateValidatorHCL(node)
+    case 'transform':
+      return generateNamedTransformHCL(node)
+    case 'aspect':
+      return generateAspectHCL(node)
+    case 'saga':
+      return generateSagaHCL(node)
+    case 'state_machine':
+      return generateStateMachineHCL(node)
+    default:
+      return null
+  }
+}
+
+// HCL block type keyword for each node type
+const NODE_TYPE_TO_HCL_BLOCK: Record<string, string> = {
+  connector: 'connector',
+  flow: 'flow',
+  type: 'type',
+  validator: 'validator',
+  transform: 'transform',
+  aspect: 'aspect',
+  saga: 'saga',
+  state_machine: 'state_machine',
+}
+
+// Find and replace a named HCL block in file content
+// Returns the updated content, or null if block not found
+export function replaceHclBlock(
+  fileContent: string,
+  blockType: string,
+  blockName: string,
+  newBlockHcl: string,
+): string | null {
+  const lines = fileContent.split('\n')
+  // Find block start: `connector "name" {` or `# comment\nconnector "name" {`
+  const blockPattern = `${blockType} "${blockName}" {`
+  let startLine = -1
+  let commentStartLine = -1
+
+  for (let i = 0; i < lines.length; i++) {
+    if (lines[i].trimStart().startsWith(blockPattern)) {
+      startLine = i
+      // Check if preceded by a comment line (# Name connector)
+      commentStartLine = i
+      if (i > 0 && lines[i - 1].trimStart().startsWith('#')) {
+        commentStartLine = i - 1
+        // Skip blank line before comment too
+        if (commentStartLine > 0 && lines[commentStartLine - 1].trim() === '') {
+          commentStartLine = commentStartLine - 1
+        }
+      }
+      break
+    }
+  }
+
+  if (startLine === -1) return null
+
+  // Find matching closing brace by tracking nesting
+  let depth = 0
+  let endLine = -1
+  for (let i = startLine; i < lines.length; i++) {
+    for (const ch of lines[i]) {
+      if (ch === '{') depth++
+      if (ch === '}') {
+        depth--
+        if (depth === 0) {
+          endLine = i
+          break
+        }
+      }
+    }
+    if (endLine !== -1) break
+  }
+
+  if (endLine === -1) return null
+
+  // Replace the block (including comment line)
+  const before = lines.slice(0, commentStartLine)
+  const after = lines.slice(endLine + 1)
+
+  // Clean up: avoid double blank lines
+  const newBlock = newBlockHcl.trimEnd()
+  const result = [...before, newBlock, ...after].join('\n')
+  return result
+}
+
+export function getHclBlockType(nodeType: string): string | undefined {
+  return NODE_TYPE_TO_HCL_BLOCK[nodeType]
+}
