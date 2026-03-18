@@ -10,6 +10,9 @@ import { generateProject, type GeneratedFile } from '../../utils/hclGenerator'
 import { computeLineDiff, type LineDiffResult } from '../../utils/lineDiff'
 import { apiGetGitFileContent } from '../../lib/api'
 import { getFileTypeInfo, getLanguageForFile } from '../../utils/fileIcons'
+import { triggerAutoSave } from '../../hooks/useAutoSave'
+import { useSettingsStore } from '../../stores/useSettingsStore'
+import { applyKeymap } from '../../monaco/keymaps'
 import TabBar from './TabBar'
 import JSZip from 'jszip'
 
@@ -362,8 +365,14 @@ export default function EditorGroupView({ groupId, isSecondary }: EditorGroupPro
             value={activeFile.content}
             theme="mycel-dark"
             beforeMount={setupMonaco}
-            onMount={(monacoEditor) => {
+            onMount={(monacoEditor, monacoInstance) => {
               editorRef.current = monacoEditor
+              // Apply keymap (IDEA/VS Code)
+              applyKeymap(monacoInstance, monacoEditor, useSettingsStore.getState().keymap)
+              // Auto-save when editor loses focus (click canvas, properties, etc.)
+              monacoEditor.onDidBlurEditorText(() => {
+                triggerAutoSave()
+              })
               // Breakpoint click handler on line numbers
               monacoEditor.onMouseDown((e) => {
                 if (e.target.type === 3 /* GUTTER_LINE_NUMBERS */) {

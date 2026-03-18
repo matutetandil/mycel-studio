@@ -78,9 +78,10 @@ interface MenuBarProps {
   onShowShortcuts?: () => void
   onShowTemplates?: () => void
   onShowAbout?: () => void
+  onShowSettings?: () => void
 }
 
-export default function MenuBar({ onShowShortcuts, onShowTemplates, onShowAbout }: MenuBarProps) {
+export default function MenuBar({ onShowShortcuts, onShowTemplates, onShowAbout, onShowSettings }: MenuBarProps) {
   const { theme, toggleTheme } = useThemeStore()
   const { projectName, files, isLoading, gitBranch, capabilities, newProject, openProject, saveProject, closeProject } = useProjectStore()
   const { undo, redo, copyNode, pasteNode, duplicateNode, selectedNodeId, clipboard } = useStudioStore()
@@ -158,6 +159,8 @@ export default function MenuBar({ onShowShortcuts, onShowTemplates, onShowAbout 
       { label: 'Zoom In', shortcut: 'Ctrl++', onClick: () => {} },
       { label: 'Zoom Out', shortcut: 'Ctrl+-', onClick: () => {} },
       { label: 'Fit to Screen', shortcut: 'Ctrl+0', onClick: () => {} },
+      { separator: true },
+      { label: 'Settings...', shortcut: 'Ctrl+,', onClick: onShowSettings },
     ],
   }
 
@@ -245,7 +248,7 @@ export default function MenuBar({ onShowShortcuts, onShowTemplates, onShowAbout 
       </button>
 
       {/* Settings */}
-      <button className="p-2 hover:bg-neutral-800 rounded" title="Settings">
+      <button onClick={onShowSettings} className="p-2 hover:bg-neutral-800 rounded" title="Settings">
         <Settings className="w-4 h-4" />
       </button>
     </header>

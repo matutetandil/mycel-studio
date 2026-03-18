@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback } from 'react'
+import { useEffect, useCallback } from 'react'
 import { useProjectStore } from '../stores/useProjectStore'
 
 type AutoSaveStatus = 'idle' | 'saving' | 'saved' | 'error'
@@ -20,32 +20,34 @@ export function onAutoSaveStatus(listener: (s: AutoSaveStatus) => void) {
   return () => { statusListeners.delete(listener) }
 }
 
-export function useAutoSave() {
-  const savingRef = useRef(false)
+// Module-level save function so Monaco editors can call it directly
+let _savingFlag = false
+export async function triggerAutoSave() {
+  if (_savingFlag) return
+  const { projectName, files, saveProject } = useProjectStore.getState()
+  if (!projectName) return
 
-  const trySave = useCallback(async () => {
-    if (savingRef.current) return
-    const { projectName, files, saveProject } = useProjectStore.getState()
-    if (!projectName) return
+  const hasDirty = files.some(f => f.isDirty)
+  if (!hasDirty) return
 
-    const hasDirty = files.some(f => f.isDirty)
-    if (!hasDirty) return
+  _savingFlag = true
+  setStatus('saving')
 
-    savingRef.current = true
-    setStatus('saving')
-
-    try {
-      const ok = await saveProject()
-      setStatus(ok ? 'saved' : 'error')
-      if (ok) {
-        setTimeout(() => setStatus('idle'), 2000)
-      }
-    } catch {
-      setStatus('error')
-    } finally {
-      savingRef.current = false
+  try {
+    const ok = await saveProject()
+    setStatus(ok ? 'saved' : 'error')
+    if (ok) {
+      setTimeout(() => setStatus('idle'), 2000)
     }
-  }, [])
+  } catch {
+    setStatus('error')
+  } finally {
+    _savingFlag = false
+  }
+}
+
+export function useAutoSave() {
+  const trySave = useCallback(() => { triggerAutoSave() }, [])
 
   useEffect(() => {
     // Save on window blur (IntelliJ-style: save when switching away)

@@ -10,6 +10,7 @@ export function useKeyboardShortcuts() {
   const { openProject, saveProject } = useProjectStore()
   const [showShortcuts, setShowShortcuts] = useState(false)
   const [showTemplates, setShowTemplates] = useState(false)
+  const [showSettings, setShowSettings] = useState(false)
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
@@ -128,10 +129,18 @@ export function useKeyboardShortcuts() {
         return
       }
 
+      // Settings: Ctrl/Cmd+,
+      if (mod && e.key === ',') {
+        e.preventDefault()
+        setShowSettings(prev => !prev)
+        return
+      }
+
       // Escape closes dialogs
       if (e.key === 'Escape') {
         setShowShortcuts(false)
         setShowTemplates(false)
+        setShowSettings(false)
       }
     },
     [undo, redo, copyNode, pasteNode, duplicateNode, selectedNodeId, removeNode, openProject, saveProject]
@@ -142,5 +151,5 @@ export function useKeyboardShortcuts() {
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [handleKeyDown])
 
-  return { showShortcuts, setShowShortcuts, showTemplates, setShowTemplates }
+  return { showShortcuts, setShowShortcuts, showTemplates, setShowTemplates, showSettings, setShowSettings }
 }

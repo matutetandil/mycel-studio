@@ -17,6 +17,7 @@ import EditorPanel from './components/EditorPanel'
 import ShortcutsDialog from './components/ShortcutsDialog'
 import TemplateGallery from './components/TemplateGallery'
 import AboutDialog from './components/AboutDialog'
+import SettingsDialog from './components/SettingsDialog'
 import StatusBar from './components/StatusBar'
 import UpdateNotification from './components/UpdateNotification'
 import { useProjectStore } from './stores/useProjectStore'
@@ -26,7 +27,7 @@ import EditorPanelComponent from './components/EditorPanel/EditorPanel'
 
 function AppInner() {
   const { theme, toggleTheme } = useThemeStore()
-  const { showShortcuts, setShowShortcuts, showTemplates, setShowTemplates } = useKeyboardShortcuts()
+  const { showShortcuts, setShowShortcuts, showTemplates, setShowTemplates, showSettings, setShowSettings } = useKeyboardShortcuts()
   const [showAbout, setShowAbout] = useState(false)
   const { newProject, openProject, saveProject, closeProject } = useProjectStore()
   const { undo, redo, duplicateNode } = useStudioStore()
@@ -71,6 +72,7 @@ function AppInner() {
           onShowShortcuts={() => setShowShortcuts(true)}
           onShowTemplates={() => setShowTemplates(true)}
           onShowAbout={() => setShowAbout(true)}
+          onShowSettings={() => setShowSettings(true)}
         />
       )}
 
@@ -104,6 +106,7 @@ function AppInner() {
       <ShortcutsDialog isOpen={showShortcuts} onClose={() => setShowShortcuts(false)} />
       <TemplateGallery isOpen={showTemplates} onClose={() => setShowTemplates(false)} />
       <AboutDialog isOpen={showAbout} onClose={() => setShowAbout(false)} />
+      <SettingsDialog isOpen={showSettings} onClose={() => setShowSettings(false)} />
     </div>
   )
 }

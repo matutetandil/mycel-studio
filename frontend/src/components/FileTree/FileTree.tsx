@@ -22,6 +22,7 @@ import type { ConnectorNodeData, FlowNodeData } from '../../types'
 import ContextMenu, { type ContextMenuItem } from '../ContextMenu'
 import { getFileTypeInfo, KNOWN_LANGUAGES, setLanguageOverride, getLanguageOverride, removeLanguageOverride, NEW_FILE_TYPES, resolveFileName, type NewFileType } from '../../utils/fileIcons'
 
+// Badge colors (the M/U/A/D indicator)
 const gitStatusColors: Record<string, string> = {
   clean: 'text-neutral-500',
   modified: 'text-amber-500',
@@ -30,6 +31,17 @@ const gitStatusColors: Record<string, string> = {
   untracked: 'text-green-500',
   deleted: 'text-red-500',
   ignored: 'text-neutral-600',
+}
+
+// Name text colors (IntelliJ-style: tint the filename itself)
+const gitStatusNameColors: Record<string, string> = {
+  clean: '',
+  modified: 'text-sky-400',
+  new: 'text-green-400',
+  added: 'text-green-400',
+  untracked: 'text-green-400',
+  deleted: 'text-red-400',
+  ignored: 'text-amber-700',
 }
 
 const gitStatusIcons: Record<string, string> = {
@@ -57,8 +69,10 @@ interface FileItemProps {
 
 function FileItem({ file, isActive, onClick, isGenerated, onContextMenu, isEditing, editName, onEditChange, onEditCommit, onEditCancel }: FileItemProps) {
   const projectFile = file as ProjectFile
-  const statusColor = gitStatusColors[projectFile.gitStatus || 'clean']
-  const statusIcon = gitStatusIcons[projectFile.gitStatus || 'clean']
+  const gitStatus = projectFile.gitStatus || 'clean'
+  const statusColor = gitStatusColors[gitStatus]
+  const statusIcon = gitStatusIcons[gitStatus]
+  const nameColor = gitStatusNameColors[gitStatus] || ''
   const fileType = getFileTypeInfo(file.name)
   const FileIcon = fileType.icon
 
@@ -87,7 +101,7 @@ function FileItem({ file, isActive, onClick, isGenerated, onContextMenu, isEditi
           className="flex-1 bg-neutral-700 text-white text-sm px-1 py-0 rounded border border-neutral-600 outline-none min-w-0"
         />
       ) : (
-        <span className="flex-1 text-left truncate">{file.name}</span>
+        <span className={`flex-1 text-left truncate ${!isActive && nameColor ? nameColor : ''}`}>{file.name}</span>
       )}
       {!isEditing && projectFile.isDirty && (
         <Circle className="w-2 h-2 fill-current text-amber-500" />
@@ -230,6 +244,7 @@ export default function FileTree() {
 
   // Track the previously opened file per node, so we can rename tabs on label change
   const prevNodeFileRef = useRef<Record<string, string>>({})
+  const prevSelectedNodeIdRef = useRef<string | null>(null)
 
   // Compute the line number where a named block starts in its generated file
   const getBlockLineInFile = (blockType: string, blockName: string, filePath: string): number | undefined => {
@@ -245,8 +260,13 @@ export default function FileTree() {
     return undefined
   }
 
-  // Auto-select file when component is selected
+  // Auto-select file when a DIFFERENT node is selected on the canvas.
+  // Only fires when selectedNodeId actually changes — not when nodes/edges update.
+  // This prevents the editor from jumping back to the node's file while you're editing another file.
   useEffect(() => {
+    if (selectedNodeId === prevSelectedNodeIdRef.current) return
+    prevSelectedNodeIdRef.current = selectedNodeId
+
     if (selectedNodeId && nodes.length > 0) {
       const selectedNode = nodes.find(n => n.id === selectedNodeId)
       if (selectedNode) {
@@ -660,7 +680,7 @@ function VirtualProjectTree({ project, activeFile, onFileClick, onOpenProject, o
             <div key={dir}>
               <button
                 onClick={() => toggleDir(dir)}
-                className="w-full flex items-center gap-1 px-2 py-1 hover:bg-neutral-800 text-neutral-400"
+                className="w-full flex items-center gap-1 px-2 py-1 hover:bg-neutral-800 text-neutral-300"
               >
                 {expandedDirs.has(dir) ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
                 {expandedDirs.has(dir) ? <FolderOpen className="w-3.5 h-3.5 text-indigo-500" /> : <Folder className="w-3.5 h-3.5 text-indigo-500" />}
@@ -701,6 +721,24 @@ interface TreeNode {
   name: string
   children: Map<string, TreeNode>
   files: ProjectFile[]
+}
+
+// Derive a directory's git status from all descendant files
+function getDirGitStatus(node: TreeNode): string | undefined {
+  const statuses = new Set<string>()
+  for (const file of node.files) {
+    if (file.gitStatus) statuses.add(file.gitStatus)
+  }
+  for (const child of node.children.values()) {
+    const childStatus = getDirGitStatus(child)
+    if (childStatus) statuses.add(childStatus)
+  }
+  if (statuses.size === 0) return undefined
+  // If ALL descendants are ignored, directory is ignored
+  if (statuses.size === 1 && statuses.has('ignored')) return 'ignored'
+  // If ALL descendants are new/untracked, directory is new
+  if ([...statuses].every(s => s === 'new' || s === 'untracked')) return 'new'
+  return undefined
 }
 
 function buildFileTree(files: ProjectFile[]): TreeNode {
@@ -786,16 +824,19 @@ function FileTreeNode({
     )
   }
 
+  const dirStatus = getDirGitStatus(node)
+  const dirNameColor = dirStatus ? (gitStatusNameColors[dirStatus] || '') : ''
+
   return (
     <div>
       <button
         onClick={() => setIsExpanded(!isExpanded)}
         onContextMenu={(e) => { if (onDirContextMenu) { e.preventDefault(); e.stopPropagation(); onDirContextMenu(e, dirPath) } }}
-        className="w-full flex items-center gap-1 px-2 py-1 hover:bg-neutral-800 text-neutral-400"
+        className="w-full flex items-center gap-1 px-2 py-1 hover:bg-neutral-800 text-neutral-300"
       >
         {isExpanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
         {isExpanded ? <FolderOpen className="w-3.5 h-3.5 text-amber-600" /> : <Folder className="w-3.5 h-3.5 text-amber-600" />}
-        <span className="truncate">{node.name}</span>
+        <span className={`truncate ${dirNameColor}`}>{node.name}</span>
       </button>
       {isExpanded && (
         <div className="pl-4">

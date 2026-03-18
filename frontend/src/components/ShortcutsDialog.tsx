@@ -9,6 +9,7 @@ const shortcuts = [
     { keys: `${mod}+S`, action: 'Save project' },
     { keys: `${mod}+N`, action: 'New from template' },
     { keys: `${mod}+/`, action: 'Show shortcuts' },
+    { keys: `${mod}+,`, action: 'Settings' },
   ]},
   { category: 'Edit', items: [
     { keys: `${mod}+Z`, action: 'Undo' },
