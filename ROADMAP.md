@@ -403,6 +403,39 @@ Currently the `to` block editor shows the same generic fields (`connector`, `tar
 
 **Data source:** Add the connector-specific properties to the connector registry (`connectorTypes.ts`), so each connector definition includes its destination properties alongside its existing config properties.
 
+### 3.14 — Context-Aware Source Properties (NEW)
+**Priority: High** — The `from` block properties panel must show contextual fields depending on the source connector type.
+
+**Reference:** `/Users/matute/Documents/Personal/MYCEL/docs/reference/source-properties.md`
+
+Currently the `from` block editor shows the same generic `operation` field for all connectors. But `operation` has a different format and meaning for each connector type, and each provides different `input.*` variables:
+
+| Connector type | `operation` format | Key `input.*` variables |
+|---|---|---|
+| REST | `"METHOD /path"` (e.g., `"GET /users/:id"`) | path params, query params, body fields, `headers` |
+| GraphQL | `"Query.field"` / `"Mutation.field"` / `"Subscription.field"` | argument fields |
+| gRPC | `"Service/Method"` (e.g., `"UserService/GetUser"`) | proto message fields |
+| SOAP | `"OperationName"` (e.g., `"CreateOrder"`) | SOAP body element children |
+| TCP | message type/pattern string | `msg.Data` fields |
+| RabbitMQ | routing key (`*` / `#` wildcards) | `body`, `headers`, `properties`, `routing_key`, `exchange` |
+| Kafka | topic name | `body`, `headers`, `topic`, `partition`, `offset`, `key`, `timestamp` |
+| Redis Pub/Sub | channel name or glob pattern | `_channel`, `_pattern`, payload fields |
+| MQTT | topic pattern (`+` / `#` wildcards) | `_topic`, `_message_id`, `_qos`, `_retained`, payload fields |
+| WebSocket | `"connect"` / `"disconnect"` / `"message"` / custom | `event`, data fields, `user_id`, `room` |
+| SSE | `"connect"` / `"disconnect"` | `event`, `client_id`, `remote_addr` |
+| CDC | `"TRIGGER:table"` (e.g., `"INSERT:users"`, `"*:*"`) | `trigger`, `table`, `schema`, `new`, `old`, `timestamp` |
+| File watch | glob pattern (e.g., `"*.csv"`) | `_path`, `_name`, `_size`, `_mod_time`, `_event`, content fields |
+
+**UI implementation:**
+1. When user selects a connector in the `from` block, detect its type from the canvas
+2. Show `operation` with a contextual label and placeholder (e.g., "HTTP Method + Path" for REST, "Routing key" for RabbitMQ, "Topic pattern" for MQTT)
+3. For REST, offer a split input: method dropdown (`GET`, `POST`, `PUT`, `PATCH`, `DELETE`) + path text field
+4. For GraphQL, offer a dropdown prefix (`Query`, `Mutation`, `Subscription`) + field name text field
+5. Show a reference tooltip listing available `input.*` variables for the selected connector type — this helps users write transforms and CEL expressions
+6. For message queue connectors, show the optional `filter` block editor with `on_reject` policy
+
+**Data source:** Add the connector-specific source properties to the connector registry (`connectorTypes.ts`), so each connector definition includes its source properties alongside its existing config and destination properties.
+
 ---
 
 ## Phase 4 — Types & Validation
@@ -922,7 +955,7 @@ Hover provider with block docs, connector type descriptions, CEL function signat
 
 | Phase | Theme | Items | Depends On |
 |-------|-------|-------|------------|
-| **3** | Fix Foundations | ~~HCL2 syntax fix~~, ~~step blocks~~, ~~filter~~, ~~multi-to~~, ~~response editor~~, ~~error handling updates~~, ~~dedupe~~, ~~remove phantom features~~, idempotency, async, fan-out, file upload, flow invocation from aspects, response enrichment, **context-aware destination properties** | — |
+| **3** | Fix Foundations | ~~HCL2 syntax fix~~, ~~step blocks~~, ~~filter~~, ~~multi-to~~, ~~response editor~~, ~~error handling updates~~, ~~dedupe~~, ~~remove phantom features~~, idempotency, async, fan-out, file upload, flow invocation from aspects, response enrichment, **context-aware destination properties**, **context-aware source properties** | — |
 | **4** | Types & Validation | Type editor, validators, type refs in flows | Phase 3 |
 | **5** | Reusability | Named transforms, aspects (incl. on_error), named operations | Phase 4 |
 | **6** | ~~Missing Connectors~~ | ~~Notifications (6), real-time (3), specialized (3 incl. SOAP), MQTT, FTP/SFTP, Redis Pub/Sub~~, PDF connector (⚠️ update `template` field per v1.14.3) + connector profiles (pending) | ~~—~~ ✅ v0.5.0 |
