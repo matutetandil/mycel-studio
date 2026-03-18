@@ -21,6 +21,7 @@ type App struct {
 	debugClient    *DebugClient
 	updater        *Updater
 	confirmOnClose bool
+	skipCloseConfirm bool
 }
 
 // NewApp creates a new App instance.
@@ -61,7 +62,7 @@ func (a *App) SetConfirmOnClose(enabled bool) {
 // BeforeClose is called when the user tries to close the app.
 // It shows a native confirmation dialog only if the setting is enabled.
 func (a *App) BeforeClose(ctx context.Context) (prevent bool) {
-	if !a.confirmOnClose {
+	if !a.confirmOnClose || a.skipCloseConfirm {
 		return false
 	}
 

@@ -194,6 +194,7 @@ func (u *Updater) RestartApp() error {
 		cmd.Start()
 	}
 
+	u.app.skipCloseConfirm = true
 	wailsRuntime.Quit(u.app.ctx)
 	return nil
 }

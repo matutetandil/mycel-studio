@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.7.2] - Terminal Padding & Update Restart Fix
+
+### Fixed
+
+- **Terminal text clipped at bottom:** added 6px bottom padding so descender letters (g, j, p, q, y) are no longer cut off on the last visible line
+- **Quit confirmation on update restart:** "Are you sure you want to quit?" dialog no longer appears when restarting after an auto-update
+
 ## [1.7.1] - Context-Aware Source Properties & From Block Fixes
 
 ### Added

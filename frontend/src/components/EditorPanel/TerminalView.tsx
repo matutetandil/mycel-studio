@@ -125,7 +125,7 @@ export default function TerminalView({ sessionId }: TerminalViewProps) {
     <div
       ref={containerRef}
       className="h-full w-full"
-      style={{ padding: '4px 0 0 8px' }}
+      style={{ padding: '4px 0 6px 8px' }}
     />
   )
 }
