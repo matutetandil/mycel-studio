@@ -183,10 +183,16 @@ func convertToStudioProject(config *parser.Configuration, basePath string) *mode
 		// Convert to
 		if flow.To != nil {
 			flowConfig.To = &models.FlowEndpoint{
-				Connector: flow.To.Connector,
-				Target:    flow.To.Target,
-				Query:     flow.To.Query,
-				Filter:    flow.To.Filter,
+				Connector:   flow.To.Connector,
+				Target:      flow.To.Target,
+				Query:       flow.To.Query,
+				Filter:      flow.To.Filter,
+				Operation:   flow.To.Operation,
+				Format:      flow.To.Format,
+				Exchange:    flow.To.Exchange,
+				QueryFilter: flow.To.QueryFilter,
+				Update:      flow.To.Update,
+				Params:      flow.To.Params,
 			}
 		}
 

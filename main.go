@@ -27,9 +27,10 @@ func main() {
 		AssetServer: &assetserver.Options{
 			Assets: assets,
 		},
-		Menu:       app.buildMenu(),
-		OnStartup:  app.Startup,
-		OnShutdown: app.Shutdown,
+		Menu:         app.buildMenu(),
+		OnStartup:    app.Startup,
+		OnShutdown:   app.Shutdown,
+		OnBeforeClose: app.BeforeClose,
 		Bind: []interface{}{
 			app,
 			app.updater,

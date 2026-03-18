@@ -343,9 +343,29 @@ function generateToBlock(to: FlowTo, indent: string): string[] {
   lines.push(`${indent}  connector = "${to.connector}"`)
   if (to.target) lines.push(`${indent}  target    = "${to.target}"`)
   if (to.operation) lines.push(`${indent}  operation = "${to.operation}"`)
+  if (to.query) lines.push(`${indent}  query     = "${to.query}"`)
   if (to.exchange) lines.push(`${indent}  exchange  = "${to.exchange}"`)
+  if (to.format) lines.push(`${indent}  format    = "${to.format}"`)
   if (to.when) lines.push(`${indent}  when      = "${to.when}"`)
   if (to.parallel === false) lines.push(`${indent}  parallel  = false`)
+  if (to.query_filter && Object.keys(to.query_filter).length > 0) {
+    lines.push(`${indent}  query_filter = { ${Object.entries(to.query_filter).map(([k, v]) => `${k} = "${v}"`).join(', ')} }`)
+  }
+  if (to.update && Object.keys(to.update).length > 0) {
+    lines.push(`${indent}  update = { ${Object.entries(to.update).map(([k, v]) => `${k} = "${v}"`).join(', ')} }`)
+  }
+  if (to.params && Object.keys(to.params).length > 0) {
+    lines.push(`${indent}  params = {`)
+    for (const [key, value] of Object.entries(to.params)) {
+      // Boolean and numeric values without quotes
+      if (value === 'true' || value === 'false' || /^\d+$/.test(value)) {
+        lines.push(`${indent}    ${key} = ${value}`)
+      } else {
+        lines.push(`${indent}    ${key} = "${value}"`)
+      }
+    }
+    lines.push(`${indent}  }`)
+  }
   if (to.transform && Object.keys(to.transform).length > 0) {
     lines.push('')
     lines.push(`${indent}  transform {`)

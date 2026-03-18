@@ -7,6 +7,7 @@ import type { ConnectorNodeData, ConnectorProfile, ConnectorProfileConfig, FlowN
 import OperationsEditor from './OperationsEditor'
 import GraphQLOperationsEditor from './GraphQLOperationsEditor'
 import { getConnector, type FieldDefinition } from '../../connectors'
+import { getDestinationConfig } from '../../connectors/destinationProperties'
 import { getAllValidatorTypes, getValidatorType } from '../../validators'
 import { useProjectStore } from '../../stores/useProjectStore'
 import { useEditorPanelStore } from '../../stores/useEditorPanelStore'
@@ -874,6 +875,10 @@ function FlowProperties({
           ? nodes.find((n) => n.id === outgoingEdges[idx].target && n.type === 'connector')
           : null
         const targetData = targetConnector?.data as ConnectorNodeData | undefined
+        const destConfig = targetData
+          ? getDestinationConfig(targetData.connectorType, targetData.config?.driver as string | undefined)
+          : null
+        const connectorIdent = targetData?.label.toLowerCase().replace(/\s+/g, '_') || to.connector || ''
 
         return (
           <div key={idx} className="p-3 bg-neutral-800/50 rounded-md space-y-3">
@@ -915,18 +920,213 @@ function FlowProperties({
               </div>
             )}
 
-            <div>
-              <label className="block text-xs font-medium text-neutral-400 mb-1">
-                {targetData?.connectorType === 'database' ? 'Table/Collection' : 'Target'}
-              </label>
-              <input
-                type="text"
-                value={to.target || ''}
-                onChange={(e) => updateToTarget(idx, { connector: targetData?.label.toLowerCase().replace(/\s+/g, '_') || to.connector || '', target: e.target.value })}
-                placeholder={targetData?.connectorType === 'database' ? 'users' : 'target'}
-                className="w-full px-3 py-2 text-sm bg-neutral-800 border border-neutral-700 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-white placeholder-neutral-500"
-              />
-            </div>
+            {/* Target field — label and placeholder are context-aware */}
+            {!(destConfig?.hideTarget) && (
+              <div>
+                <label className="block text-xs font-medium text-neutral-400 mb-1">
+                  {destConfig?.targetLabel || 'Target'}
+                </label>
+                <input
+                  type="text"
+                  value={to.target || ''}
+                  onChange={(e) => updateToTarget(idx, { connector: connectorIdent, target: e.target.value })}
+                  placeholder={destConfig?.targetPlaceholder || 'target'}
+                  className="w-full px-3 py-2 text-sm bg-neutral-800 border border-neutral-700 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-white placeholder-neutral-500"
+                />
+                {destConfig?.targetHelpText && (
+                  <p className="text-xs text-neutral-500 mt-1">{destConfig.targetHelpText}</p>
+                )}
+              </div>
+            )}
+
+            {/* Operation dropdown — only when connector has specific operations */}
+            {destConfig?.operationOptions && !destConfig.hideOperation && (
+              <div>
+                <label className="block text-xs font-medium text-neutral-400 mb-1">Operation</label>
+                <select
+                  value={to.operation || ''}
+                  onChange={(e) => updateToTarget(idx, { connector: connectorIdent, operation: e.target.value || undefined })}
+                  className="w-full px-3 py-2 text-sm bg-neutral-800 border border-neutral-700 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-white"
+                >
+                  {destConfig.operationOptions.map((opt) => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  ))}
+                </select>
+                {destConfig.operationHelpText && (
+                  <p className="text-xs text-neutral-500 mt-1">{destConfig.operationHelpText}</p>
+                )}
+              </div>
+            )}
+
+            {/* Connector-specific extra fields */}
+            {destConfig?.fields?.map((field) => {
+              // Determine where this field stores its value
+              const isMapped = field.mapsTo !== undefined
+              const getValue = (): string => {
+                if (isMapped) {
+                  const v = to[field.mapsTo as keyof FlowTo]
+                  if (typeof v === 'string') return v
+                  if (typeof v === 'object' && v) return JSON.stringify(v)
+                  return ''
+                }
+                return (to.params?.[field.key] as string) || ''
+              }
+              const setValue = (val: string) => {
+                if (isMapped) {
+                  updateToTarget(idx, { connector: connectorIdent, [field.mapsTo!]: val || undefined })
+                } else {
+                  const newParams = { ...(to.params || {}), [field.key]: val }
+                  if (!val) delete newParams[field.key]
+                  updateToTarget(idx, { connector: connectorIdent, params: Object.keys(newParams).length ? newParams : undefined })
+                }
+              }
+
+              if (field.type === 'checkbox') {
+                const checked = isMapped
+                  ? !!to[field.mapsTo as keyof FlowTo]
+                  : to.params?.[field.key] === 'true'
+                return (
+                  <label key={field.key} className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={(e) => {
+                        if (isMapped) {
+                          updateToTarget(idx, { connector: connectorIdent, [field.mapsTo!]: e.target.checked || undefined })
+                        } else {
+                          const newParams = { ...(to.params || {}) }
+                          if (e.target.checked) newParams[field.key] = 'true'
+                          else delete newParams[field.key]
+                          updateToTarget(idx, { connector: connectorIdent, params: Object.keys(newParams).length ? newParams : undefined })
+                        }
+                      }}
+                      className="accent-indigo-500"
+                    />
+                    <span className="text-sm text-neutral-300">{field.label}</span>
+                  </label>
+                )
+              }
+
+              if (field.type === 'select') {
+                return (
+                  <div key={field.key}>
+                    <label className="block text-xs font-medium text-neutral-400 mb-1">{field.label}</label>
+                    <select
+                      value={getValue()}
+                      onChange={(e) => setValue(e.target.value)}
+                      className="w-full px-3 py-2 text-sm bg-neutral-800 border border-neutral-700 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-white"
+                    >
+                      {field.options?.map((opt) => (
+                        <option key={opt.value} value={opt.value}>{opt.label}</option>
+                      ))}
+                    </select>
+                    {field.helpText && <p className="text-xs text-neutral-500 mt-1">{field.helpText}</p>}
+                  </div>
+                )
+              }
+
+              if (field.type === 'textarea') {
+                return (
+                  <div key={field.key}>
+                    <label className="block text-xs font-medium text-neutral-400 mb-1">{field.label}</label>
+                    <textarea
+                      value={getValue()}
+                      onChange={(e) => setValue(e.target.value)}
+                      placeholder={field.placeholder}
+                      rows={3}
+                      className="w-full px-3 py-2 text-sm bg-neutral-800 border border-neutral-700 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-white placeholder-neutral-500 font-mono resize-y"
+                    />
+                    {field.helpText && <p className="text-xs text-neutral-500 mt-1">{field.helpText}</p>}
+                  </div>
+                )
+              }
+
+              if (field.type === 'kv-map') {
+                const mapVal: Record<string, string> = isMapped
+                  ? (to[field.mapsTo as keyof FlowTo] as Record<string, string>) || {}
+                  : {}
+                return (
+                  <div key={field.key}>
+                    <label className="block text-xs font-medium text-neutral-400 mb-1">{field.label}</label>
+                    {Object.entries(mapVal).map(([k, v]) => (
+                      <div key={k} className="flex gap-1 mb-1">
+                        <input
+                          type="text"
+                          value={k}
+                          readOnly
+                          className="w-1/3 px-2 py-1 text-xs bg-neutral-800 border border-neutral-700 rounded text-neutral-400 font-mono"
+                        />
+                        <input
+                          type="text"
+                          value={v}
+                          onChange={(e) => {
+                            const newMap = { ...mapVal, [k]: e.target.value }
+                            if (isMapped) updateToTarget(idx, { connector: connectorIdent, [field.mapsTo!]: newMap })
+                          }}
+                          className="flex-1 px-2 py-1 text-xs bg-neutral-800 border border-neutral-700 rounded text-white font-mono"
+                        />
+                        <button
+                          onClick={() => {
+                            const newMap = { ...mapVal }
+                            delete newMap[k]
+                            if (isMapped) updateToTarget(idx, { connector: connectorIdent, [field.mapsTo!]: Object.keys(newMap).length ? newMap : undefined })
+                          }}
+                          className="px-1 text-red-500 hover:text-red-400"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                        </button>
+                      </div>
+                    ))}
+                    <button
+                      onClick={() => {
+                        const key = prompt('Field name:')
+                        if (!key) return
+                        const newMap = { ...mapVal, [key]: '' }
+                        if (isMapped) updateToTarget(idx, { connector: connectorIdent, [field.mapsTo!]: newMap })
+                      }}
+                      className="text-xs text-blue-400 hover:text-blue-300 mt-1"
+                    >
+                      + Add field
+                    </button>
+                    {field.helpText && <p className="text-xs text-neutral-500 mt-1">{field.helpText}</p>}
+                  </div>
+                )
+              }
+
+              // Default: text input
+              return (
+                <div key={field.key}>
+                  <label className="block text-xs font-medium text-neutral-400 mb-1">{field.label}</label>
+                  <input
+                    type="text"
+                    value={getValue()}
+                    onChange={(e) => setValue(e.target.value)}
+                    placeholder={field.placeholder}
+                    className="w-full px-3 py-2 text-sm bg-neutral-800 border border-neutral-700 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-white placeholder-neutral-500"
+                  />
+                  {field.helpText && <p className="text-xs text-neutral-500 mt-1">{field.helpText}</p>}
+                </div>
+              )
+            })}
+
+            {/* Exchange (legacy support for existing flows) */}
+            {!destConfig?.fields?.some(f => f.key === 'exchange') && to.exchange && (
+              <div>
+                <label className="block text-xs font-medium text-neutral-400 mb-1">Exchange</label>
+                <input
+                  type="text"
+                  value={to.exchange || ''}
+                  onChange={(e) => updateToTarget(idx, { connector: connectorIdent, exchange: e.target.value || undefined })}
+                  placeholder="exchange_name"
+                  className="w-full px-3 py-2 text-sm bg-neutral-800 border border-neutral-700 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-white placeholder-neutral-500"
+                />
+              </div>
+            )}
+
+            {/* Info note for notification/webhook connectors */}
+            {destConfig?.infoNote && (
+              <p className="text-xs text-amber-500/80 italic">{destConfig.infoNote}</p>
+            )}
 
             {/* Per-to condition (for multi-to) */}
             {toTargets.length > 1 && (

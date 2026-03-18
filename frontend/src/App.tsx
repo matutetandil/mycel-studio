@@ -9,6 +9,7 @@ import { useNativeMenu } from './hooks/useNativeMenu'
 import { useGitPolling } from './hooks/useGitPolling'
 import { useFileToCanvasSync } from './hooks/useFileToCanvasSync'
 import { useCanvasToFileSync } from './hooks/useCanvasToFileSync'
+import { useAppLifecycle } from './hooks/useAppLifecycle'
 import { isWailsRuntime } from './lib/api'
 import MenuBar from './components/MenuBar/MenuBar'
 import Sidebar from './components/Sidebar/Sidebar'
@@ -39,6 +40,7 @@ function AppInner() {
   useGitPolling()
   useFileToCanvasSync()
   useCanvasToFileSync()
+  useAppLifecycle()
 
   const isDesktop = isWailsRuntime()
 

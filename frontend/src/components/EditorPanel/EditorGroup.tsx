@@ -261,6 +261,13 @@ export default function EditorGroupView({ groupId, isSecondary }: EditorGroupPro
       return
     }
 
+    // Skip git diff for ignored files
+    const fileInfo = projectFiles.find(f => f.relativePath === activeFile.path)
+    if (fileInfo?.gitStatus === 'ignored') {
+      setGitDiff(null)
+      return
+    }
+
     let cancelled = false
     apiGetGitFileContent(projectPath, activeFile.path).then(headContent => {
       if (cancelled) return
@@ -278,7 +285,7 @@ export default function EditorGroupView({ groupId, isSecondary }: EditorGroupPro
     })
 
     return () => { cancelled = true }
-  }, [activeFile?.path, activeFile?.content, projectPath, isRealFile])
+  }, [activeFile?.path, activeFile?.content, projectPath, isRealFile, projectFiles])
 
   // Apply git diff gutter decorations
   const applyGitDecorations = useCallback(() => {

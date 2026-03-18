@@ -1,4 +1,4 @@
-import { X, Keyboard } from 'lucide-react'
+import { X, Keyboard, ShieldCheck } from 'lucide-react'
 import { useSettingsStore, type KeymapType } from '../stores/useSettingsStore'
 
 interface SettingsDialogProps {
@@ -12,7 +12,7 @@ const KEYMAPS: { value: KeymapType; label: string; description: string }[] = [
 ]
 
 export default function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
-  const { keymap, setKeymap } = useSettingsStore()
+  const { keymap, setKeymap, confirmOnClose, setConfirmOnClose } = useSettingsStore()
 
   if (!isOpen) return null
 
@@ -71,6 +71,26 @@ export default function SettingsDialog({ isOpen, onClose }: SettingsDialogProps)
                 </label>
               ))}
             </div>
+          </section>
+
+          {/* General Section */}
+          <section>
+            <div className="flex items-center gap-2 mb-3">
+              <ShieldCheck className="w-4 h-4 text-neutral-400" />
+              <h3 className="text-sm font-medium text-white">General</h3>
+            </div>
+            <label className="flex items-center gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={confirmOnClose}
+                onChange={(e) => setConfirmOnClose(e.target.checked)}
+                className="accent-indigo-500"
+              />
+              <div>
+                <div className="text-sm text-neutral-300">Confirm before closing</div>
+                <div className="text-xs text-neutral-500">Ask for confirmation when quitting the application</div>
+              </div>
+            </label>
           </section>
         </div>
 

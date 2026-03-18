@@ -354,6 +354,10 @@ export interface FlowTo {
   when?: string
   parallel?: boolean
   transform?: Record<string, string>
+  format?: 'json' | 'xml'
+  query_filter?: Record<string, string>
+  update?: Record<string, string>
+  params?: Record<string, string>
 }
 
 export interface FlowStep {

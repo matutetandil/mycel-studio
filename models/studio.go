@@ -48,12 +48,17 @@ type FlowConfig struct {
 
 // FlowEndpoint represents from/to blocks.
 type FlowEndpoint struct {
-	Connector string                 `json:"connector"`
-	Operation string                 `json:"operation,omitempty"`
-	Target    string                 `json:"target,omitempty"`
-	Query     string                 `json:"query,omitempty"`
-	Filter    string                 `json:"filter,omitempty"`
-	Extra     map[string]interface{} `json:"extra,omitempty"`
+	Connector   string                 `json:"connector"`
+	Operation   string                 `json:"operation,omitempty"`
+	Target      string                 `json:"target,omitempty"`
+	Query       string                 `json:"query,omitempty"`
+	Filter      string                 `json:"filter,omitempty"`
+	Format      string                 `json:"format,omitempty"`
+	Exchange    string                 `json:"exchange,omitempty"`
+	QueryFilter map[string]string      `json:"query_filter,omitempty"`
+	Update      map[string]string      `json:"update,omitempty"`
+	Params      map[string]string      `json:"params,omitempty"`
+	Extra       map[string]interface{} `json:"extra,omitempty"`
 }
 
 // TransformBlock represents a transform block.

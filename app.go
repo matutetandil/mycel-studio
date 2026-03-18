@@ -15,19 +15,21 @@ import (
 
 // App struct holds application state and provides Wails bindings.
 type App struct {
-	ctx         context.Context
-	parser      *studioparser.Parser
-	ptyManager  *PTYManager
-	debugClient *DebugClient
-	updater     *Updater
+	ctx            context.Context
+	parser         *studioparser.Parser
+	ptyManager     *PTYManager
+	debugClient    *DebugClient
+	updater        *Updater
+	confirmOnClose bool
 }
 
 // NewApp creates a new App instance.
 func NewApp() *App {
 	return &App{
-		parser:     studioparser.NewParser(),
-		ptyManager: NewPTYManager(),
-		updater:    NewUpdater(version),
+		parser:         studioparser.NewParser(),
+		ptyManager:     NewPTYManager(),
+		updater:        NewUpdater(version),
+		confirmOnClose: true,
 	}
 }
 
@@ -49,6 +51,31 @@ func (a *App) Startup(ctx context.Context) {
 			time.Sleep(1 * time.Hour)
 		}
 	}()
+}
+
+// SetConfirmOnClose updates the confirm-on-close preference from the frontend.
+func (a *App) SetConfirmOnClose(enabled bool) {
+	a.confirmOnClose = enabled
+}
+
+// BeforeClose is called when the user tries to close the app.
+// It shows a native confirmation dialog only if the setting is enabled.
+func (a *App) BeforeClose(ctx context.Context) (prevent bool) {
+	if !a.confirmOnClose {
+		return false
+	}
+
+	result, err := wailsRuntime.MessageDialog(a.ctx, wailsRuntime.MessageDialogOptions{
+		Type:          wailsRuntime.QuestionDialog,
+		Title:         "Quit Mycel Studio?",
+		Message:       "Are you sure you want to quit?\n\nYou can disable this in Settings.",
+		DefaultButton: "Yes",
+		Buttons:       []string{"Yes", "No"},
+	})
+	if err != nil {
+		return false
+	}
+	return result == "No"
 }
 
 // Shutdown is called when the Wails app is closing.

@@ -3,6 +3,7 @@ import { getFileSystemProvider, getCapabilities, type FSCapabilities } from '../
 import { loadWorkspace, applyWorkspace } from './useWorkspaceStore'
 import { generateProject } from '../utils/hclGenerator'
 import { apiParse, apiConfirm } from '../lib/api'
+import { useSettingsStore } from './useSettingsStore'
 
 export interface ProjectFile {
   name: string
@@ -66,6 +67,7 @@ interface ProjectState {
   // Async operations (works with all providers)
   newProject: () => Promise<boolean>
   openProject: () => Promise<boolean>
+  openProjectAtPath: (path: string) => Promise<boolean>
   saveProject: () => Promise<boolean>
   createFile: (relativePath: string, content?: string) => Promise<boolean>
   createDirectory: (relativePath: string) => Promise<boolean>
@@ -90,6 +92,105 @@ const defaultMetadata: ProjectMetadata = {
     enabled: false,
     debounceMs: 2000,
   },
+}
+
+// Shared logic for loading a project into the store (used by openProject and openProjectAtPath)
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function loadProjectIntoStore(set: any, get: any, provider: any, project: any): Promise<boolean> {
+  const files: ProjectFile[] = project.files.map((f: { name: string; relativePath: string; content: string }) => ({
+    name: f.name,
+    path: f.relativePath,
+    relativePath: f.relativePath,
+    content: f.content,
+    isDirty: false,
+  }))
+
+  // Detect Mycel root: directory containing config.hcl
+  const configFile = files.find(f => f.name === 'config.hcl')
+  const mycelRoot = configFile
+    ? configFile.relativePath.replace(/\/?config\.hcl$/, '')
+    : ''
+  const normalizedRoot = mycelRoot ? (mycelRoot.endsWith('/') ? mycelRoot : mycelRoot + '/') : ''
+
+  const projectPath = provider.getProjectPath()
+  set({
+    projectPath,
+    projectName: project.name,
+    mycelRoot: normalizedRoot,
+    files,
+    metadata: defaultMetadata,
+    activeFile: files.find((f: ProjectFile) => f.name.endsWith('.hcl'))?.relativePath ?? null,
+    isLoading: false,
+    capabilities: provider.getCapabilities(),
+  })
+
+  // Save last project path for reopen on startup
+  if (projectPath) {
+    useSettingsStore.getState().setLastProjectPath(projectPath)
+  }
+
+  // Refresh git status if available
+  get().refreshGitStatus()
+
+  // Parse HCL files into canvas nodes
+  const hclFiles = files.filter((f: ProjectFile) => f.name.endsWith('.hcl'))
+  if (hclFiles.length > 0) {
+    const fileEntries = hclFiles.map((f: ProjectFile) => ({
+      path: f.relativePath,
+      content: f.content,
+    }))
+    try {
+      const result = await apiParse({ files: fileEntries })
+      if (result.success && result.project) {
+        const { parseProjectToCanvas } = await import('../hooks/useSync')
+        parseProjectToCanvas(result.project as never)
+      }
+    } catch (err) {
+      console.error('Failed to parse HCL files:', err)
+    }
+  }
+
+  // Load .env files into envConfig
+  const envFile = files.find((f: ProjectFile) => f.relativePath === normalizedRoot + '.env')
+    || files.find((f: ProjectFile) => f.name === '.env')
+  if (envFile) {
+    const { useStudioStore } = await import('./useStudioStore')
+    const envVars = envFile.content
+      .split('\n')
+      .filter((line: string) => line.trim() && !line.trim().startsWith('#'))
+      .map((line: string) => {
+        const eqIdx = line.indexOf('=')
+        if (eqIdx < 0) return null
+        const key = line.slice(0, eqIdx).trim()
+        const value = line.slice(eqIdx + 1).trim()
+        return { key, value, secret: false }
+      })
+      .filter((v: unknown): v is { key: string; value: string; secret: boolean } => v !== null && (v as { key: string }).key.length > 0)
+
+    const exampleFile = files.find((f: ProjectFile) => f.relativePath === normalizedRoot + '.env.example')
+      || files.find((f: ProjectFile) => f.name === '.env.example')
+    if (exampleFile) {
+      for (const v of envVars) {
+        const exampleLine = exampleFile.content.split('\n').find((l: string) => l.startsWith(v.key + '='))
+        if (exampleLine && exampleLine.slice(v.key.length + 1).trim() === '') {
+          v.secret = true
+        }
+      }
+    }
+
+    useStudioStore.getState().updateEnvConfig({ variables: envVars })
+  }
+
+  // Load workspace state (.mycel-studio.json) after nodes are on canvas
+  const workspaceFile = files.find((f: ProjectFile) => f.name === '.mycel-studio.json')
+  if (workspaceFile) {
+    const ws = loadWorkspace(workspaceFile.content)
+    if (ws) {
+      setTimeout(() => applyWorkspace(ws), 100)
+    }
+  }
+
+  return true
 }
 
 export const useProjectStore = create<ProjectState>((set, get) => ({
@@ -294,101 +395,32 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
         return false
       }
 
-      // Convert files to our format
-      const files: ProjectFile[] = project.files.map((f) => ({
-        name: f.name,
-        path: f.relativePath,
-        relativePath: f.relativePath,
-        content: f.content,
-        isDirty: false,
-      }))
+      return await loadProjectIntoStore(set, get, provider, project)
+    } catch (error) {
+      set({ error: String(error), isLoading: false })
+      return false
+    }
+  },
 
-      // Detect Mycel root: directory containing config.hcl
-      const configFile = files.find(f => f.name === 'config.hcl')
-      const mycelRoot = configFile
-        ? configFile.relativePath.replace(/\/?config\.hcl$/, '')
-        : ''
-      // Normalize: ensure trailing slash if non-empty, empty string if root
-      const normalizedRoot = mycelRoot ? (mycelRoot.endsWith('/') ? mycelRoot : mycelRoot + '/') : ''
+  openProjectAtPath: async (path: string) => {
+    try {
+      set({ isLoading: true, error: null })
 
-      set({
-        projectPath: provider.getProjectPath(),
-        projectName: project.name,
-        mycelRoot: normalizedRoot,
-        files,
-        metadata: defaultMetadata,
-        activeFile: files.find((f) => f.name.endsWith('.hcl'))?.relativePath ?? null,
-        isLoading: false,
-        capabilities: provider.getCapabilities(),
-      })
+      const provider = getFileSystemProvider()
+      // Only wailsFS supports openProjectAtPath
+      if (!('openProjectAtPath' in provider)) {
+        set({ isLoading: false })
+        return false
+      }
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const project = await (provider as any).openProjectAtPath(path)
 
-      // Refresh git status if available
-      get().refreshGitStatus()
-
-      // Parse HCL files into canvas nodes
-      const hclFiles = files.filter(f => f.name.endsWith('.hcl'))
-      if (hclFiles.length > 0) {
-        const fileEntries = hclFiles.map(f => ({
-          path: f.relativePath,
-          content: f.content,
-        }))
-        try {
-          const result = await apiParse({ files: fileEntries })
-          if (result.success && result.project) {
-            // Import dynamically to avoid circular deps
-            const { parseProjectToCanvas } = await import('../hooks/useSync')
-            parseProjectToCanvas(result.project as never)
-          }
-        } catch (err) {
-          console.error('Failed to parse HCL files:', err)
-        }
+      if (!project) {
+        set({ isLoading: false })
+        return false
       }
 
-      // Load .env files into envConfig
-      // Look for .env inside mycelRoot first, then project root
-      const envFile = files.find(f => f.relativePath === normalizedRoot + '.env')
-        || files.find(f => f.name === '.env')
-      if (envFile) {
-        const { useStudioStore } = await import('./useStudioStore')
-        const envVars = envFile.content
-          .split('\n')
-          .filter(line => line.trim() && !line.trim().startsWith('#'))
-          .map(line => {
-            const eqIdx = line.indexOf('=')
-            if (eqIdx < 0) return null
-            const key = line.slice(0, eqIdx).trim()
-            const value = line.slice(eqIdx + 1).trim()
-            return { key, value, secret: false }
-          })
-          .filter((v): v is { key: string; value: string; secret: boolean } => v !== null && v.key.length > 0)
-
-        // Also check .env.example to detect secrets (keys present in .env.example with empty values)
-        const exampleFile = files.find(f => f.relativePath === normalizedRoot + '.env.example')
-          || files.find(f => f.name === '.env.example')
-        if (exampleFile) {
-          // Keys in .env but with empty value in .env.example are likely secrets
-          for (const v of envVars) {
-            const exampleLine = exampleFile.content.split('\n').find(l => l.startsWith(v.key + '='))
-            if (exampleLine && exampleLine.slice(v.key.length + 1).trim() === '') {
-              v.secret = true
-            }
-          }
-        }
-
-        useStudioStore.getState().updateEnvConfig({ variables: envVars })
-      }
-
-      // Load workspace state (.mycel-studio.json) after nodes are on canvas
-      const workspaceFile = files.find(f => f.name === '.mycel-studio.json')
-      if (workspaceFile) {
-        const ws = loadWorkspace(workspaceFile.content)
-        if (ws) {
-          // Small delay to let canvas mount first
-          setTimeout(() => applyWorkspace(ws), 100)
-        }
-      }
-
-      return true
+      return await loadProjectIntoStore(set, get, provider, project)
     } catch (error) {
       set({ error: String(error), isLoading: false })
       return false

@@ -75,11 +75,16 @@ type FlowConfig struct {
 
 // EndpointConfig represents from/to blocks.
 type EndpointConfig struct {
-	Connector string
-	Operation string
-	Target    string
-	Query     string
-	Filter    string
+	Connector   string
+	Operation   string
+	Target      string
+	Query       string
+	Filter      string
+	Format      string
+	Exchange    string
+	QueryFilter map[string]string
+	Update      map[string]string
+	Params      map[string]string
 }
 
 // TransformBlockConfig represents transform block in a flow.
@@ -985,6 +990,28 @@ func (p *Parser) parseEndpointBlock(block *hcl.Block) (*EndpointConfig, error) {
 
 	for name, attr := range attrs {
 		val, _ := attr.Expr.Value(p.evalCtx)
+
+		// Handle map-type attributes (params, query_filter, update)
+		if val.Type().IsObjectType() || val.Type().IsMapType() {
+			m := make(map[string]string)
+			for k, v := range val.AsValueMap() {
+				if v.Type() == cty.String {
+					m[k] = v.AsString()
+				} else {
+					m[k] = v.GoString()
+				}
+			}
+			switch name {
+			case "params":
+				config.Params = m
+			case "query_filter":
+				config.QueryFilter = m
+			case "update":
+				config.Update = m
+			}
+			continue
+		}
+
 		if val.Type() != cty.String {
 			continue
 		}
@@ -999,6 +1026,10 @@ func (p *Parser) parseEndpointBlock(block *hcl.Block) (*EndpointConfig, error) {
 			config.Query = val.AsString()
 		case "filter":
 			config.Filter = val.AsString()
+		case "format":
+			config.Format = val.AsString()
+		case "exchange":
+			config.Exchange = val.AsString()
 		}
 	}
 

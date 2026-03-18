@@ -30,7 +30,7 @@ interface ParsedProject {
     sourceFile?: string
     when?: string
     from?: { connector: string; operation?: string }
-    to?: { connector: string; target?: string; query?: string; filter?: string }
+    to?: { connector: string; target?: string; query?: string; filter?: string; operation?: string; format?: string; exchange?: string; query_filter?: Record<string, string>; update?: Record<string, string>; params?: Record<string, string> }
     transform?: { use?: string[]; mappings?: Record<string, string> }
     validate?: { input?: string; output?: string }
     enrichments?: Array<{
@@ -97,7 +97,7 @@ interface GenerateRequest {
       name: string
       when?: string
       from?: { connector: string; operation?: string }
-      to?: { connector: string; target?: string; query?: string; filter?: string }
+      to?: { connector: string; target?: string; query?: string; filter?: string; operation?: string; format?: string; exchange?: string; query_filter?: Record<string, string>; update?: Record<string, string>; params?: Record<string, string> }
       transform?: { use?: string[]; mappings?: Record<string, string> }
       validate?: { input?: string; output?: string }
       enrichments?: Array<{
@@ -281,6 +281,12 @@ function convertProjectToNodes(project: ParsedProject): {
         connector: flow.to.connector,
         target: flow.to.target,
         query: flow.to.query,
+        operation: flow.to.operation,
+        format: flow.to.format as 'json' | 'xml' | undefined,
+        exchange: flow.to.exchange,
+        query_filter: flow.to.query_filter,
+        update: flow.to.update,
+        params: flow.to.params,
       } : undefined,
       transform: flow.transform ? {
         use: flow.transform.use,

@@ -359,6 +359,50 @@ aspect "add_headers" {
 - `foreach` → Replaced by CEL array functions (`map`, `filter`, `sort_by`, etc.)
 - `after` → Replaced by Aspects (Phase 5)
 
+### 3.13 — Context-Aware Destination Properties (NEW)
+**Priority: High** — The `to` block properties panel must show different fields depending on the destination connector type.
+
+**Reference:** `/Users/matute/Documents/Personal/MYCEL/docs/reference/destination-properties.md`
+
+Currently the `to` block editor shows the same generic fields (`connector`, `target`, `operation`) for all connectors. But each connector type gives different meaning to these fields, and some support extra properties via `params`:
+
+| Connector type | `target` means | `operation` values | Extra `params` |
+|---|---|---|---|
+| Database (SQL) | Table name | `INSERT`, `UPDATE`, `DELETE` | — (uses `query` for raw SQL with `:named` params) |
+| MongoDB | Collection name | `INSERT_ONE`, `UPDATE_ONE`, `DELETE_ONE`, etc. | `upsert`, `documents` |
+| RabbitMQ | Routing key | `PUBLISH` | `exchange` |
+| Kafka | Topic name | `PUBLISH` | — |
+| Redis Pub/Sub | Channel name | `PUBLISH` | — |
+| MQTT | Topic | `PUBLISH` | `qos`, `retain` |
+| HTTP Client | Endpoint path (e.g., `/api/notify`) | `GET`, `POST`, `PUT`, `PATCH`, `DELETE` | — |
+| GraphQL Client | Full mutation/query string | — | — |
+| gRPC Client | RPC method name | — | — |
+| SOAP Client | SOAP operation name | — | — |
+| File | File path | `WRITE`, `DELETE`, `COPY`, `MOVE` | `format`, `append`, `sheet` (Excel) |
+| S3 | Object key | `PUT`, `DELETE`, `COPY` | `content_type`, `storage_class`, `acl`, `metadata` |
+| Exec | Command | — | `args`, `stdin` |
+| Elasticsearch | Index name | `index`, `update`, `delete`, `bulk` | — |
+| PDF | Template fallback | `generate`, `save` | — |
+| WebSocket | Room name | `broadcast`, `send_to_room`, `send_to_user` | — |
+| SSE | Room name | `broadcast`, `send_to_room` | — |
+| Email | — | `send` | — (fields in payload) |
+| Slack | — | `send` | — (fields in payload) |
+| Discord | — | `send` | — (fields in payload) |
+| SMS | — | `send` | — (fields in payload) |
+| Push | — | `send` | — (fields in payload) |
+| Webhook | — | — | — (URL in connector config) |
+
+**UI implementation:**
+1. When user selects a connector in the `to` block, detect its type from the canvas
+2. Show `target` with a contextual label and placeholder (e.g., "Table name" for DB, "Routing key" for RabbitMQ, "Endpoint" for HTTP)
+3. Show `operation` as a dropdown with valid values for that connector type
+4. Show `query` field only for SQL databases
+5. Show `query_filter` and `update` fields only for MongoDB
+6. Show connector-specific `params` fields (e.g., `exchange` for RabbitMQ, `qos`/`retain` for MQTT, `format`/`append` for File)
+7. For notification connectors, show a note that message fields come from the flow's `transform` block (not from `to` properties)
+
+**Data source:** Add the connector-specific properties to the connector registry (`connectorTypes.ts`), so each connector definition includes its destination properties alongside its existing config properties.
+
 ---
 
 ## Phase 4 — Types & Validation
@@ -878,7 +922,7 @@ Hover provider with block docs, connector type descriptions, CEL function signat
 
 | Phase | Theme | Items | Depends On |
 |-------|-------|-------|------------|
-| **3** | Fix Foundations | ~~HCL2 syntax fix~~, ~~step blocks~~, ~~filter~~, ~~multi-to~~, ~~response editor~~, ~~error handling updates~~, ~~dedupe~~, ~~remove phantom features~~, idempotency, async, fan-out, file upload, flow invocation from aspects, response enrichment | — |
+| **3** | Fix Foundations | ~~HCL2 syntax fix~~, ~~step blocks~~, ~~filter~~, ~~multi-to~~, ~~response editor~~, ~~error handling updates~~, ~~dedupe~~, ~~remove phantom features~~, idempotency, async, fan-out, file upload, flow invocation from aspects, response enrichment, **context-aware destination properties** | — |
 | **4** | Types & Validation | Type editor, validators, type refs in flows | Phase 3 |
 | **5** | Reusability | Named transforms, aspects (incl. on_error), named operations | Phase 4 |
 | **6** | ~~Missing Connectors~~ | ~~Notifications (6), real-time (3), specialized (3 incl. SOAP), MQTT, FTP/SFTP, Redis Pub/Sub~~, PDF connector (⚠️ update `template` field per v1.14.3) + connector profiles (pending) | ~~—~~ ✅ v0.5.0 |

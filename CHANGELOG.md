@@ -2,6 +2,39 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.7.0] - Context-Aware Destination Properties & App Lifecycle
+
+### Added
+
+- **Context-aware `to` block properties:** The flow destination panel now shows different fields depending on the target connector type:
+  - Database (SQL): table, operation (INSERT/UPDATE/DELETE), raw SQL query with named parameters
+  - MongoDB: collection, operation (INSERT_ONE/UPDATE_ONE/etc.), query_filter, update document, upsert
+  - RabbitMQ: routing key, exchange
+  - Kafka: topic
+  - Redis Pub/Sub: channel
+  - MQTT: topic, QoS level, retain flag
+  - HTTP Client: endpoint path, HTTP method override
+  - GraphQL Client: full query/mutation string
+  - gRPC/SOAP: method/operation name
+  - File: file path, operation (WRITE/DELETE/COPY/MOVE), format, append, Excel sheet name
+  - S3: object key, operation (PUT/DELETE/COPY), content type, storage class, ACL
+  - Exec: command, arguments, stdin
+  - Elasticsearch: index, operation (index/update/delete/bulk)
+  - PDF: template fallback, operation (generate/save)
+  - WebSocket/SSE: room, operation (broadcast/send_to_room/send_to_user)
+  - Notification connectors (Email, Slack, Discord, SMS, Push): info note about transform block
+  - Cache: key, operation (SET/DELETE)
+
+- **Confirm before closing (desktop):** native dialog asks "Are you sure you want to quit?" with option to disable in Settings
+- **Auto-reopen last project on startup:** remembers and reopens the last opened project
+- **Settings persistence to Go backend:** `confirmOnClose` setting syncs to native dialog on startup and on change
+
+### Changed
+
+- **FlowTo type extended** with `format`, `query_filter`, `update`, `params` fields
+- **HCL generator** now emits `query`, `format`, `query_filter`, `update`, and `params` blocks in `to`
+- **Backend parser** now parses map-type attributes (`params`, `query_filter`, `update`) and new string fields (`format`, `exchange`, `operation`) from `to` blocks
+
 ## [1.6.1] - Sync Fixes & Visual Polish
 
 ### Added

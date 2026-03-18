@@ -38,6 +38,12 @@ export class WailsFileSystem implements FileSystemProvider {
     const path: string = await app.OpenDirectoryDialog()
     if (!path) return null
 
+    return this.openProjectAtPath(path)
+  }
+
+  async openProjectAtPath(path: string): Promise<FSProject | null> {
+    const app = getApp()
+
     this.projectPath = path
     this.projectName = path.split('/').pop() ?? path
 
