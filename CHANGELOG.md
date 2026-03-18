@@ -2,6 +2,35 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.6.0] - Bidirectional Sync, Settings & UX Improvements
+
+### Added
+
+- **Settings dialog** (`Ctrl+,` or View > Settings):
+  - Keymap selection: IntelliJ IDEA (default) or Visual Studio Code
+  - Persisted in localStorage, extensible for future settings
+
+- **IntelliJ IDEA keybindings** for Monaco editor:
+  - `Ctrl+D` duplicate line, `Ctrl+Y` delete line
+  - `Ctrl+W` / `Ctrl+Shift+W` expand/shrink selection
+  - `Alt+Shift+Up/Down` move line, `Ctrl+Shift+J` join lines
+  - `Ctrl+Alt+L` reformat, `Ctrl+Shift+U` toggle case, `Alt+Enter` quick fix
+
+- **Bidirectional sync between Properties panel and HCL files:**
+  - Properties → File: editing a connector property (e.g., Slack channel) now updates the HCL file automatically
+  - File → Properties: editing HCL in Monaco updates the Properties panel
+  - Handles block renames, debounced writes, loop prevention via suppression flags
+
+- **Git status colors in file tree** (IntelliJ-style):
+  - Modified files: blue, New/untracked: green, Ignored: orange
+  - Directories inherit status from children (all-ignored dirs shown in orange)
+
+### Fixed
+
+- **Auto-save not triggering on editor blur:** now fires when Monaco loses focus (clicking canvas, properties, etc.), not just on window blur
+- **Editor tab jumping:** no longer switches back to the selected node's file while editing another file
+- **Directory text color:** directories now use the same base color as files instead of gray
+
 ## [1.5.0] - Auto-Update System
 
 ### Added
