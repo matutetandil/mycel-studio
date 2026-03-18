@@ -78,50 +78,50 @@ function syncNodesToFiles(changes: ChangedNodeInfo[]) {
   const { nodes, edges } = useStudioStore.getState()
   const { files, updateFile } = useProjectStore.getState()
 
-  let didUpdate = false
+  // Suppress file→canvas sync BEFORE any updateFile calls,
+  // because Zustand subscribers fire synchronously inside set()
+  _suppressFileToCanvas = true
 
-  for (const change of changes) {
-    const node = nodes.find(n => n.id === change.id)
-    if (!node || !node.type) continue
+  try {
+    for (const change of changes) {
+      const node = nodes.find(n => n.id === change.id)
+      if (!node || !node.type) continue
 
-    const data = node.data as ConnectorNodeData | FlowNodeData
-    const hclFile = (data as Record<string, unknown>).hclFile as string | undefined
-    if (!hclFile) continue // No source file — it's a new node, skip
+      const data = node.data as ConnectorNodeData | FlowNodeData
+      const hclFile = (data as Record<string, unknown>).hclFile as string | undefined
+      if (!hclFile) continue // No source file — it's a new node, skip
 
-    const blockType = getHclBlockType(node.type)
-    if (!blockType) continue
+      const blockType = getHclBlockType(node.type)
+      if (!blockType) continue
 
-    const newHcl = generateNodeHCL(node, nodes, edges)
-    if (!newHcl) continue
+      const newHcl = generateNodeHCL(node, nodes, edges)
+      if (!newHcl) continue
 
-    // Find the file in the project
-    const file = files.find(f => f.relativePath === hclFile)
-    if (!file) continue
+      // Find the file in the project
+      const file = files.find(f => f.relativePath === hclFile)
+      if (!file) continue
 
-    // Try current name first, then previous name (handles renames)
-    const currentName = toIdentifier(data.label)
-    const prevName = toIdentifier(change.prevLabel)
+      // Try current name first, then previous name (handles renames)
+      const currentName = toIdentifier(data.label)
+      const prevName = toIdentifier(change.prevLabel)
 
-    let updatedContent = replaceHclBlock(file.content, blockType, currentName, newHcl)
-    if (updatedContent === null && prevName !== currentName) {
-      // Block was renamed — find with old name
-      updatedContent = replaceHclBlock(file.content, blockType, prevName, newHcl)
+      let updatedContent = replaceHclBlock(file.content, blockType, currentName, newHcl)
+      if (updatedContent === null && prevName !== currentName) {
+        // Block was renamed — find with old name
+        updatedContent = replaceHclBlock(file.content, blockType, prevName, newHcl)
+      }
+
+      if (updatedContent === null) {
+        console.warn(`Canvas→File sync: block ${blockType} "${currentName}" not found in ${hclFile}`)
+        continue
+      }
+
+      if (updatedContent !== file.content) {
+        updateFile(hclFile, updatedContent)
+      }
     }
-
-    if (updatedContent === null) {
-      console.warn(`Canvas→File sync: block ${blockType} "${currentName}" not found in ${hclFile}`)
-      continue
-    }
-
-    if (updatedContent !== file.content) {
-      updateFile(hclFile, updatedContent)
-      didUpdate = true
-    }
-  }
-
-  if (didUpdate) {
-    // Suppress file→canvas sync to avoid loop
-    _suppressFileToCanvas = true
-    setTimeout(() => { _suppressFileToCanvas = false }, 1000)
+  } finally {
+    // Release suppression after debounce window of file→canvas sync (800ms)
+    setTimeout(() => { _suppressFileToCanvas = false }, 1200)
   }
 }

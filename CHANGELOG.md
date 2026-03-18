@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.6.1] - Sync Fixes & Visual Polish
+
+### Added
+
+- **Settings in native macOS menu:** View > Settings... (`Cmd+,`) now works in desktop app
+- **Selected edge styling:** edges glow indigo with thicker stroke when selected
+
+### Fixed
+
+- **Properties→File sync losing focus:** suppression flag now set before file writes (Zustand subscribers are synchronous)
+- **Git ignored files not shown:** added `--ignored` flag to `git status` command
+- **Git status badge color:** M/U/A/D badge now matches the file name color
+
 ## [1.6.0] - Bidirectional Sync, Settings & UX Improvements
 
 ### Added

@@ -63,6 +63,10 @@ func (a *App) buildMenu() *menu.Menu {
 	viewMenu.AddText("Toggle Terminal", keys.CmdOrCtrl("`"), func(_ *menu.CallbackData) {
 		wailsRuntime.EventsEmit(a.ctx, "menu:toggle-terminal")
 	})
+	viewMenu.AddSeparator()
+	viewMenu.AddText("Settings...", keys.CmdOrCtrl(","), func(_ *menu.CallbackData) {
+		wailsRuntime.EventsEmit(a.ctx, "menu:show-settings")
+	})
 
 	// Help menu
 	helpMenu := appMenu.AddSubmenu("Help")

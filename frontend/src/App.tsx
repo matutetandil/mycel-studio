@@ -56,6 +56,7 @@ function AppInner() {
     onToggleEditor: () => toggleCollapse(),
     onToggleTerminal: () => EditorPanelComponent.switchToTerminal(),
     onShowShortcuts: () => setShowShortcuts(true),
+    onShowSettings: () => setShowSettings(true),
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }), [])
   useNativeMenu(menuCallbacks)

@@ -31,7 +31,7 @@ func (a *App) GetGitBranch(path string) (string, error) {
 // GetGitFileStatuses returns a map of relative file paths to their git status.
 // Status values: "modified", "added", "deleted", "untracked", "renamed", "unmodified"
 func (a *App) GetGitFileStatuses(path string) (map[string]string, error) {
-	cmd := exec.Command("git", "status", "--porcelain", "-uall")
+	cmd := exec.Command("git", "status", "--porcelain", "-uall", "--ignored")
 	cmd.Dir = path
 	out, err := cmd.Output()
 	if err != nil {

@@ -33,6 +33,12 @@ body {
   --xy-edge-selected-stroke: #6366f1;
 }
 
+/* Selected edge: thicker stroke + glow */
+.react-flow .react-flow__edge.selected .react-flow__edge-path {
+  stroke-width: 3;
+  filter: drop-shadow(0 0 4px #818cf8);
+}
+
 /* Custom scrollbar for dark mode */
 .dark ::-webkit-scrollbar {
   width: 8px;

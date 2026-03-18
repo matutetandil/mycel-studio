@@ -107,7 +107,7 @@ function FileItem({ file, isActive, onClick, isGenerated, onContextMenu, isEditi
         <Circle className="w-2 h-2 fill-current text-amber-500" />
       )}
       {!isEditing && statusIcon && (
-        <span className={`text-xs font-medium ${statusColor}`}>
+        <span className={`text-xs font-medium ${!isActive && nameColor ? nameColor : statusColor}`}>
           {statusIcon}
         </span>
       )}

@@ -17,6 +17,7 @@ interface NativeMenuCallbacks {
   onToggleEditor: () => void
   onToggleTerminal: () => void
   onShowShortcuts: () => void
+  onShowSettings: () => void
 }
 
 export function useNativeMenu(callbacks: NativeMenuCallbacks) {
@@ -47,6 +48,7 @@ export function useNativeMenu(callbacks: NativeMenuCallbacks) {
     on('menu:toggle-editor', callbacks.onToggleEditor)
     on('menu:toggle-terminal', callbacks.onToggleTerminal)
     on('menu:show-shortcuts', callbacks.onShowShortcuts)
+    on('menu:show-settings', callbacks.onShowSettings)
 
     return () => {
       cleanups.forEach(fn => fn())
