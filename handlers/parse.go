@@ -177,6 +177,8 @@ func convertToStudioProject(config *parser.Configuration, basePath string) *mode
 			flowConfig.From = &models.FlowEndpoint{
 				Connector: flow.From.Connector,
 				Operation: flow.From.Operation,
+				Filter:    flow.From.Filter,
+				Format:    flow.From.Format,
 			}
 		}
 

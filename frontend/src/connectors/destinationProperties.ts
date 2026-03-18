@@ -49,10 +49,10 @@ const DATABASE_SQL: DestinationConfig = {
   fields: [
     {
       key: 'query',
-      label: 'Raw SQL (optional)',
+      label: 'Query',
       type: 'textarea',
       placeholder: 'INSERT INTO users (name, email) VALUES (:name, :email)',
-      helpText: 'Named parameters (:name) resolved from payload',
+      helpText: 'SQL with named parameters (:name, :email) resolved from payload. Leave empty for auto-generated queries.',
       mapsTo: 'query',
     },
   ],

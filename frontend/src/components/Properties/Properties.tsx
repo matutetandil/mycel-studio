@@ -8,6 +8,7 @@ import OperationsEditor from './OperationsEditor'
 import GraphQLOperationsEditor from './GraphQLOperationsEditor'
 import { getConnector, type FieldDefinition } from '../../connectors'
 import { getDestinationConfig } from '../../connectors/destinationProperties'
+import { getSourceConfig } from '../../connectors/sourceProperties'
 import { getAllValidatorTypes, getValidatorType } from '../../validators'
 import { useProjectStore } from '../../stores/useProjectStore'
 import { useEditorPanelStore } from '../../stores/useEditorPanelStore'
@@ -804,69 +805,182 @@ function FlowProperties({
 
       {/* Source (From) — hidden for internal flows */}
       {!data.isInternal && <div className="p-3 bg-neutral-800/50 rounded-md space-y-3">
-        <div className="flex items-center gap-2 text-xs text-neutral-400 flex-wrap">
-          <span className="font-medium">FROM</span>
-          {sourceData ? (
-            <span className="px-2 py-0.5 bg-green-600/20 text-green-400 rounded text-xs">
-              {sourceData.label} ({sourceData.connectorType})
-            </span>
-          ) : (
-            <span className="text-amber-500 italic">Not connected</span>
-          )}
-        </div>
+        {(() => {
+          const srcConfig = sourceData
+            ? getSourceConfig(sourceData.connectorType, sourceData.config?.driver as string | undefined)
+            : null
+          const sourceIdent = sourceData?.label.toLowerCase().replace(/\s+/g, '_') || ''
 
-        {sourceOperations.length > 0 ? (
-          <div>
-            <label className="block text-xs font-medium text-neutral-400 mb-1">Operation</label>
-            <select
-              value={fromOperation}
-              onChange={(e) => onChange({ from: { ...data.from, connector: sourceData?.label.toLowerCase().replace(/\s+/g, '_') || '', operation: e.target.value } })}
-              className="w-full px-3 py-2 text-sm bg-neutral-800 border border-neutral-700 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-white"
-            >
-              <option value="">Select operation...</option>
-              {sourceOperations.map((op) => (
-                <option key={op.id} value={formatOperation(op)}>
-                  {formatOperation(op)}
-                </option>
-              ))}
-            </select>
-          </div>
-        ) : (
-          <div>
-            <label className="block text-xs font-medium text-neutral-400 mb-1">Operation</label>
-            <input
-              type="text"
-              value={fromOperation}
-              onChange={(e) => onChange({ from: { ...data.from, connector: sourceData?.label.toLowerCase().replace(/\s+/g, '_') || '', operation: e.target.value } })}
-              placeholder={
-                sourceData?.connectorType === 'rest'
-                  ? 'GET /users (define on connector)'
-                  : sourceData?.connectorType === 'graphql'
-                  ? 'Query.users (define on connector)'
-                  : sourceData?.connectorType === 'grpc'
-                  ? 'GetUser'
-                  : 'operation'
-              }
-              className="w-full px-3 py-2 text-sm bg-neutral-800 border border-neutral-700 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-white placeholder-neutral-500"
-            />
-          </div>
-        )}
+          return (<>
+            <div className="flex items-center gap-2 text-xs text-neutral-400 flex-wrap">
+              <span className="font-medium">FROM</span>
+              {sourceData ? (
+                <span className="px-2 py-0.5 bg-green-600/20 text-green-400 rounded text-xs">
+                  {sourceData.label} ({sourceData.connectorType})
+                </span>
+              ) : (
+                <span className="text-amber-500 italic">Not connected</span>
+              )}
+            </div>
 
-        {/* Filter */}
-        <div>
-          <label className="block text-xs font-medium text-neutral-400 mb-1">Filter (CEL, optional)</label>
-          <input
-            type="text"
-            value={fromFilter}
-            onChange={(e) => {
-              const filter = e.target.value || undefined
-              onChange({ from: { ...data.from, connector: data.from?.connector || '', operation: data.from?.operation || '', filter } })
-            }}
-            placeholder="input.status != 'internal'"
-            className="w-full px-3 py-2 text-sm bg-neutral-800 border border-neutral-700 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-white placeholder-neutral-500 font-mono"
-          />
-          <p className="text-xs text-neutral-500 mt-1">Skip events where condition is false</p>
-        </div>
+            {/* Operation — dropdown if connector has defined operations, text input with contextual label otherwise */}
+            {sourceOperations.length > 0 ? (
+              <div>
+                <label className="block text-xs font-medium text-neutral-400 mb-1">
+                  {srcConfig?.operationLabel || 'Operation'}
+                </label>
+                <select
+                  value={fromOperation}
+                  onChange={(e) => onChange({ from: { ...data.from, connector: sourceIdent, operation: e.target.value } })}
+                  className="w-full px-3 py-2 text-sm bg-neutral-800 border border-neutral-700 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-white"
+                >
+                  <option value="">Select operation...</option>
+                  {sourceOperations.map((op) => (
+                    <option key={op.id} value={formatOperation(op)}>
+                      {formatOperation(op)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : srcConfig?.operationOptions ? (
+              <div>
+                <label className="block text-xs font-medium text-neutral-400 mb-1">
+                  {srcConfig.operationLabel}
+                </label>
+                <select
+                  value={fromOperation}
+                  onChange={(e) => onChange({ from: { ...data.from, connector: sourceIdent, operation: e.target.value } })}
+                  className="w-full px-3 py-2 text-sm bg-neutral-800 border border-neutral-700 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-white"
+                >
+                  <option value="">Select...</option>
+                  {srcConfig.operationOptions.map((opt) => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  ))}
+                </select>
+                {srcConfig.operationHelpText && (
+                  <p className="text-xs text-neutral-500 mt-1">{srcConfig.operationHelpText}</p>
+                )}
+              </div>
+            ) : (
+              <div>
+                <label className="block text-xs font-medium text-neutral-400 mb-1">
+                  {srcConfig?.operationLabel || 'Operation'}
+                </label>
+                <input
+                  type="text"
+                  value={fromOperation}
+                  onChange={(e) => onChange({ from: { ...data.from, connector: sourceIdent, operation: e.target.value } })}
+                  placeholder={srcConfig?.operationPlaceholder || 'operation'}
+                  className="w-full px-3 py-2 text-sm bg-neutral-800 border border-neutral-700 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-white placeholder-neutral-500"
+                />
+                {srcConfig?.operationHelpText && (
+                  <p className="text-xs text-neutral-500 mt-1">{srcConfig.operationHelpText}</p>
+                )}
+              </div>
+            )}
+
+            {/* Available input.* variables reference */}
+            {srcConfig && srcConfig.inputVariables.length > 0 && (
+              <details className="text-xs">
+                <summary className="text-neutral-500 cursor-pointer hover:text-neutral-400">
+                  Available input variables
+                </summary>
+                <div className="mt-1 pl-2 border-l border-neutral-700 space-y-0.5">
+                  {srcConfig.inputVariables.map((v) => (
+                    <div key={v} className="text-neutral-400 font-mono">{v}</div>
+                  ))}
+                </div>
+              </details>
+            )}
+
+            {/* Format */}
+            <div>
+              <label className="block text-xs font-medium text-neutral-400 mb-1">Format</label>
+              <select
+                value={data.from?.format || ''}
+                onChange={(e) => onChange({ from: { ...data.from, connector: data.from?.connector || '', operation: data.from?.operation || '', format: (e.target.value || undefined) as 'json' | 'xml' | 'csv' | undefined } })}
+                className="w-full px-3 py-2 text-sm bg-neutral-800 border border-neutral-700 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-white"
+              >
+                <option value="">json (default)</option>
+                <option value="json">json</option>
+                <option value="xml">xml</option>
+                <option value="csv">csv</option>
+              </select>
+            </div>
+
+            {/* Filter */}
+            <div>
+              <label className="block text-xs font-medium text-neutral-400 mb-1">Filter (CEL, optional)</label>
+              <input
+                type="text"
+                value={fromFilter}
+                onChange={(e) => {
+                  // For MQ connectors, preserve block-form filter fields if they exist
+                  const existingFilter = data.from?.filter
+                  const isBlockFilter = typeof existingFilter === 'object' && existingFilter !== null
+                  const newFilter = e.target.value
+                    ? isBlockFilter
+                      ? { ...existingFilter, condition: e.target.value }
+                      : e.target.value
+                    : undefined
+                  onChange({ from: { ...data.from, connector: data.from?.connector || '', operation: data.from?.operation || '', filter: newFilter } })
+                }}
+                placeholder="input.status != 'internal'"
+                className="w-full px-3 py-2 text-sm bg-neutral-800 border border-neutral-700 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-white placeholder-neutral-500 font-mono"
+              />
+              <p className="text-xs text-neutral-500 mt-1">Skip events where condition is false</p>
+            </div>
+
+            {/* MQ-specific filter block fields (on_reject, id_field, max_requeue) */}
+            {sourceData && (sourceData.connectorType === 'mq' || sourceData.connectorType === 'mqtt') && fromFilter && (
+              <div className="pl-3 border-l-2 border-neutral-700 space-y-2">
+                <p className="text-xs text-neutral-500">Message queue filter options</p>
+                <div>
+                  <label className="block text-xs font-medium text-neutral-400 mb-1">On Reject</label>
+                  <select
+                    value={(typeof data.from?.filter === 'object' ? data.from.filter.onReject : '') || ''}
+                    onChange={(e) => {
+                      const current = typeof data.from?.filter === 'object' ? data.from.filter : { condition: fromFilter }
+                      onChange({ from: { ...data.from, connector: data.from?.connector || '', operation: data.from?.operation || '', filter: { ...current, onReject: (e.target.value || undefined) as 'ack' | 'reject' | 'requeue' | undefined } } })
+                    }}
+                    className="w-full px-3 py-2 text-sm bg-neutral-800 border border-neutral-700 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-white"
+                  >
+                    <option value="">Default</option>
+                    <option value="ack">ack (discard)</option>
+                    <option value="reject">reject (DLQ)</option>
+                    <option value="requeue">requeue (retry)</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-neutral-400 mb-1">ID Field (dedup)</label>
+                  <input
+                    type="text"
+                    value={(typeof data.from?.filter === 'object' ? data.from.filter.idField : '') || ''}
+                    onChange={(e) => {
+                      const current = typeof data.from?.filter === 'object' ? data.from.filter : { condition: fromFilter }
+                      onChange({ from: { ...data.from, connector: data.from?.connector || '', operation: data.from?.operation || '', filter: { ...current, idField: e.target.value || undefined } } })
+                    }}
+                    placeholder="input.payment_id"
+                    className="w-full px-3 py-2 text-sm bg-neutral-800 border border-neutral-700 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-white placeholder-neutral-500 font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-neutral-400 mb-1">Max Requeue</label>
+                  <input
+                    type="number"
+                    value={(typeof data.from?.filter === 'object' ? data.from.filter.maxRequeue : '') || ''}
+                    onChange={(e) => {
+                      const current = typeof data.from?.filter === 'object' ? data.from.filter : { condition: fromFilter }
+                      onChange({ from: { ...data.from, connector: data.from?.connector || '', operation: data.from?.operation || '', filter: { ...current, maxRequeue: e.target.value ? parseInt(e.target.value) : undefined } } })
+                    }}
+                    placeholder="3"
+                    className="w-full px-3 py-2 text-sm bg-neutral-800 border border-neutral-700 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-white placeholder-neutral-500"
+                  />
+                </div>
+              </div>
+            )}
+          </>)
+        })()}
       </div>}
 
       {/* Targets (To) - Multi-to support */}

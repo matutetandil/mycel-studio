@@ -343,6 +343,7 @@ export interface FlowFrom {
   connector: string
   operation: string
   filter?: string | FlowFilter
+  format?: 'json' | 'xml' | 'csv'
 }
 
 export interface FlowTo {

@@ -2,6 +2,35 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.7.1] - Context-Aware Source Properties & From Block Fixes
+
+### Added
+
+- **Context-aware `from` block properties:** The flow source panel now shows contextual fields depending on the source connector type:
+  - REST: label "HTTP Method + Path", placeholder `GET /users/:id`
+  - GraphQL: "GraphQL Operation", placeholder `Query.users or Mutation.createUser`
+  - gRPC: "RPC Method", placeholder `UserService/CreateUser`
+  - SOAP/TCP: contextual labels and placeholders
+  - RabbitMQ: "Routing Key" with AMQP wildcard hints (`*`/`#`)
+  - Kafka: "Topic"
+  - Redis Pub/Sub: "Channel Pattern" with glob hint
+  - MQTT: "Topic Pattern" with MQTT wildcard hints (`+`/`#`)
+  - WebSocket: dropdown with connect/disconnect/message events
+  - SSE: dropdown with connect/disconnect events
+  - CDC: "Trigger:Table", placeholder `INSERT:users`
+  - File watch: "File Pattern", placeholder `*.csv`
+
+- **Input variables reference tooltip:** collapsible "Available input variables" section in `from` block shows all `input.*` variables available for each connector type (helps writing transforms and CEL)
+
+- **Format selector in `from` block:** json/xml/csv input format override
+
+- **MQ filter block fields:** when source is a message queue and filter is set, shows On Reject (ack/reject/requeue), ID Field (dedup key), Max Requeue options
+
+### Fixed
+
+- **`from` block not loading filter and format from HCL files:** backend handler now passes `filter` and `format` fields from parsed `from` blocks
+- **"Raw SQL (optional)" label:** renamed to "Query" with clearer help text
+
 ## [1.7.0] - Context-Aware Destination Properties & App Lifecycle
 
 ### Added

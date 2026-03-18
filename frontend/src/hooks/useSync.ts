@@ -29,7 +29,7 @@ interface ParsedProject {
     name: string
     sourceFile?: string
     when?: string
-    from?: { connector: string; operation?: string }
+    from?: { connector: string; operation?: string; filter?: string; format?: string }
     to?: { connector: string; target?: string; query?: string; filter?: string; operation?: string; format?: string; exchange?: string; query_filter?: Record<string, string>; update?: Record<string, string>; params?: Record<string, string> }
     transform?: { use?: string[]; mappings?: Record<string, string> }
     validate?: { input?: string; output?: string }
@@ -96,7 +96,7 @@ interface GenerateRequest {
     flows: Array<{
       name: string
       when?: string
-      from?: { connector: string; operation?: string }
+      from?: { connector: string; operation?: string; filter?: string; format?: string }
       to?: { connector: string; target?: string; query?: string; filter?: string; operation?: string; format?: string; exchange?: string; query_filter?: Record<string, string>; update?: Record<string, string>; params?: Record<string, string> }
       transform?: { use?: string[]; mappings?: Record<string, string> }
       validate?: { input?: string; output?: string }
@@ -276,6 +276,8 @@ function convertProjectToNodes(project: ParsedProject): {
       from: flow.from ? {
         connector: flow.from.connector,
         operation: flow.from.operation || '',
+        filter: flow.from.filter || undefined,
+        format: flow.from.format as 'json' | 'xml' | 'csv' | undefined,
       } : undefined,
       to: flow.to ? {
         connector: flow.to.connector,

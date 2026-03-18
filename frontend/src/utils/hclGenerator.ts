@@ -456,6 +456,9 @@ function generateFlowHCL(
     if (data.from?.operation) {
       lines.push(`    operation = "${data.from.operation}"`)
     }
+    if (data.from?.format) {
+      lines.push(`    format    = "${data.from.format}"`)
+    }
     // Filter
     if (data.from?.filter) {
       if (typeof data.from.filter === 'string') {
