@@ -2,6 +2,25 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.8.0] - View Modes, Notification System & UX Improvements
+
+### Added
+
+- **Visual First / Text First view modes:** Toggle between canvas-primary (default) and editor-primary layouts. In Text First mode, Monaco editor takes the main area and canvas becomes a resizable preview panel. Toggle via View menu, `Cmd/Ctrl+Shift+V`, or native macOS menu
+- **Auto-switch to Text First on debug breakpoint:** When the debugger stops at a breakpoint, the view automatically switches to Text First for a better code debugging experience
+- **IDE-style notification system:** Toast notifications (bottom-right) with type indicators (info, warning, error, success), action buttons, auto-hide timers, and click-to-expand popup
+- **Notification popup:** IntelliJ-style notification list with 1/N navigation, time-ago timestamps, clear all, and dismiss individual notifications
+- **Update notifications via toast:** "Update available" and "Update installed" now appear as toast notifications with "Update Now", "What's New", and "Later" action buttons
+- **What's New dialog:** Shows release notes for new versions with Update Now / Update Later buttons
+- **Update progress in status bar:** Download progress (percentage + progress bar) appears in the status bar instead of a banner
+- **Notification bell in status bar:** Shows notification count badge, click to open notification popup
+- **View mode persisted in workspace:** `.mycel-studio.json` saves/restores view mode with the project
+
+### Fixed
+
+- **Terminal name persistence:** Terminal names are now restored when reopening a project (previously always reset to "Terminal 1", "Terminal 2", etc.)
+- **Git status in editor tabs:** File tabs now show git status with colored filenames (sky for modified, green for new/added, red for deleted) and badge letters (M, U, A, D) matching the file explorer
+
 ## [1.7.2] - Terminal Padding & Update Restart Fix
 
 ### Fixed

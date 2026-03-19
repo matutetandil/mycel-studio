@@ -18,6 +18,7 @@ export function useWorkspacePersistence() {
   const leftCollapsed = useLayoutStore(s => s.leftCollapsed)
   const rightWidth = useLayoutStore(s => s.rightWidth)
   const rightCollapsed = useLayoutStore(s => s.rightCollapsed)
+  const viewMode = useLayoutStore(s => s.viewMode)
   const terminalCount = useTerminalStore(s => s.terminals.length)
 
   const { getViewport } = useReactFlow()
@@ -52,6 +53,7 @@ export function useWorkspacePersistence() {
     leftCollapsed,
     rightWidth,
     rightCollapsed,
+    viewMode,
     terminalCount,
     debouncedSave,
   ])

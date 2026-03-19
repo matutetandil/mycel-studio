@@ -12,7 +12,7 @@ import DebugPanel from '../DebugPanel/DebugPanel'
 
 type PanelTab = 'editor' | 'terminal' | 'debug'
 
-export default function EditorPanel() {
+export default function EditorPanel({ isMain }: { isMain?: boolean }) {
   const { panelHeight, isCollapsed, groups, splitDirection, splitRatio, setPanelHeight, toggleCollapse } = useEditorPanelStore()
   const { nodes, edges, serviceConfig, authConfig, envConfig, securityConfig, pluginConfig } = useStudioStore()
   const projectFiles = useProjectStore(s => s.files)
@@ -127,6 +127,138 @@ export default function EditorPanel() {
 
   const hasErrors = project.errors.length > 0
 
+  const panelContent = (
+    <div className="flex h-full">
+      {/* Left icon bar */}
+      <div className="w-10 shrink-0 bg-neutral-950 border-r border-neutral-800 flex flex-col items-center py-1 gap-0.5">
+        <button
+          onClick={() => handlePanelTabClick('editor')}
+          title="Editor"
+          className={`w-8 h-8 flex items-center justify-center rounded transition-colors ${
+            activePanel === 'editor' && !isCollapsed
+              ? 'bg-neutral-800 text-white border-l-2 border-indigo-500'
+              : 'text-neutral-500 hover:text-neutral-300 hover:bg-neutral-800'
+          }`}
+        >
+          <FileCode className="w-4 h-4" />
+        </button>
+        <button
+          onClick={() => handlePanelTabClick('terminal')}
+          title="Terminal (Cmd+`)"
+          className={`relative w-8 h-8 flex items-center justify-center rounded transition-colors ${
+            activePanel === 'terminal' && !isCollapsed
+              ? 'bg-neutral-800 text-white border-l-2 border-green-500'
+              : 'text-neutral-500 hover:text-neutral-300 hover:bg-neutral-800'
+          }`}
+        >
+          <Terminal className="w-4 h-4" />
+          {terminalCount > 0 && (
+            <span className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 bg-green-600 text-white text-[8px] font-bold rounded-full flex items-center justify-center">
+              {terminalCount}
+            </span>
+          )}
+        </button>
+        <button
+          onClick={() => handlePanelTabClick('debug')}
+          title="Debug"
+          className={`relative w-8 h-8 flex items-center justify-center rounded transition-colors ${
+            activePanel === 'debug' && !isCollapsed
+              ? 'bg-neutral-800 text-white border-l-2 border-amber-500'
+              : 'text-neutral-500 hover:text-neutral-300 hover:bg-neutral-800'
+          }`}
+        >
+          <Bug className="w-4 h-4" />
+          {debugStatus === 'connected' && (
+            <span className={`absolute -top-0.5 -right-0.5 w-3 h-3 rounded-full ${
+              debugStopped ? 'bg-amber-500 animate-pulse' : 'bg-green-500'
+            }`} />
+          )}
+        </button>
+      </div>
+
+      {/* Main content area */}
+      <div className="flex-1 min-w-0 flex flex-col">
+        {/* Errors bar */}
+        {hasErrors && (
+          <div className="px-3 py-1 bg-amber-900/20 border-b border-amber-800/50 flex items-center gap-2 shrink-0">
+            <AlertTriangle className="w-3 h-3 text-amber-500 shrink-0" />
+            <span className="text-xs text-amber-400 truncate">
+              {project.errors.length} warning{project.errors.length > 1 ? 's' : ''}: {project.errors[0]}
+            </span>
+          </div>
+        )}
+
+        {/* Panel content — both always mounted, toggled via display */}
+        <div className="flex-1 min-h-0 relative">
+          {/* Editor view */}
+          <div
+            className={`absolute inset-0 ${
+              splitDirection === 'horizontal' ? 'flex flex-row' :
+              splitDirection === 'vertical' ? 'flex flex-col' :
+              ''
+            }`}
+            style={{ display: activePanel === 'editor' ? undefined : 'none' }}
+          >
+            {/* Main group */}
+            <div
+              style={splitDirection ? { flexBasis: `${splitRatio * 100}%` } : undefined}
+              className={splitDirection ? 'min-w-0 min-h-0 overflow-hidden' : 'h-full'}
+            >
+              <EditorGroupView groupId={groups[0]?.id || 'main'} />
+            </div>
+
+            {/* Split resize handle */}
+            {splitDirection && groups.length > 1 && (
+              <div
+                className={`shrink-0 hover:bg-indigo-500/50 transition-colors ${
+                  splitDirection === 'horizontal'
+                    ? 'w-1 cursor-ew-resize bg-neutral-800'
+                    : 'h-1 cursor-ns-resize bg-neutral-800'
+                } ${isSplitResizing ? 'bg-indigo-500/50' : ''}`}
+                onMouseDown={handleSplitResizeMouseDown}
+              />
+            )}
+
+            {/* Secondary group */}
+            {splitDirection && groups.length > 1 && (
+              <div
+                style={{ flexBasis: `${(1 - splitRatio) * 100}%` }}
+                className="min-w-0 min-h-0 overflow-hidden"
+              >
+                <EditorGroupView groupId={groups[1].id} isSecondary />
+              </div>
+            )}
+          </div>
+
+          {/* Terminal view — always mounted once created, hidden via display */}
+          <div
+            className="absolute inset-0"
+            style={{ display: activePanel === 'terminal' ? undefined : 'none' }}
+          >
+            <TerminalPanel />
+          </div>
+
+          {/* Debug view */}
+          <div
+            className="absolute inset-0"
+            style={{ display: activePanel === 'debug' ? undefined : 'none' }}
+          >
+            <DebugPanel />
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+
+  // In "isMain" mode (text-first), the panel fills available space with no collapse/resize
+  if (isMain) {
+    return (
+      <div className="flex-1 min-h-0 bg-neutral-900 border-b border-neutral-800">
+        {panelContent}
+      </div>
+    )
+  }
+
   return (
     <div className="flex-shrink-0 relative">
       {/* Collapse toggle - pill sitting ON TOP of the divider line */}
@@ -156,126 +288,7 @@ export default function EditorPanel() {
         style={{ height: isCollapsed ? 0 : panelHeight }}
         className={`bg-neutral-900 border-t border-neutral-800 overflow-hidden transition-[height] duration-200 ease-in-out ${isResizing || isSplitResizing ? 'select-none transition-none' : ''}`}
       >
-        <div className="flex h-full">
-          {/* Left icon bar */}
-          <div className="w-10 shrink-0 bg-neutral-950 border-r border-neutral-800 flex flex-col items-center py-1 gap-0.5">
-            <button
-              onClick={() => handlePanelTabClick('editor')}
-              title="Editor"
-              className={`w-8 h-8 flex items-center justify-center rounded transition-colors ${
-                activePanel === 'editor' && !isCollapsed
-                  ? 'bg-neutral-800 text-white border-l-2 border-indigo-500'
-                  : 'text-neutral-500 hover:text-neutral-300 hover:bg-neutral-800'
-              }`}
-            >
-              <FileCode className="w-4 h-4" />
-            </button>
-            <button
-              onClick={() => handlePanelTabClick('terminal')}
-              title="Terminal (Cmd+`)"
-              className={`relative w-8 h-8 flex items-center justify-center rounded transition-colors ${
-                activePanel === 'terminal' && !isCollapsed
-                  ? 'bg-neutral-800 text-white border-l-2 border-green-500'
-                  : 'text-neutral-500 hover:text-neutral-300 hover:bg-neutral-800'
-              }`}
-            >
-              <Terminal className="w-4 h-4" />
-              {terminalCount > 0 && (
-                <span className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 bg-green-600 text-white text-[8px] font-bold rounded-full flex items-center justify-center">
-                  {terminalCount}
-                </span>
-              )}
-            </button>
-            <button
-              onClick={() => handlePanelTabClick('debug')}
-              title="Debug"
-              className={`relative w-8 h-8 flex items-center justify-center rounded transition-colors ${
-                activePanel === 'debug' && !isCollapsed
-                  ? 'bg-neutral-800 text-white border-l-2 border-amber-500'
-                  : 'text-neutral-500 hover:text-neutral-300 hover:bg-neutral-800'
-              }`}
-            >
-              <Bug className="w-4 h-4" />
-              {debugStatus === 'connected' && (
-                <span className={`absolute -top-0.5 -right-0.5 w-3 h-3 rounded-full ${
-                  debugStopped ? 'bg-amber-500 animate-pulse' : 'bg-green-500'
-                }`} />
-              )}
-            </button>
-          </div>
-
-          {/* Main content area */}
-          <div className="flex-1 min-w-0 flex flex-col">
-            {/* Errors bar */}
-            {hasErrors && !isCollapsed && (
-              <div className="px-3 py-1 bg-amber-900/20 border-b border-amber-800/50 flex items-center gap-2 shrink-0">
-                <AlertTriangle className="w-3 h-3 text-amber-500 shrink-0" />
-                <span className="text-xs text-amber-400 truncate">
-                  {project.errors.length} warning{project.errors.length > 1 ? 's' : ''}: {project.errors[0]}
-                </span>
-              </div>
-            )}
-
-            {/* Panel content — both always mounted, toggled via display */}
-            <div className="flex-1 min-h-0 relative">
-              {/* Editor view */}
-              <div
-                className={`absolute inset-0 ${
-                  splitDirection === 'horizontal' ? 'flex flex-row' :
-                  splitDirection === 'vertical' ? 'flex flex-col' :
-                  ''
-                }`}
-                style={{ display: activePanel === 'editor' ? undefined : 'none' }}
-              >
-                {/* Main group */}
-                <div
-                  style={splitDirection ? { flexBasis: `${splitRatio * 100}%` } : undefined}
-                  className={splitDirection ? 'min-w-0 min-h-0 overflow-hidden' : 'h-full'}
-                >
-                  <EditorGroupView groupId={groups[0]?.id || 'main'} />
-                </div>
-
-                {/* Split resize handle */}
-                {splitDirection && groups.length > 1 && (
-                  <div
-                    className={`shrink-0 hover:bg-indigo-500/50 transition-colors ${
-                      splitDirection === 'horizontal'
-                        ? 'w-1 cursor-ew-resize bg-neutral-800'
-                        : 'h-1 cursor-ns-resize bg-neutral-800'
-                    } ${isSplitResizing ? 'bg-indigo-500/50' : ''}`}
-                    onMouseDown={handleSplitResizeMouseDown}
-                  />
-                )}
-
-                {/* Secondary group */}
-                {splitDirection && groups.length > 1 && (
-                  <div
-                    style={{ flexBasis: `${(1 - splitRatio) * 100}%` }}
-                    className="min-w-0 min-h-0 overflow-hidden"
-                  >
-                    <EditorGroupView groupId={groups[1].id} isSecondary />
-                  </div>
-                )}
-              </div>
-
-              {/* Terminal view — always mounted once created, hidden via display */}
-              <div
-                className="absolute inset-0"
-                style={{ display: activePanel === 'terminal' ? undefined : 'none' }}
-              >
-                <TerminalPanel />
-              </div>
-
-              {/* Debug view */}
-              <div
-                className="absolute inset-0"
-                style={{ display: activePanel === 'debug' ? undefined : 'none' }}
-              >
-                <DebugPanel />
-              </div>
-            </div>
-          </div>
-        </div>
+        {panelContent}
       </div>
     </div>
   )

@@ -53,6 +53,9 @@ func (a *App) buildMenu() *menu.Menu {
 
 	// View menu
 	viewMenu := appMenu.AddSubmenu("View")
+	viewMenu.AddText("Toggle View Mode", keys.Combo("v", keys.CmdOrCtrlKey, keys.ShiftKey), func(_ *menu.CallbackData) {
+		wailsRuntime.EventsEmit(a.ctx, "menu:toggle-view-mode")
+	})
 	viewMenu.AddText("Toggle Dark Mode", nil, func(_ *menu.CallbackData) {
 		wailsRuntime.EventsEmit(a.ctx, "menu:toggle-theme")
 	})

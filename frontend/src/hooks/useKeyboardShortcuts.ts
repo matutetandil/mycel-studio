@@ -2,6 +2,7 @@ import { useEffect, useCallback, useState } from 'react'
 import { useStudioStore } from '../stores/useStudioStore'
 import { useProjectStore } from '../stores/useProjectStore'
 import { useEditorPanelStore } from '../stores/useEditorPanelStore'
+import { useLayoutStore } from '../stores/useLayoutStore'
 import { useDebugStore } from '../stores/useDebugStore'
 import EditorPanel from '../components/EditorPanel/EditorPanel'
 
@@ -20,6 +21,13 @@ export function useKeyboardShortcuts() {
       if (mod && e.key === '`') {
         e.preventDefault()
         EditorPanel.switchToTerminal()
+        return
+      }
+
+      // Toggle view mode: Ctrl/Cmd+Shift+V — works from anywhere
+      if (mod && e.shiftKey && (e.key === 'v' || e.key === 'V')) {
+        e.preventDefault()
+        useLayoutStore.getState().toggleViewMode()
         return
       }
 

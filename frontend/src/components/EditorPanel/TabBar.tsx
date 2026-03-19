@@ -1,10 +1,34 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useMemo } from 'react'
 import { X, Columns2, Rows2, Copy, Check, Download, XCircle } from 'lucide-react'
 import { useEditorPanelStore, type EditorTab } from '../../stores/useEditorPanelStore'
 import { useStudioStore } from '../../stores/useStudioStore'
+import { useProjectStore } from '../../stores/useProjectStore'
 import { toIdentifier } from '../../utils/hclGenerator'
 import type { ConnectorNodeData } from '../../types'
 import { getFileTypeInfo } from '../../utils/fileIcons'
+
+// Git status colors (same as FileTree)
+const gitNameColors: Record<string, string> = {
+  modified: 'text-sky-400',
+  new: 'text-green-400',
+  added: 'text-green-400',
+  untracked: 'text-green-400',
+  deleted: 'text-red-400',
+}
+const gitBadgeColors: Record<string, string> = {
+  modified: 'text-amber-500',
+  new: 'text-green-500',
+  added: 'text-green-500',
+  untracked: 'text-green-500',
+  deleted: 'text-red-500',
+}
+const gitBadgeLetters: Record<string, string> = {
+  modified: 'M',
+  new: 'U',
+  added: 'A',
+  untracked: 'U',
+  deleted: 'D',
+}
 
 interface TabBarProps {
   groupId: string
@@ -55,8 +79,20 @@ function selectNodeForFile(filePath: string) {
 
 export default function TabBar({ groupId, tabs, activeTabId, isSecondary, onCopy, onDownloadZip, copied }: TabBarProps) {
   const { setActiveTab, closeTab, reorderTab, moveTabToGroup, splitEditor, closeSplit } = useEditorPanelStore()
+  const projectFiles = useProjectStore(s => s.files)
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null)
   const dragSourceRef = useRef<{ groupId: string; index: number } | null>(null)
+
+  // Build a map of filePath → gitStatus for quick lookup
+  const gitStatusMap = useMemo(() => {
+    const map: Record<string, string> = {}
+    for (const f of projectFiles) {
+      if (f.gitStatus && f.gitStatus !== 'clean' && f.gitStatus !== 'ignored') {
+        map[f.relativePath] = f.gitStatus
+      }
+    }
+    return map
+  }, [projectFiles])
 
   const handleDragStart = (e: React.DragEvent, index: number) => {
     dragSourceRef.current = { groupId, index }
@@ -103,36 +139,46 @@ export default function TabBar({ groupId, tabs, activeTabId, isSecondary, onCopy
     <div className="flex items-center bg-neutral-900 border-b border-neutral-800 min-h-[33px]">
       {/* Tabs */}
       <div className="flex-1 flex items-center overflow-x-auto">
-        {tabs.map((tab, index) => (
-          <div
-            key={tab.id}
-            draggable
-            onDragStart={(e) => handleDragStart(e, index)}
-            onDragOver={(e) => handleDragOver(e, index)}
-            onDragLeave={handleDragLeave}
-            onDrop={(e) => handleDrop(e, index)}
-            onClick={() => { setActiveTab(groupId, tab.id); selectNodeForFile(tab.filePath) }}
-            className={`
-              group flex items-center gap-1.5 px-3 py-1.5 text-xs border-r border-neutral-800 cursor-pointer shrink-0 select-none
-              ${activeTabId === tab.id
-                ? 'bg-neutral-800 text-white border-b-2 border-b-indigo-500'
-                : 'bg-neutral-900 text-neutral-400 hover:bg-neutral-850 hover:text-neutral-300'}
-              ${dragOverIndex === index ? 'border-l-2 border-l-indigo-500' : ''}
-            `}
-          >
-            {(() => { const ft = getFileTypeInfo(tab.fileName); const Icon = ft.icon; return <Icon className={`w-3 h-3 shrink-0 ${activeTabId === tab.id ? ft.color : 'text-neutral-500'}`} /> })()}
-            <span className="max-w-32 truncate">{tab.fileName}</span>
-            <button
-              onClick={(e) => {
-                e.stopPropagation()
-                closeTab(groupId, tab.id)
-              }}
-              className="p-0.5 rounded opacity-0 group-hover:opacity-100 hover:bg-neutral-700 shrink-0"
+        {tabs.map((tab, index) => {
+          const gitStatus = gitStatusMap[tab.filePath]
+          const nameColor = gitStatus ? gitNameColors[gitStatus] : ''
+          const badgeLetter = gitStatus ? gitBadgeLetters[gitStatus] : ''
+          const badgeColor = gitStatus ? gitBadgeColors[gitStatus] : ''
+
+          return (
+            <div
+              key={tab.id}
+              draggable
+              onDragStart={(e) => handleDragStart(e, index)}
+              onDragOver={(e) => handleDragOver(e, index)}
+              onDragLeave={handleDragLeave}
+              onDrop={(e) => handleDrop(e, index)}
+              onClick={() => { setActiveTab(groupId, tab.id); selectNodeForFile(tab.filePath) }}
+              className={`
+                group flex items-center gap-1.5 px-3 py-1.5 text-xs border-r border-neutral-800 cursor-pointer shrink-0 select-none
+                ${activeTabId === tab.id
+                  ? 'bg-neutral-800 text-white border-b-2 border-b-indigo-500'
+                  : 'bg-neutral-900 text-neutral-400 hover:bg-neutral-850 hover:text-neutral-300'}
+                ${dragOverIndex === index ? 'border-l-2 border-l-indigo-500' : ''}
+              `}
             >
-              <X className="w-3 h-3" />
-            </button>
-          </div>
-        ))}
+              {(() => { const ft = getFileTypeInfo(tab.fileName); const Icon = ft.icon; return <Icon className={`w-3 h-3 shrink-0 ${activeTabId === tab.id ? ft.color : 'text-neutral-500'}`} /> })()}
+              <span className={`max-w-32 truncate ${nameColor}`}>{tab.fileName}</span>
+              {badgeLetter && (
+                <span className={`text-[9px] font-bold leading-none ${badgeColor}`}>{badgeLetter}</span>
+              )}
+              <button
+                onClick={(e) => {
+                  e.stopPropagation()
+                  closeTab(groupId, tab.id)
+                }}
+                className="p-0.5 rounded opacity-0 group-hover:opacity-100 hover:bg-neutral-700 shrink-0"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            </div>
+          )
+        })}
       </div>
 
       {/* Actions */}

@@ -1,14 +1,24 @@
 import { useState, useRef, useEffect } from 'react'
 import { useProjectStore } from '../stores/useProjectStore'
 import { useEditorPanelStore } from '../stores/useEditorPanelStore'
-import { GitBranch } from 'lucide-react'
+import { useNotificationStore } from '../stores/useNotificationStore'
+import { GitBranch, Bell, BellDot, CheckCircle, Download } from 'lucide-react'
 import { getFileTypeInfo, KNOWN_LANGUAGES, setLanguageOverride, removeLanguageOverride, getLanguageOverride } from '../utils/fileIcons'
 
-export default function StatusBar() {
+interface StatusBarProps {
+  downloadProgress?: { percent: number; message: string } | null
+  isDownloading?: boolean
+  updateReady?: boolean
+  updateVersion?: string
+}
+
+export default function StatusBar({ downloadProgress, isDownloading, updateReady, updateVersion }: StatusBarProps) {
   const gitBranch = useProjectStore((s) => s.gitBranch)
   const projectName = useProjectStore((s) => s.projectName)
   const activeGroupId = useEditorPanelStore(s => s.activeGroupId)
   const groups = useEditorPanelStore(s => s.groups)
+  const notifications = useNotificationStore(s => s.notifications)
+  const togglePopup = useNotificationStore(s => s.togglePopup)
   const [showLangPicker, setShowLangPicker] = useState(false)
   const [langSearch, setLangSearch] = useState('')
   const pickerRef = useRef<HTMLDivElement>(null)
@@ -18,6 +28,7 @@ export default function StatusBar() {
   const activeTab = activeGroup?.tabs.find(t => t.id === activeGroup.activeTabId)
   const fileTypeInfo = activeTab ? getFileTypeInfo(activeTab.fileName) : null
   const hasOverride = activeTab ? !!getLanguageOverride(activeTab.fileName) : false
+  const notifCount = notifications.length
 
   useEffect(() => {
     if (showLangPicker && searchRef.current) {
@@ -47,7 +58,6 @@ export default function StatusBar() {
   const handleSelectLanguage = (langId: string) => {
     if (!activeTab) return
     setLanguageOverride(activeTab.fileName, langId)
-    // Close and reopen tab to apply
     const store = useEditorPanelStore.getState()
     store.closeTab(activeGroupId, activeTab.filePath)
     setTimeout(() => store.openFile(activeTab.filePath, activeTab.fileName), 50)
@@ -69,8 +79,11 @@ export default function StatusBar() {
     !langSearch || l.label.toLowerCase().includes(langSearch.toLowerCase())
   )
 
+  const BellIcon = notifCount > 0 ? BellDot : Bell
+
   return (
     <div className="h-6 flex items-center px-3 bg-neutral-900 border-t border-neutral-800 text-[11px] text-neutral-400 select-none shrink-0 relative">
+      {/* Left side: git branch + notifications bell + download progress */}
       <div className="flex items-center gap-3">
         {gitBranch && (
           <span className="flex items-center gap-1">
@@ -78,8 +91,50 @@ export default function StatusBar() {
             {gitBranch}
           </span>
         )}
+
+        {/* Bell icon */}
+        <button
+          data-notification-bell
+          onClick={togglePopup}
+          className="flex items-center gap-1 hover:text-neutral-200 relative"
+          title={`${notifCount} notification${notifCount !== 1 ? 's' : ''}`}
+        >
+          <BellIcon className="w-3 h-3" />
+          {notifCount > 0 && (
+            <span className="absolute -top-1.5 -right-1.5 min-w-[14px] h-[14px] flex items-center justify-center bg-indigo-500 text-white text-[9px] font-bold rounded-full leading-none px-0.5">
+              {notifCount > 99 ? '99+' : notifCount}
+            </span>
+          )}
+        </button>
+
+        {/* Download progress */}
+        {isDownloading && downloadProgress && (
+          <div className="flex items-center gap-1.5 text-indigo-300">
+            <Download className="w-3 h-3 animate-pulse" />
+            <span className="text-[10px]">
+              {updateVersion ? `v${updateVersion}` : 'Downloading'}... {Math.round(downloadProgress.percent)}%
+            </span>
+            <div className="w-24 h-1.5 bg-neutral-700 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-indigo-500 rounded-full transition-all duration-300"
+                style={{ width: `${downloadProgress.percent}%` }}
+              />
+            </div>
+          </div>
+        )}
+
+        {/* Update ready indicator */}
+        {updateReady && !isDownloading && (
+          <span className="flex items-center gap-1 text-green-400 text-[10px]">
+            <CheckCircle className="w-3 h-3" />
+            Update ready
+          </span>
+        )}
       </div>
+
       <div className="flex-1" />
+
+      {/* Right side: language + project name */}
       <div className="flex items-center gap-3">
         {fileTypeInfo && (
           <button

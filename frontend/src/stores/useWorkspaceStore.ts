@@ -1,7 +1,7 @@
 // Workspace persistence — saves/loads .mycel-studio.json
 import { useStudioStore } from './useStudioStore'
 import { useEditorPanelStore, type EditorTab } from './useEditorPanelStore'
-import { useLayoutStore } from './useLayoutStore'
+import { useLayoutStore, type ViewMode } from './useLayoutStore'
 import { useTerminalStore } from './useTerminalStore'
 import { getFileSystemProvider } from '../lib/fileSystem'
 
@@ -26,6 +26,7 @@ export interface WorkspaceState {
     rightWidth: number
     rightCollapsed: boolean
   }
+  viewMode?: ViewMode
   terminals?: Array<{ name: string; workDir: string }>
 }
 
@@ -99,11 +100,16 @@ export function applyWorkspace(ws: WorkspaceState) {
   layoutStore.setRightWidth(ws.sidebar.rightWidth)
   layoutStore.setRightCollapsed(ws.sidebar.rightCollapsed)
 
-  // Restore terminals
+  // Restore view mode
+  if (ws.viewMode) {
+    useLayoutStore.getState().setViewMode(ws.viewMode)
+  }
+
+  // Restore terminals with saved names
   if (ws.terminals && ws.terminals.length > 0) {
     const termStore = useTerminalStore.getState()
     for (const saved of ws.terminals) {
-      termStore.createTerminal(saved.workDir)
+      termStore.createTerminal(saved.workDir, saved.name)
     }
   }
 }
@@ -155,6 +161,7 @@ export function buildWorkspace(
       rightWidth: layout.rightWidth,
       rightCollapsed: layout.rightCollapsed,
     },
+    viewMode: layout.viewMode !== 'visual-first' ? layout.viewMode : undefined,
     terminals: terminals.length > 0 ? terminals : undefined,
   }
 }

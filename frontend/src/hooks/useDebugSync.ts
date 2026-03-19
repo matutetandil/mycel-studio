@@ -3,6 +3,7 @@ import { useEffect, useRef } from 'react'
 import { useDebugStore } from '../stores/useDebugStore'
 import { useStudioStore } from '../stores/useStudioStore'
 import { useEditorPanelStore } from '../stores/useEditorPanelStore'
+import { useLayoutStore } from '../stores/useLayoutStore'
 import { toIdentifier } from '../utils/hclGenerator'
 import EditorPanel from '../components/EditorPanel/EditorPanel'
 import type { FlowNodeData } from '../types'
@@ -13,7 +14,8 @@ export function useDebugSync() {
 
   useEffect(() => {
     if (stoppedAt && stoppedAt !== prevStoppedRef.current) {
-      // Switch to debug panel
+      // Switch to text-first mode and debug panel
+      useLayoutStore.getState().setViewMode('text-first')
       EditorPanel.switchToDebug()
 
       // Find the flow node on canvas and select it

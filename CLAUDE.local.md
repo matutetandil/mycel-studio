@@ -884,11 +884,37 @@ En vez de escribir HCL manualmente, el usuario:
 - **Build:** ✅ Wails build exitoso
 - **Próximo paso:** Commit, testear About dialog en desktop app
 
+### 2026-03-19 - View Modes, Notification System & Terminal Fix — v1.8.0
+- **Estado:** ✅ Completado
+- **Visual First / Text First view modes:**
+  - `useLayoutStore.ts` — `viewMode: 'visual-first' | 'text-first'`, `toggleViewMode()`
+  - `App.tsx` — Conditional layout: Canvas main / Editor bottom (visual) vs Editor main / Canvas bottom (text)
+  - `CanvasPreview` component — Resizable canvas preview panel for text-first mode (reuses panelHeight)
+  - `EditorPanel.tsx` — `isMain` prop: when true, fills available space without collapse/resize chrome
+  - `menu.go` — "Toggle View Mode" in View menu with `Cmd+Shift+V`
+  - `useNativeMenu.ts` — `onToggleViewMode` callback
+  - `useKeyboardShortcuts.ts` — `Cmd/Ctrl+Shift+V` works from anywhere (including Monaco/xterm)
+  - `MenuBar.tsx` — Dynamic label "Switch to Text First" / "Switch to Visual First"
+  - `ShortcutsDialog.tsx` — New "View" section with view mode, editor panel, terminal shortcuts
+  - Auto-switch to Text First on debug breakpoint (`useDebugSync.ts`)
+  - View mode persisted in `.mycel-studio.json` workspace
+- **IDE-style notification system (replaces UpdateNotification banner):**
+  - `useNotificationStore.ts` — Zustand store: addNotification, removeNotification, clearAll, popup toggle
+  - `NotificationToast.tsx` — Slide-in toast (bottom-right), type icons, action buttons, dismiss
+  - `NotificationPopup.tsx` — Full notification list with 1/N navigation, time-ago, clear all
+  - `WhatsNewDialog.tsx` — Release notes popup with Update Now / Later
+  - `useUpdateManager.ts` — Hook: update-available → toast notification with actions, download progress → status bar state, done → restart notification
+  - `StatusBar.tsx` — Bell icon with badge count, download progress bar + percentage, update ready indicator
+- **Terminal name persistence fix:**
+  - `useTerminalStore.ts` — `createTerminal()` accepts optional `savedName` parameter
+  - `useWorkspaceStore.ts` — `applyWorkspace()` passes saved terminal names when restoring
+- **Build:** ✅ TypeScript + Vite + Go build exitosos
+
 ---
 
 ## Próximos pasos (pendientes para siguiente sesión)
 
-### Todas las fases principales COMPLETADAS (3-9) + UX Polish + Connector Alignment + Desktop App + v1.1.0
+### Todas las fases principales COMPLETADAS (3-9) + UX Polish + Connector Alignment + Desktop App + v1.8.0
 
 ### Pendientes (por prioridad):
 - **Homebrew Cask:** Crear fórmula para distribución macOS

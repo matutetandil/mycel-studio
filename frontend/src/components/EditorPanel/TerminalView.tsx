@@ -10,6 +10,7 @@ interface TerminalViewProps {
 }
 
 export default function TerminalView({ sessionId }: TerminalViewProps) {
+  const wrapperRef = useRef<HTMLDivElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const terminalRef = useRef<Terminal | null>(null)
   const fitAddonRef = useRef<FitAddon | null>(null)
@@ -17,7 +18,7 @@ export default function TerminalView({ sessionId }: TerminalViewProps) {
   const lastSizeRef = useRef<{ w: number; h: number }>({ w: 0, h: 0 })
 
   useEffect(() => {
-    if (!containerRef.current || initializedRef.current) return
+    if (!containerRef.current || !wrapperRef.current || initializedRef.current) return
     initializedRef.current = true
 
     const backend = getTerminalBackend()
@@ -88,11 +89,11 @@ export default function TerminalView({ sessionId }: TerminalViewProps) {
       terminal.write('\r\n\x1b[90m[Process exited]\x1b[0m\r\n')
     })
 
-    // Observe container resize → re-fit terminal (only if size actually changed)
-    const container = containerRef.current
+    // Observe wrapper resize → re-fit terminal (only if size actually changed)
+    const wrapper = wrapperRef.current
     const observer = new ResizeObserver(() => {
-      const w = container.clientWidth
-      const h = container.clientHeight
+      const w = wrapper.clientWidth
+      const h = wrapper.clientHeight
       if (w === lastSizeRef.current.w && h === lastSizeRef.current.h) return
       if (w === 0 || h === 0) return // hidden
       lastSizeRef.current = { w, h }
@@ -104,7 +105,7 @@ export default function TerminalView({ sessionId }: TerminalViewProps) {
         }
       })
     })
-    observer.observe(container)
+    observer.observe(wrapper)
 
     // Focus terminal
     terminal.focus()
@@ -122,10 +123,8 @@ export default function TerminalView({ sessionId }: TerminalViewProps) {
   }, [sessionId])
 
   return (
-    <div
-      ref={containerRef}
-      className="h-full w-full"
-      style={{ padding: '4px 0 6px 8px' }}
-    />
+    <div ref={wrapperRef} className="h-full w-full" style={{ padding: '4px 0 6px 8px' }}>
+      <div ref={containerRef} className="h-full w-full" />
+    </div>
   )
 }

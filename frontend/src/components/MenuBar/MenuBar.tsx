@@ -13,6 +13,7 @@ import { useThemeStore } from '../../stores/useThemeStore'
 import { useProjectStore } from '../../stores/useProjectStore'
 import { useStudioStore } from '../../stores/useStudioStore'
 import { useHistoryStore } from '../../stores/useHistoryStore'
+import { useLayoutStore } from '../../stores/useLayoutStore'
 
 interface MenuItem {
   label?: string
@@ -86,6 +87,7 @@ export default function MenuBar({ onShowShortcuts, onShowTemplates, onShowAbout,
   const { projectName, files, isLoading, gitBranch, capabilities, newProject, openProject, saveProject, closeProject } = useProjectStore()
   const { undo, redo, copyNode, pasteNode, duplicateNode, selectedNodeId, clipboard } = useStudioStore()
   const historyStore = useHistoryStore()
+  const { viewMode, toggleViewMode } = useLayoutStore()
 
   const hasUnsavedChanges = files.some((f) => f.isDirty)
 
@@ -154,6 +156,7 @@ export default function MenuBar({ onShowShortcuts, onShowTemplates, onShowAbout,
   const viewMenu = {
     label: 'View',
     items: [
+      { label: viewMode === 'visual-first' ? 'Switch to Text First' : 'Switch to Visual First', shortcut: 'Ctrl+Shift+V', onClick: toggleViewMode },
       { label: 'Toggle Dark Mode', onClick: toggleTheme },
       { separator: true },
       { label: 'Zoom In', shortcut: 'Ctrl++', onClick: () => {} },

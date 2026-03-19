@@ -13,6 +13,7 @@ interface NativeMenuCallbacks {
   onUndo: () => void
   onRedo: () => void
   onDuplicate: () => void
+  onToggleViewMode: () => void
   onToggleTheme: () => void
   onToggleEditor: () => void
   onToggleTerminal: () => void
@@ -44,6 +45,7 @@ export function useNativeMenu(callbacks: NativeMenuCallbacks) {
     on('menu:undo', callbacks.onUndo)
     on('menu:redo', callbacks.onRedo)
     on('menu:duplicate', callbacks.onDuplicate)
+    on('menu:toggle-view-mode', callbacks.onToggleViewMode)
     on('menu:toggle-theme', callbacks.onToggleTheme)
     on('menu:toggle-editor', callbacks.onToggleEditor)
     on('menu:toggle-terminal', callbacks.onToggleTerminal)

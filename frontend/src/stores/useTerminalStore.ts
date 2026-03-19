@@ -12,7 +12,7 @@ interface TerminalState {
   terminals: TerminalInstance[]
   activeTerminalId: string | null
   counter: number
-  createTerminal: (workDir?: string) => Promise<void>
+  createTerminal: (workDir?: string, name?: string) => Promise<void>
   closeTerminal: (id: string) => void
   setActiveTerminal: (id: string) => void
   renameTerminal: (id: string, name: string) => void
@@ -23,13 +23,13 @@ export const useTerminalStore = create<TerminalState>((set, get) => ({
   activeTerminalId: null,
   counter: 0,
 
-  createTerminal: async (workDir?: string) => {
+  createTerminal: async (workDir?: string, savedName?: string) => {
     try {
       const backend = getTerminalBackend()
       const dir = workDir || useProjectStore.getState().projectPath || ''
       const id = await backend.create(80, 24, dir || undefined)
       const num = get().counter + 1
-      const name = `Terminal ${num}`
+      const name = savedName || `Terminal ${num}`
 
       set(state => ({
         counter: num,
