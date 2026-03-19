@@ -74,7 +74,7 @@ jobs:
         run: |
           cd build/bin
           ls -la
-          ditto -c -k --keepParent mycel-studio.app ${{ matrix.artifact }}.zip
+          ditto -c -k --keepParent "Mycel Studio.app" ${{ matrix.artifact }}.zip
 
       - name: Rename Linux binary
         if: runner.os == 'Linux'
