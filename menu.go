@@ -53,9 +53,14 @@ func (a *App) buildMenu() *menu.Menu {
 
 	// View menu
 	viewMenu := appMenu.AddSubmenu("View")
-	viewMenu.AddText("Toggle View Mode", keys.Combo("v", keys.CmdOrCtrlKey, keys.ShiftKey), func(_ *menu.CallbackData) {
-		wailsRuntime.EventsEmit(a.ctx, "menu:toggle-view-mode")
+	modeMenu := viewMenu.AddSubmenu("Mode")
+	modeMenu.AddText("Visual First", nil, func(_ *menu.CallbackData) {
+		wailsRuntime.EventsEmit(a.ctx, "menu:set-view-mode", "visual-first")
 	})
+	modeMenu.AddText("Text First", nil, func(_ *menu.CallbackData) {
+		wailsRuntime.EventsEmit(a.ctx, "menu:set-view-mode", "text-first")
+	})
+	viewMenu.AddSeparator()
 	viewMenu.AddText("Toggle Dark Mode", nil, func(_ *menu.CallbackData) {
 		wailsRuntime.EventsEmit(a.ctx, "menu:toggle-theme")
 	})

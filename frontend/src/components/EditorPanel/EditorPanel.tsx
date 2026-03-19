@@ -1,18 +1,20 @@
 import { useCallback, useMemo, useState } from 'react'
-import { ChevronDown, ChevronUp, AlertTriangle, FileCode, Terminal, Bug } from 'lucide-react'
+import { ChevronDown, ChevronUp, AlertTriangle, FileCode, Terminal, Bug, Eye } from 'lucide-react'
 import { useEditorPanelStore } from '../../stores/useEditorPanelStore'
 import { useStudioStore } from '../../stores/useStudioStore'
 import { useProjectStore } from '../../stores/useProjectStore'
 import { useTerminalStore } from '../../stores/useTerminalStore'
 import { useDebugStore } from '../../stores/useDebugStore'
+import { useLayoutStore } from '../../stores/useLayoutStore'
 import { generateProject } from '../../utils/hclGenerator'
 import EditorGroupView from './EditorGroup'
 import TerminalPanel from './TerminalPanel'
 import DebugPanel from '../DebugPanel/DebugPanel'
+import Canvas from '../Canvas/Canvas'
 
 type PanelTab = 'editor' | 'terminal' | 'debug'
 
-export default function EditorPanel({ isMain }: { isMain?: boolean }) {
+export default function EditorPanel() {
   const { panelHeight, isCollapsed, groups, splitDirection, splitRatio, setPanelHeight, toggleCollapse } = useEditorPanelStore()
   const { nodes, edges, serviceConfig, authConfig, envConfig, securityConfig, pluginConfig } = useStudioStore()
   const projectFiles = useProjectStore(s => s.files)
@@ -20,6 +22,7 @@ export default function EditorPanel({ isMain }: { isMain?: boolean }) {
   const terminalCount = useTerminalStore(s => s.terminals.length)
   const debugStatus = useDebugStore(s => s.status)
   const debugStopped = useDebugStore(s => s.stoppedAt)
+  const viewMode = useLayoutStore(s => s.viewMode)
   const [isResizing, setIsResizing] = useState(false)
   const [isSplitResizing, setIsSplitResizing] = useState(false)
   const [activePanel, setActivePanel] = useState<PanelTab>('editor')
@@ -133,14 +136,17 @@ export default function EditorPanel({ isMain }: { isMain?: boolean }) {
       <div className="w-10 shrink-0 bg-neutral-950 border-r border-neutral-800 flex flex-col items-center py-1 gap-0.5">
         <button
           onClick={() => handlePanelTabClick('editor')}
-          title="Editor"
+          title={viewMode === 'visual-first' ? 'Editor' : 'Visual Editor'}
           className={`w-8 h-8 flex items-center justify-center rounded transition-colors ${
             activePanel === 'editor' && !isCollapsed
               ? 'bg-neutral-800 text-white border-l-2 border-indigo-500'
               : 'text-neutral-500 hover:text-neutral-300 hover:bg-neutral-800'
           }`}
         >
-          <FileCode className="w-4 h-4" />
+          {viewMode === 'visual-first'
+            ? <FileCode className="w-4 h-4" />
+            : <Eye className="w-4 h-4" />
+          }
         </button>
         <button
           onClick={() => handlePanelTabClick('terminal')}
@@ -190,43 +196,50 @@ export default function EditorPanel({ isMain }: { isMain?: boolean }) {
 
         {/* Panel content — both always mounted, toggled via display */}
         <div className="flex-1 min-h-0 relative">
-          {/* Editor view */}
+          {/* Editor / Visual Editor view */}
           <div
             className={`absolute inset-0 ${
-              splitDirection === 'horizontal' ? 'flex flex-row' :
-              splitDirection === 'vertical' ? 'flex flex-col' :
+              viewMode === 'visual-first' && splitDirection === 'horizontal' ? 'flex flex-row' :
+              viewMode === 'visual-first' && splitDirection === 'vertical' ? 'flex flex-col' :
               ''
             }`}
             style={{ display: activePanel === 'editor' ? undefined : 'none' }}
           >
-            {/* Main group */}
-            <div
-              style={splitDirection ? { flexBasis: `${splitRatio * 100}%` } : undefined}
-              className={splitDirection ? 'min-w-0 min-h-0 overflow-hidden' : 'h-full'}
-            >
-              <EditorGroupView groupId={groups[0]?.id || 'main'} />
-            </div>
+            {viewMode === 'text-first' ? (
+              /* In text-first mode, the bottom panel shows Canvas */
+              <Canvas />
+            ) : (
+              <>
+                {/* Main group */}
+                <div
+                  style={splitDirection ? { flexBasis: `${splitRatio * 100}%` } : undefined}
+                  className={splitDirection ? 'min-w-0 min-h-0 overflow-hidden' : 'h-full'}
+                >
+                  <EditorGroupView groupId={groups[0]?.id || 'main'} />
+                </div>
 
-            {/* Split resize handle */}
-            {splitDirection && groups.length > 1 && (
-              <div
-                className={`shrink-0 hover:bg-indigo-500/50 transition-colors ${
-                  splitDirection === 'horizontal'
-                    ? 'w-1 cursor-ew-resize bg-neutral-800'
-                    : 'h-1 cursor-ns-resize bg-neutral-800'
-                } ${isSplitResizing ? 'bg-indigo-500/50' : ''}`}
-                onMouseDown={handleSplitResizeMouseDown}
-              />
-            )}
+                {/* Split resize handle */}
+                {splitDirection && groups.length > 1 && (
+                  <div
+                    className={`shrink-0 hover:bg-indigo-500/50 transition-colors ${
+                      splitDirection === 'horizontal'
+                        ? 'w-1 cursor-ew-resize bg-neutral-800'
+                        : 'h-1 cursor-ns-resize bg-neutral-800'
+                    } ${isSplitResizing ? 'bg-indigo-500/50' : ''}`}
+                    onMouseDown={handleSplitResizeMouseDown}
+                  />
+                )}
 
-            {/* Secondary group */}
-            {splitDirection && groups.length > 1 && (
-              <div
-                style={{ flexBasis: `${(1 - splitRatio) * 100}%` }}
-                className="min-w-0 min-h-0 overflow-hidden"
-              >
-                <EditorGroupView groupId={groups[1].id} isSecondary />
-              </div>
+                {/* Secondary group */}
+                {splitDirection && groups.length > 1 && (
+                  <div
+                    style={{ flexBasis: `${(1 - splitRatio) * 100}%` }}
+                    className="min-w-0 min-h-0 overflow-hidden"
+                  >
+                    <EditorGroupView groupId={groups[1].id} isSecondary />
+                  </div>
+                )}
+              </>
             )}
           </div>
 
@@ -249,15 +262,6 @@ export default function EditorPanel({ isMain }: { isMain?: boolean }) {
       </div>
     </div>
   )
-
-  // In "isMain" mode (text-first), the panel fills available space with no collapse/resize
-  if (isMain) {
-    return (
-      <div className="flex-1 min-h-0 bg-neutral-900 border-b border-neutral-800">
-        {panelContent}
-      </div>
-    )
-  }
 
   return (
     <div className="flex-shrink-0 relative">

@@ -2,6 +2,22 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.8.1] - View Mode Fixes, Terminal CWD Persistence & Window Size
+
+### Added
+
+- **Window size persistence:** Desktop app saves and restores window dimensions across sessions (stored in app settings, not per-project)
+- **Terminal CWD persistence:** Terminal working directories are now saved when closing the app — if you `cd` somewhere, it will restore to that directory on reopen
+- **Copy file path shortcut:** `Cmd/Ctrl+Shift+V` copies the active editor tab's file path to clipboard (IntelliJ-style)
+- **Workspace save on close:** App now saves workspace state (terminal CWDs, layout, etc.) immediately before closing instead of relying on debounced auto-save
+
+### Fixed
+
+- **View mode toggle architecture:** Fixed fundamental issue where toggling view modes swapped entire panels. Now only the Monaco editor and Canvas swap positions — the bottom panel (terminals, debug) always stays in place. In Text First mode, the bottom panel's first tab becomes "Visual Editor" (with Eye icon) showing the canvas
+- **View menu structure:** View → Mode now shows "Visual First Mode" and "Text First Mode" as separate items with a checkmark on the active one (both browser and native macOS menu)
+- **Terminal restore order:** Terminals now restore in the correct order (previously could swap positions due to parallel creation)
+- **Cmd+Shift+V conflict:** Removed view mode toggle from this shortcut — now used for Copy Path only. View mode is accessible via View menu
+
 ## [1.8.0] - View Modes, Notification System & UX Improvements
 
 ### Added

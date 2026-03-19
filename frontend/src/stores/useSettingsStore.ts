@@ -4,13 +4,20 @@ import { isWailsRuntime } from '../lib/api'
 
 export type KeymapType = 'vscode' | 'idea'
 
+interface WindowSize {
+  width: number
+  height: number
+}
+
 interface SettingsState {
   keymap: KeymapType
   confirmOnClose: boolean
   lastProjectPath: string | null
+  windowSize: WindowSize | null
   setKeymap: (keymap: KeymapType) => void
   setConfirmOnClose: (confirm: boolean) => void
   setLastProjectPath: (path: string | null) => void
+  setWindowSize: (size: WindowSize) => void
 }
 
 // Sync confirmOnClose to Go backend (desktop only)
@@ -29,12 +36,14 @@ export const useSettingsStore = create<SettingsState>()(
       keymap: 'idea',
       confirmOnClose: true,
       lastProjectPath: null,
+      windowSize: null,
       setKeymap: (keymap) => set({ keymap }),
       setConfirmOnClose: (confirmOnClose) => {
         syncConfirmOnCloseToGo(confirmOnClose)
         set({ confirmOnClose })
       },
       setLastProjectPath: (lastProjectPath) => set({ lastProjectPath }),
+      setWindowSize: (windowSize) => set({ windowSize }),
     }),
     {
       name: 'mycel-studio-settings',

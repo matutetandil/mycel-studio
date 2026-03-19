@@ -30,43 +30,82 @@ import { useStudioStore } from './stores/useStudioStore'
 import { useEditorPanelStore } from './stores/useEditorPanelStore'
 import { useLayoutStore } from './stores/useLayoutStore'
 import EditorPanelComponent from './components/EditorPanel/EditorPanel'
+import EditorGroupView from './components/EditorPanel/EditorGroup'
 
-function CanvasPreview() {
-  const { panelHeight, isCollapsed, setPanelHeight } = useEditorPanelStore()
-  const [isResizing, setIsResizing] = useState(false)
+// Main editor area for text-first mode — renders EditorGroupView with splits
+function MainEditorArea() {
+  const { groups, splitDirection, splitRatio } = useEditorPanelStore()
+  const [isSplitResizing, setIsSplitResizing] = useState(false)
 
-  const handleResizeMouseDown = useCallback((e: React.MouseEvent) => {
+  const handleSplitResizeMouseDown = useCallback((e: React.MouseEvent) => {
     e.preventDefault()
-    setIsResizing(true)
-    const startY = e.clientY
-    const startHeight = panelHeight
+    e.stopPropagation()
+    setIsSplitResizing(true)
+
+    const container = (e.target as HTMLElement).parentElement
+    if (!container) return
+
+    const containerSize = splitDirection === 'horizontal'
+      ? container.clientWidth
+      : container.clientHeight
 
     const handleMouseMove = (e: MouseEvent) => {
-      // Inverted: dragging up increases canvas height
-      const delta = startY - e.clientY
-      setPanelHeight(startHeight + delta)
+      const currentPos = splitDirection === 'horizontal' ? e.clientX : e.clientY
+      const rect = container.getBoundingClientRect()
+      const offset = splitDirection === 'horizontal'
+        ? currentPos - rect.left
+        : currentPos - rect.top
+      const ratio = Math.max(0.2, Math.min(0.8, offset / containerSize))
+      useEditorPanelStore.setState({ splitRatio: ratio })
     }
+
     const handleMouseUp = () => {
-      setIsResizing(false)
+      setIsSplitResizing(false)
       document.removeEventListener('mousemove', handleMouseMove)
       document.removeEventListener('mouseup', handleMouseUp)
     }
+
     document.addEventListener('mousemove', handleMouseMove)
     document.addEventListener('mouseup', handleMouseUp)
-  }, [panelHeight, setPanelHeight])
+  }, [splitDirection])
 
   return (
-    <div className="flex-shrink-0 relative">
+    <div
+      className={`h-full ${
+        splitDirection === 'horizontal' ? 'flex flex-row' :
+        splitDirection === 'vertical' ? 'flex flex-col' :
+        ''
+      } ${isSplitResizing ? 'select-none' : ''}`}
+    >
+      {/* Main group */}
       <div
-        className={`h-1 cursor-ns-resize hover:bg-indigo-500/50 transition-colors ${isResizing ? 'bg-indigo-500/50' : 'bg-neutral-800'}`}
-        onMouseDown={!isCollapsed ? handleResizeMouseDown : undefined}
-      />
-      <div
-        style={{ height: isCollapsed ? 0 : panelHeight }}
-        className={`border-t border-neutral-800 overflow-hidden ${isResizing ? 'select-none' : ''}`}
+        style={splitDirection ? { flexBasis: `${splitRatio * 100}%` } : undefined}
+        className={splitDirection ? 'min-w-0 min-h-0 overflow-hidden' : 'h-full'}
       >
-        <Canvas />
+        <EditorGroupView groupId={groups[0]?.id || 'main'} />
       </div>
+
+      {/* Split resize handle */}
+      {splitDirection && groups.length > 1 && (
+        <div
+          className={`shrink-0 hover:bg-indigo-500/50 transition-colors ${
+            splitDirection === 'horizontal'
+              ? 'w-1 cursor-ew-resize bg-neutral-800'
+              : 'h-1 cursor-ns-resize bg-neutral-800'
+          } ${isSplitResizing ? 'bg-indigo-500/50' : ''}`}
+          onMouseDown={handleSplitResizeMouseDown}
+        />
+      )}
+
+      {/* Secondary group */}
+      {splitDirection && groups.length > 1 && (
+        <div
+          style={{ flexBasis: `${(1 - splitRatio) * 100}%` }}
+          className="min-w-0 min-h-0 overflow-hidden"
+        >
+          <EditorGroupView groupId={groups[1].id} isSecondary />
+        </div>
+      )}
     </div>
   )
 }
@@ -79,7 +118,6 @@ function AppInner() {
   const { undo, redo, duplicateNode } = useStudioStore()
   const { toggleCollapse } = useEditorPanelStore()
   const viewMode = useLayoutStore((s) => s.viewMode)
-  const toggleViewMode = useLayoutStore((s) => s.toggleViewMode)
   useAutoSave()
   useWorkspacePersistence()
   useDebugSync()
@@ -102,7 +140,7 @@ function AppInner() {
     onUndo: () => undo(),
     onRedo: () => redo(),
     onDuplicate: () => duplicateNode(),
-    onToggleViewMode: () => toggleViewMode(),
+    onSetViewMode: (mode: string) => { if (mode === 'visual-first' || mode === 'text-first') useLayoutStore.getState().setViewMode(mode) },
     onToggleTheme: () => toggleTheme(),
     onToggleEditor: () => toggleCollapse(),
     onToggleTerminal: () => EditorPanelComponent.switchToTerminal(),
@@ -137,23 +175,12 @@ function AppInner() {
 
         {/* Center - Canvas and Editor */}
         <div className="flex-1 flex flex-col overflow-hidden">
-          {viewMode === 'visual-first' ? (
-            <>
-              {/* Canvas area (main) */}
-              <div className="flex-1 min-h-0">
-                <Canvas />
-              </div>
-              {/* Editor panel (bottom) */}
-              <EditorPanel />
-            </>
-          ) : (
-            <>
-              {/* Editor panel (main) */}
-              <EditorPanel isMain />
-              {/* Canvas preview (bottom, resizable via EditorPanel height) */}
-              <CanvasPreview />
-            </>
-          )}
+          {/* Main area */}
+          <div className="flex-1 min-h-0">
+            {viewMode === 'visual-first' ? <Canvas /> : <MainEditorArea />}
+          </div>
+          {/* Bottom panel (always) */}
+          <EditorPanel />
         </div>
 
         {/* Right sidebar - Properties */}

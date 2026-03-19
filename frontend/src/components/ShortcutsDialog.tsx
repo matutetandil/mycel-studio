@@ -20,9 +20,9 @@ const shortcuts = [
     { keys: 'Delete', action: 'Delete selected' },
   ]},
   { category: 'View', items: [
-    { keys: `${mod}+Shift+V`, action: 'Toggle Visual/Text First' },
     { keys: `${mod}+J`, action: 'Toggle editor panel' },
     { keys: `${mod}+\``, action: 'Toggle terminal' },
+    { keys: `${mod}+Shift+V`, action: 'Copy file path' },
   ]},
   { category: 'Canvas', items: [
     { keys: 'Scroll', action: 'Zoom in/out' },

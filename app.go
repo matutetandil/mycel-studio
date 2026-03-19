@@ -60,8 +60,13 @@ func (a *App) SetConfirmOnClose(enabled bool) {
 }
 
 // BeforeClose is called when the user tries to close the app.
-// It shows a native confirmation dialog only if the setting is enabled.
+// It emits a before-close event for workspace save, then shows a confirmation dialog if enabled.
 func (a *App) BeforeClose(ctx context.Context) (prevent bool) {
+	// Notify frontend to save workspace state (terminal CWDs, window layout, etc.)
+	wailsRuntime.EventsEmit(a.ctx, "app:before-close")
+	// Small delay to let the frontend save
+	time.Sleep(500 * time.Millisecond)
+
 	if !a.confirmOnClose || a.skipCloseConfirm {
 		return false
 	}
@@ -106,6 +111,11 @@ func (a *App) ResizeTerminal(id string, cols, rows int) error {
 // CloseTerminal kills a terminal session.
 func (a *App) CloseTerminal(id string) error {
 	return a.ptyManager.CloseTerminal(id)
+}
+
+// GetTerminalCwd returns the current working directory of a terminal session.
+func (a *App) GetTerminalCwd(id string) string {
+	return a.ptyManager.GetTerminalCwd(id)
 }
 
 // ParseHCL parses HCL content or files and returns a studio project as JSON.
@@ -170,6 +180,17 @@ func (a *App) ValidateHCL(hcl string, filename string) string {
 
 	out, _ := json.Marshal(resp)
 	return string(out)
+}
+
+// GetWindowSize returns the current window width and height.
+func (a *App) GetWindowSize() map[string]int {
+	w, h := wailsRuntime.WindowGetSize(a.ctx)
+	return map[string]int{"width": w, "height": h}
+}
+
+// SetWindowSize sets the window width and height.
+func (a *App) SetWindowSize(width, height int) {
+	wailsRuntime.WindowSetSize(a.ctx, width, height)
 }
 
 // ShowConfirmDialog shows a native confirmation dialog and returns the user's choice.

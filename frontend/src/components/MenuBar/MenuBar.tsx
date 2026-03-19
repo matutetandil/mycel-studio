@@ -21,6 +21,7 @@ interface MenuItem {
   onClick?: () => void
   disabled?: boolean
   separator?: boolean
+  checked?: boolean
 }
 
 interface MenuItemProps {
@@ -58,9 +59,12 @@ function MenuDropdown({ label, items }: MenuItemProps) {
                   setIsOpen(false)
                 }}
                 disabled={item.disabled}
-                className="w-full px-3 py-1.5 text-sm text-left hover:bg-neutral-700 disabled:opacity-50 disabled:cursor-not-allowed flex justify-between items-center"
+                className="w-full px-3 py-1.5 text-sm text-left hover:bg-neutral-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
               >
-                <span>{item.label}</span>
+                <span className="w-4 text-center shrink-0 text-xs">
+                  {item.checked !== undefined ? (item.checked ? '✓' : '') : ''}
+                </span>
+                <span className="flex-1">{item.label}</span>
                 {item.shortcut && (
                   <span className="text-neutral-500 text-xs">
                     {item.shortcut}
@@ -87,7 +91,7 @@ export default function MenuBar({ onShowShortcuts, onShowTemplates, onShowAbout,
   const { projectName, files, isLoading, gitBranch, capabilities, newProject, openProject, saveProject, closeProject } = useProjectStore()
   const { undo, redo, copyNode, pasteNode, duplicateNode, selectedNodeId, clipboard } = useStudioStore()
   const historyStore = useHistoryStore()
-  const { viewMode, toggleViewMode } = useLayoutStore()
+  const viewMode = useLayoutStore((s) => s.viewMode)
 
   const hasUnsavedChanges = files.some((f) => f.isDirty)
 
@@ -153,10 +157,14 @@ export default function MenuBar({ onShowShortcuts, onShowTemplates, onShowAbout,
     ],
   }
 
+  const setViewMode = useLayoutStore((s) => s.setViewMode)
+
   const viewMenu = {
     label: 'View',
     items: [
-      { label: viewMode === 'visual-first' ? 'Switch to Text First' : 'Switch to Visual First', shortcut: 'Ctrl+Shift+V', onClick: toggleViewMode },
+      { label: 'Visual First Mode', checked: viewMode === 'visual-first', onClick: () => setViewMode('visual-first') },
+      { label: 'Text First Mode', checked: viewMode === 'text-first', onClick: () => setViewMode('text-first') },
+      { separator: true },
       { label: 'Toggle Dark Mode', onClick: toggleTheme },
       { separator: true },
       { label: 'Zoom In', shortcut: 'Ctrl++', onClick: () => {} },

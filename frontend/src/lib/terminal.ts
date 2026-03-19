@@ -11,6 +11,7 @@ export interface TerminalBackend {
   onData(id: string, callback: (data: string) => void): () => void
   onExit(id: string, callback: () => void): () => void
   close(id: string): void
+  getCwd(id: string): Promise<string>
 }
 
 class WailsTerminalBackend implements TerminalBackend {
@@ -61,6 +62,10 @@ class WailsTerminalBackend implements TerminalBackend {
 
   close(id: string): void {
     this.app.CloseTerminal(id)
+  }
+
+  async getCwd(id: string): Promise<string> {
+    return await this.app.GetTerminalCwd(id) || ''
   }
 }
 
@@ -133,6 +138,11 @@ class WebSocketTerminalBackend implements TerminalBackend {
     }
     this.dataCallbacks.delete(id)
     this.exitCallbacks.delete(id)
+  }
+
+  async getCwd(_id: string): Promise<string> {
+    // WebSocket backend doesn't support CWD tracking
+    return ''
   }
 }
 

@@ -4,6 +4,7 @@ import { useEditorPanelStore, type EditorTab } from './useEditorPanelStore'
 import { useLayoutStore, type ViewMode } from './useLayoutStore'
 import { useTerminalStore } from './useTerminalStore'
 import { getFileSystemProvider } from '../lib/fileSystem'
+import { getTerminalBackend } from '../lib/terminal'
 
 const WORKSPACE_FILE = '.mycel-studio.json'
 
@@ -105,19 +106,22 @@ export function applyWorkspace(ws: WorkspaceState) {
     useLayoutStore.getState().setViewMode(ws.viewMode)
   }
 
-  // Restore terminals with saved names
+  // Restore terminals sequentially (order matters)
   if (ws.terminals && ws.terminals.length > 0) {
     const termStore = useTerminalStore.getState()
-    for (const saved of ws.terminals) {
-      termStore.createTerminal(saved.workDir, saved.name)
+    const restoreTerminals = async () => {
+      for (const saved of ws.terminals!) {
+        await termStore.createTerminal(saved.workDir, saved.name)
+      }
     }
+    restoreTerminals()
   }
 }
 
 // Build workspace JSON from current state
-export function buildWorkspace(
+export async function buildWorkspace(
   canvasViewport: { zoom: number; x: number; y: number } | null,
-): WorkspaceState {
+): Promise<WorkspaceState> {
   const studioStore = useStudioStore.getState()
   const editorStore = useEditorPanelStore.getState()
   const layout = useLayoutStore.getState()
@@ -136,12 +140,18 @@ export function buildWorkspace(
   const activeGroup = editorStore.groups.find(g => g.id === editorStore.activeGroupId)
   const activeTab = activeGroup?.activeTabId || null
 
-  // Collect terminal state
+  // Collect terminal state with live CWDs
   const terminalStore = useTerminalStore.getState()
-  const terminals = terminalStore.terminals.map(t => ({
-    name: t.name,
-    workDir: t.workDir,
-  }))
+  const backend = getTerminalBackend()
+  const terminals = await Promise.all(
+    terminalStore.terminals.map(async (t) => {
+      const cwd = await backend.getCwd(t.id).catch(() => '')
+      return {
+        name: t.name,
+        workDir: cwd || t.workDir,
+      }
+    })
+  )
 
   return {
     version: '1.0',
@@ -173,7 +183,7 @@ export async function saveWorkspace(
   const provider = getFileSystemProvider()
   if (!provider.hasOpenProject()) return false
 
-  const workspace = buildWorkspace(canvasViewport)
+  const workspace = await buildWorkspace(canvasViewport)
   try {
     return await provider.writeFile(WORKSPACE_FILE, JSON.stringify(workspace, null, 2))
   } catch (error) {

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strings"
 	"sync"
 
 	"github.com/creack/pty"
@@ -162,6 +163,32 @@ func (m *PTYManager) CloseTerminal(id string) error {
 		session.cmd.Wait()
 	}
 	return nil
+}
+
+// GetTerminalCwd returns the current working directory of a terminal session.
+func (m *PTYManager) GetTerminalCwd(id string) string {
+	m.mu.Lock()
+	session, ok := m.sessions[id]
+	m.mu.Unlock()
+
+	if !ok || session.cmd.Process == nil {
+		return ""
+	}
+
+	pid := session.cmd.Process.Pid
+	// macOS: use lsof to get the cwd of the child process
+	out, err := exec.Command("lsof", "-a", "-d", "cwd", "-p", fmt.Sprintf("%d", pid), "-Fn").Output()
+	if err != nil {
+		return ""
+	}
+
+	// Parse lsof output: lines starting with "n" contain the path
+	for _, line := range strings.Split(string(out), "\n") {
+		if strings.HasPrefix(line, "n") && len(line) > 1 {
+			return line[1:]
+		}
+	}
+	return ""
 }
 
 // Shutdown closes all terminal sessions.
