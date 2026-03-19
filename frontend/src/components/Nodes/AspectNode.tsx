@@ -117,11 +117,19 @@ function AspectNode({ data, selected }: AspectNodeProps) {
         className="w-3 h-3 !bg-neutral-400"
       />
 
-      {/* Bottom handle — visual link to matched flows */}
+      {/* Top handle — visual link to flows below */}
+      <Handle
+        type="source"
+        position={Position.Top}
+        id="aspect-flows-top"
+        className={`w-2.5 h-2.5 !rounded-full !border-2 ${colors.bg.replace('bg-', '!bg-')}`}
+      />
+
+      {/* Bottom handle — visual link to flows above */}
       <Handle
         type="source"
         position={Position.Bottom}
-        id="aspect-flows"
+        id="aspect-flows-bottom"
         className={`w-2.5 h-2.5 !rounded-full !border-2 ${colors.bg.replace('bg-', '!bg-')}`}
       />
     </div>

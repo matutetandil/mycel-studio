@@ -14,13 +14,15 @@ const gitNameColors: Record<string, string> = {
   added: 'text-green-400',
   untracked: 'text-green-400',
   deleted: 'text-red-400',
+  ignored: 'text-neutral-600',
 }
 const gitBadgeColors: Record<string, string> = {
-  modified: 'text-amber-500',
-  new: 'text-green-500',
-  added: 'text-green-500',
-  untracked: 'text-green-500',
-  deleted: 'text-red-500',
+  modified: 'text-sky-400',
+  new: 'text-green-400',
+  added: 'text-green-400',
+  untracked: 'text-green-400',
+  deleted: 'text-red-400',
+  ignored: 'text-neutral-600',
 }
 const gitBadgeLetters: Record<string, string> = {
   modified: 'M',

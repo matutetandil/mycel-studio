@@ -6,7 +6,7 @@
   <key>CFBundleName</key>
   <string>Mycel Studio</string>
   <key>CFBundleExecutable</key>
-  <string>MycelStudio</string>
+  <string>Mycel Studio</string>
   <key>CFBundleIdentifier</key>
   <string>com.mycel.studio</string>
   <key>CFBundleVersion</key>

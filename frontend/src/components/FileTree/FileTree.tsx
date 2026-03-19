@@ -41,7 +41,7 @@ const gitStatusNameColors: Record<string, string> = {
   added: 'text-green-400',
   untracked: 'text-green-400',
   deleted: 'text-red-400',
-  ignored: 'text-amber-700',
+  ignored: 'text-neutral-600',
 }
 
 const gitStatusIcons: Record<string, string> = {

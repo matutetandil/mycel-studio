@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.8.4] - Aspect Connections, Git Colors & App Name
+
+### Added
+
+- **Bidirectional aspect↔flow connections:** Aspects and flows now have connection handles on both top and bottom edges. Edges auto-route based on relative vertical position, allowing aspects to be placed above or below flows freely
+- **App name:** Renamed app bundle from `mycel-studio.app` to `Mycel Studio.app` — Dock and taskbar now show "Mycel Studio"
+
+### Fixed
+
+- **Git status badge color in editor tabs:** The M/U/A/D letter badge now uses the same color as the filename (e.g., sky for modified) instead of a separate amber color
+- **Git ignored files color:** Changed from amber/red to gray (`text-neutral-600`) in both the file explorer and editor tabs, matching Visual Studio behavior
+
 ## [1.8.2] - Breakpoint Persistence, Debug UX & Aspect Indicators
 
 ### Added

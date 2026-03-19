@@ -174,12 +174,14 @@ export default function Canvas() {
 
           const matches = patterns.some(p => globMatch(p, flowName))
           if (matches) {
+            // Pick handles based on relative vertical position
+            const aspectAbove = aspectNode.position.y < flowNode.position.y
             virtualEdges.push({
               id: `aspect-${aspectNode.id}-${flowNode.id}`,
               source: aspectNode.id,
-              sourceHandle: 'aspect-flows',
+              sourceHandle: aspectAbove ? 'aspect-flows-bottom' : 'aspect-flows-top',
               target: flowNode.id,
-              targetHandle: 'aspect-target',
+              targetHandle: aspectAbove ? 'aspect-target-top' : 'aspect-target-bottom',
               type: 'aspect',
               data: { when: aspectData.when },
               selectable: false,
@@ -220,12 +222,13 @@ export default function Canvas() {
           return name === flowName
         })
         if (targetFlow) {
+          const actionAbove = aspectNode.position.y < targetFlow.position.y
           virtualEdges.push({
             id: `aspect-flow-action-${aspectNode.id}-${targetFlow.id}`,
             source: aspectNode.id,
             sourceHandle: 'action',
             target: targetFlow.id,
-            targetHandle: 'aspect-target',
+            targetHandle: actionAbove ? 'aspect-target-top' : 'aspect-target-bottom',
             type: 'smoothstep',
             data: { when: aspectData.when },
             selectable: false,
