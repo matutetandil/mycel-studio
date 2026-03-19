@@ -6,16 +6,24 @@ import VariablesView from './VariablesView'
 import WatchView from './WatchView'
 import EventLog from './EventLog'
 import CallStackView from './CallStackView'
+import BreakpointsView from './BreakpointsView'
 
-type DebugTab = 'variables' | 'watch' | 'callstack' | 'events'
+type DebugTab = 'variables' | 'watch' | 'breakpoints' | 'callstack' | 'events'
 
 export default function DebugPanel() {
   const status = useDebugStore(s => s.status)
   const [activeTab, setActiveTab] = useState<DebugTab>('variables')
 
+  const breakpointCount = useDebugStore(s => {
+    let count = 0
+    for (const specs of s.breakpoints.values()) count += specs.length
+    return count
+  })
+
   const tabs: { key: DebugTab; label: string }[] = [
     { key: 'variables', label: 'Variables' },
     { key: 'watch', label: 'Watch' },
+    { key: 'breakpoints', label: `Breakpoints${breakpointCount > 0 ? ` (${breakpointCount})` : ''}` },
     { key: 'callstack', label: 'Call Stack' },
     { key: 'events', label: 'Events' },
   ]
@@ -60,6 +68,7 @@ export default function DebugPanel() {
       <div className="flex-1 min-h-0">
         {activeTab === 'variables' && <VariablesView />}
         {activeTab === 'watch' && <WatchView />}
+        {activeTab === 'breakpoints' && <BreakpointsView />}
         {activeTab === 'callstack' && <CallStackView />}
         {activeTab === 'events' && <EventLog />}
       </div>

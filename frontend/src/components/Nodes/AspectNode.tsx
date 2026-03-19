@@ -1,6 +1,6 @@
 import { memo } from 'react'
 import { Handle, Position } from '@xyflow/react'
-import { Eye } from 'lucide-react'
+import { Eye, Shuffle, Filter } from 'lucide-react'
 import type { AspectNodeData } from '../../types'
 
 const whenColors: Record<string, { bg: string; border: string; text: string }> = {
@@ -38,8 +38,19 @@ function AspectNode({ data, selected }: AspectNodeProps) {
         <div className={`p-2 rounded-lg ${colors.bg}`}>
           <Eye className="w-5 h-5 text-white" />
         </div>
-        <div className="flex-1">
-          <div className="font-semibold text-neutral-100">{data.label}</div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-1">
+            <span className="font-semibold text-neutral-100 truncate">{data.label}</span>
+            {/* Indicator badges */}
+            <div className="flex items-center gap-0.5 ml-auto shrink-0">
+              {data.action?.transform && Object.keys(data.action.transform).length > 0 && (
+                <span title="Has transform"><Shuffle className="w-3 h-3 text-amber-400" /></span>
+              )}
+              {data.condition && (
+                <span title="Conditional"><Filter className="w-3 h-3 text-sky-400" /></span>
+              )}
+            </div>
+          </div>
           <div className="text-xs text-neutral-400">
             ASPECT
             <span className={`ml-1 ${colors.text}`}>
@@ -63,15 +74,23 @@ function AspectNode({ data, selected }: AspectNodeProps) {
 
       {/* Show what the aspect does */}
       {data.action && (
-        <div className={`mt-1 px-2 py-1 rounded text-xs truncate ${
+        <div className={`mt-1 px-2 py-1 rounded text-xs ${
           data.action.flow
             ? 'bg-emerald-900/20 border border-emerald-700/30 text-emerald-300'
             : 'bg-blue-900/20 border border-blue-700/30 text-blue-300'
         }`}>
-          {data.action.flow
-            ? <>Flow → {data.action.flow}</>
-            : <>Action → {data.action.connector}{data.action.target ? ` (${data.action.target})` : ''}</>
-          }
+          <div className="truncate">
+            {data.action.flow
+              ? <>Flow → {data.action.flow}</>
+              : <>Action → {data.action.connector}{data.action.target ? ` (${data.action.target})` : ''}</>
+            }
+          </div>
+          {data.action.transform && Object.keys(data.action.transform).length > 0 && (
+            <div className="text-amber-400/80 mt-0.5">
+              <Shuffle className="w-3 h-3 inline mr-1" />
+              Transform ({Object.keys(data.action.transform).length} fields)
+            </div>
+          )}
         </div>
       )}
       {data.response && (

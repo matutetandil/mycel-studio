@@ -190,11 +190,22 @@ export const useDebugStore = create<DebugState>((set, get) => ({
         // inspect.flows may not be available
       }
 
-      // Re-apply breakpoints
+      // Re-apply breakpoints that were set before connecting
       const bps = get().breakpoints
       for (const [flow, specs] of bps) {
         if (specs.length > 0) {
-          await backend.send('debug.setBreakpoints', { flow, breakpoints: specs })
+          try {
+            // Strip empty conditions before sending
+            const cleanSpecs = specs.map(s => ({
+              stage: s.stage,
+              ruleIndex: s.ruleIndex,
+              ...(s.condition ? { condition: s.condition } : {}),
+            }))
+            console.log(`[debug] Sending breakpoints for flow "${flow}":`, cleanSpecs)
+            await backend.send('debug.setBreakpoints', { flow, breakpoints: cleanSpecs })
+          } catch (err) {
+            console.error(`[debug] Failed to set breakpoints for flow "${flow}":`, err)
+          }
         }
       }
     } catch (err) {
@@ -230,7 +241,17 @@ export const useDebugStore = create<DebugState>((set, get) => ({
 
     if (get().status === 'connected') {
       const backend = getDebugBackend()
-      await backend.send('debug.setBreakpoints', { flow, breakpoints: specs })
+      try {
+        const cleanSpecs = specs.map(s => ({
+          stage: s.stage,
+          ruleIndex: s.ruleIndex,
+          ...(s.condition ? { condition: s.condition } : {}),
+        }))
+        console.log(`[debug] Setting breakpoints for flow "${flow}":`, cleanSpecs)
+        await backend.send('debug.setBreakpoints', { flow, breakpoints: cleanSpecs })
+      } catch (err) {
+        console.error(`[debug] Failed to set breakpoints for flow "${flow}":`, err)
+      }
     }
   },
 
@@ -242,7 +263,7 @@ export const useDebugStore = create<DebugState>((set, get) => ({
     if (exists >= 0) {
       newSpecs = current.filter((_, i) => i !== exists)
     } else {
-      newSpecs = [...current, { stage, ruleIndex, condition: condition || '' }]
+      newSpecs = [...current, { stage, ruleIndex, ...(condition ? { condition } : {}) }]
     }
 
     await get().setBreakpoints(flow, newSpecs)

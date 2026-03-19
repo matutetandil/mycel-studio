@@ -2,6 +2,22 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.8.2] - Breakpoint Persistence, Debug UX & Aspect Indicators
+
+### Added
+
+- **Breakpoint persistence:** Breakpoints are now saved per-project in `.mycel-studio.json` and restored when reopening a project. Setting or removing breakpoints triggers auto-save
+- **Breakpoints tab in debug panel:** New tab listing all active breakpoints with flow name, stage, rule index, and remove button. Tab label shows breakpoint count
+- **Aspect node transform indicator:** Aspect nodes now show a Shuffle badge and "Transform (N fields)" detail when the action has a transform block
+- **Aspect node condition indicator:** Filter badge shown when aspect has a conditional (`if`) expression
+- **Debug connection status indicator:** Green/gray dot with "Connected"/"Disconnected" label on the right side of the debug toolbar, separated from action buttons
+- **Debug Stop button:** Explicit red "Stop" button when connected (replaces the ambiguous green "Connected" toggle)
+
+### Fixed
+
+- **Breakpoints not sent to runtime on connect:** Fixed empty `condition: ""` being serialized in breakpoint specs which could cause runtime to reject them. Conditions are now omitted when empty
+- **Silent breakpoint send failures:** Added error handling and console logging when sending breakpoints to runtime, preventing silent failures
+
 ## [1.8.1] - View Mode Fixes, Terminal CWD Persistence & Window Size
 
 ### Added

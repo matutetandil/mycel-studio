@@ -3,6 +3,7 @@ import { useStudioStore } from './useStudioStore'
 import { useEditorPanelStore, type EditorTab } from './useEditorPanelStore'
 import { useLayoutStore, type ViewMode } from './useLayoutStore'
 import { useTerminalStore } from './useTerminalStore'
+import { useDebugStore, type BreakpointSpec } from './useDebugStore'
 import { getFileSystemProvider } from '../lib/fileSystem'
 import { getTerminalBackend } from '../lib/terminal'
 
@@ -29,6 +30,7 @@ export interface WorkspaceState {
   }
   viewMode?: ViewMode
   terminals?: Array<{ name: string; workDir: string }>
+  breakpoints?: Record<string, BreakpointSpec[]>
 }
 
 const DEFAULT_WORKSPACE: WorkspaceState = {
@@ -106,6 +108,15 @@ export function applyWorkspace(ws: WorkspaceState) {
     useLayoutStore.getState().setViewMode(ws.viewMode)
   }
 
+  // Restore breakpoints
+  if (ws.breakpoints && Object.keys(ws.breakpoints).length > 0) {
+    const bpMap = new Map<string, BreakpointSpec[]>()
+    for (const [flow, specs] of Object.entries(ws.breakpoints)) {
+      bpMap.set(flow, specs)
+    }
+    useDebugStore.setState({ breakpoints: bpMap })
+  }
+
   // Restore terminals sequentially (order matters)
   if (ws.terminals && ws.terminals.length > 0) {
     const termStore = useTerminalStore.getState()
@@ -116,6 +127,17 @@ export function applyWorkspace(ws: WorkspaceState) {
     }
     restoreTerminals()
   }
+}
+
+// Serialize breakpoints Map to plain object for JSON
+function serializeBreakpoints(): Record<string, BreakpointSpec[]> | undefined {
+  const bps = useDebugStore.getState().breakpoints
+  if (bps.size === 0) return undefined
+  const obj: Record<string, BreakpointSpec[]> = {}
+  for (const [flow, specs] of bps) {
+    if (specs.length > 0) obj[flow] = specs
+  }
+  return Object.keys(obj).length > 0 ? obj : undefined
 }
 
 // Build workspace JSON from current state
@@ -173,6 +195,7 @@ export async function buildWorkspace(
     },
     viewMode: layout.viewMode !== 'visual-first' ? layout.viewMode : undefined,
     terminals: terminals.length > 0 ? terminals : undefined,
+    breakpoints: serializeBreakpoints(),
   }
 }
 
