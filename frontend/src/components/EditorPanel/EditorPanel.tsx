@@ -1,27 +1,30 @@
 import { useCallback, useMemo, useState } from 'react'
-import { ChevronDown, ChevronUp, AlertTriangle, FileCode, Terminal, Bug, Eye } from 'lucide-react'
+import { ChevronDown, ChevronUp, AlertTriangle, FileCode, Terminal, Bug, Eye, ScrollText } from 'lucide-react'
 import { useEditorPanelStore } from '../../stores/useEditorPanelStore'
 import { useStudioStore } from '../../stores/useStudioStore'
 import { useProjectStore } from '../../stores/useProjectStore'
 import { useTerminalStore } from '../../stores/useTerminalStore'
 import { useDebugStore } from '../../stores/useDebugStore'
+import { useOutputStore } from '../../stores/useOutputStore'
 import { useLayoutStore } from '../../stores/useLayoutStore'
 import { generateProject } from '../../utils/hclGenerator'
 import EditorGroupView from './EditorGroup'
 import TerminalPanel from './TerminalPanel'
 import DebugPanel from '../DebugPanel/DebugPanel'
+import OutputPanel from './OutputPanel'
 import Canvas from '../Canvas/Canvas'
 
-type PanelTab = 'editor' | 'terminal' | 'debug'
+type PanelTab = 'editor' | 'terminal' | 'debug' | 'output'
 
 export default function EditorPanel() {
   const { panelHeight, isCollapsed, groups, splitDirection, splitRatio, setPanelHeight, toggleCollapse } = useEditorPanelStore()
   const { nodes, edges, serviceConfig, authConfig, envConfig, securityConfig, pluginConfig } = useStudioStore()
   const projectFiles = useProjectStore(s => s.files)
   const mycelRoot = useProjectStore(s => s.mycelRoot)
-  const terminalCount = useTerminalStore(s => s.terminals.length)
+
   const debugStatus = useDebugStore(s => s.status)
   const debugStopped = useDebugStore(s => s.stoppedAt)
+  const outputCount = useOutputStore(s => s.entries.length)
   const viewMode = useLayoutStore(s => s.viewMode)
   const [isResizing, setIsResizing] = useState(false)
   const [isSplitResizing, setIsSplitResizing] = useState(false)
@@ -158,11 +161,6 @@ export default function EditorPanel() {
           }`}
         >
           <Terminal className="w-4 h-4" />
-          {terminalCount > 0 && (
-            <span className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 bg-green-600 text-white text-[8px] font-bold rounded-full flex items-center justify-center">
-              {terminalCount}
-            </span>
-          )}
         </button>
         <button
           onClick={() => handlePanelTabClick('debug')}
@@ -178,6 +176,22 @@ export default function EditorPanel() {
             <span className={`absolute -top-0.5 -right-0.5 w-3 h-3 rounded-full ${
               debugStopped ? 'bg-amber-500 animate-pulse' : 'bg-green-500'
             }`} />
+          )}
+        </button>
+        <button
+          onClick={() => handlePanelTabClick('output')}
+          title="Output"
+          className={`relative w-8 h-8 flex items-center justify-center rounded transition-colors ${
+            activePanel === 'output' && !isCollapsed
+              ? 'bg-neutral-800 text-white border-l-2 border-sky-500'
+              : 'text-neutral-500 hover:text-neutral-300 hover:bg-neutral-800'
+          }`}
+        >
+          <ScrollText className="w-4 h-4" />
+          {outputCount > 0 && (
+            <span className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 bg-sky-600 text-white text-[8px] font-bold rounded-full flex items-center justify-center">
+              {outputCount > 99 ? '99' : outputCount}
+            </span>
           )}
         </button>
       </div>
@@ -257,6 +271,14 @@ export default function EditorPanel() {
             style={{ display: activePanel === 'debug' ? undefined : 'none' }}
           >
             <DebugPanel />
+          </div>
+
+          {/* Output view */}
+          <div
+            className="absolute inset-0"
+            style={{ display: activePanel === 'output' ? undefined : 'none' }}
+          >
+            <OutputPanel />
           </div>
         </div>
       </div>

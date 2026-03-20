@@ -9,15 +9,36 @@ interface WindowSize {
   height: number
 }
 
+interface WindowPosition {
+  x: number
+  y: number
+}
+
+// Persisted multi-project state
+export interface PersistedInstance {
+  id: string
+  label: string
+  projectPaths: string[] // ordered list of attached project paths
+  activeProjectPath: string | null
+}
+
 interface SettingsState {
   keymap: KeymapType
   confirmOnClose: boolean
   lastProjectPath: string | null
   windowSize: WindowSize | null
+  windowPosition: WindowPosition | null
+
+  // Multi-project persistence
+  workspaceInstances: PersistedInstance[]
+  activeInstanceId: string | null
+
   setKeymap: (keymap: KeymapType) => void
   setConfirmOnClose: (confirm: boolean) => void
   setLastProjectPath: (path: string | null) => void
   setWindowSize: (size: WindowSize) => void
+  setWindowPosition: (pos: WindowPosition) => void
+  setWorkspaceInstances: (instances: PersistedInstance[], activeId: string | null) => void
 }
 
 // Sync confirmOnClose to Go backend (desktop only)
@@ -37,6 +58,9 @@ export const useSettingsStore = create<SettingsState>()(
       confirmOnClose: true,
       lastProjectPath: null,
       windowSize: null,
+      windowPosition: null,
+      workspaceInstances: [],
+      activeInstanceId: null,
       setKeymap: (keymap) => set({ keymap }),
       setConfirmOnClose: (confirmOnClose) => {
         syncConfirmOnCloseToGo(confirmOnClose)
@@ -44,6 +68,8 @@ export const useSettingsStore = create<SettingsState>()(
       },
       setLastProjectPath: (lastProjectPath) => set({ lastProjectPath }),
       setWindowSize: (windowSize) => set({ windowSize }),
+      setWindowPosition: (windowPosition) => set({ windowPosition }),
+      setWorkspaceInstances: (workspaceInstances, activeInstanceId) => set({ workspaceInstances, activeInstanceId }),
     }),
     {
       name: 'mycel-studio-settings',

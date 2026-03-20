@@ -39,10 +39,11 @@ type UpdateProgress struct {
 
 // Updater handles checking for and applying updates from GitHub Releases.
 type Updater struct {
-	app            *App
-	currentVersion string
-	repo           string
-	cachedInfo     *UpdateInfo
+	app              *App
+	currentVersion   string
+	repo             string
+	cachedInfo       *UpdateInfo
+	installedVersion string // tracks the version we already downloaded to avoid re-downloading
 }
 
 // NewUpdater creates a new Updater.
@@ -50,6 +51,35 @@ func NewUpdater(currentVersion string) *Updater {
 	return &Updater{
 		currentVersion: currentVersion,
 		repo:           "matutetandil/mycel-studio",
+	}
+}
+
+// CheckAndAutoInstall checks for updates and automatically downloads + installs
+// if a new version is found. The frontend only needs to offer "Restart Now / Later".
+func (u *Updater) CheckAndAutoInstall() {
+	info, err := u.CheckForUpdates()
+	if err != nil || !info.Available {
+		return
+	}
+
+	// Already downloaded this version — just re-notify
+	if u.installedVersion == info.LatestVersion {
+		u.emitUpdateReady(info)
+		return
+	}
+
+	if err := u.DownloadAndInstall(info.AssetURL, info.ChecksumURL, info.AssetName); err != nil {
+		return // emitProgress already sent the error
+	}
+
+	u.installedVersion = info.LatestVersion
+	u.emitUpdateReady(info)
+}
+
+// emitUpdateReady notifies the frontend that an update is installed and ready to apply.
+func (u *Updater) emitUpdateReady(info *UpdateInfo) {
+	if u.app != nil && u.app.ctx != nil {
+		wailsRuntime.EventsEmit(u.app.ctx, "updater:update-ready", info)
 	}
 }
 

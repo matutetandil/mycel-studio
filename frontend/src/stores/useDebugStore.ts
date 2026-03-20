@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { getDebugBackend } from '../lib/debug'
+import { debugLog, debugSend, debugRecv, debugError, debugWarn } from './useOutputStore'
 
 // --- Protocol types ---
 
@@ -45,6 +46,13 @@ export interface FlowInfo {
   hasRetry: boolean
 }
 
+export interface SourceCapability {
+  connector: string
+  type: string
+  source: string
+  manualConsume: boolean
+}
+
 export interface DebugEvent {
   id: number
   timestamp: number
@@ -68,6 +76,11 @@ interface DebugState {
   sessionId: string | null
   runtimeUrl: string
   availableFlows: string[]
+  ready: boolean
+
+  // Sources (from debug.ready)
+  sources: SourceCapability[]
+  consuming: Set<string> // connector names currently being consumed
 
   // Threads
   threads: DebugThread[]
@@ -78,6 +91,8 @@ interface DebugState {
 
   // Breakpoints per flow
   breakpoints: Map<string, BreakpointSpec[]> // flow name → specs
+  verifiedBreakpoints: Set<string> // breakpointKey() values confirmed by runtime
+  rejectedBreakpoints: Set<string> // breakpointKey() values rejected by runtime
 
   // Event log
   events: DebugEvent[]
@@ -101,6 +116,8 @@ interface DebugState {
   // Actions
   connect: (url?: string) => Promise<void>
   disconnect: () => void
+  sendReady: () => Promise<void>
+  consume: (connector: string) => Promise<void>
   setBreakpoints: (flow: string, specs: BreakpointSpec[]) => Promise<void>
   toggleBreakpoint: (flow: string, stage: string, ruleIndex: number, condition?: string) => Promise<void>
   clearAllBreakpoints: () => Promise<void>
@@ -122,10 +139,15 @@ export const useDebugStore = create<DebugState>((set, get) => ({
   sessionId: null,
   runtimeUrl: 'ws://localhost:9090/debug',
   availableFlows: [],
+  ready: false,
+  sources: [],
+  consuming: new Set(),
   threads: [],
   activeThreadId: null,
   variables: null,
   breakpoints: new Map(),
+  verifiedBreakpoints: new Set(),
+  rejectedBreakpoints: new Set(),
   events: [],
   eventCounter: 0,
   stoppedAt: null,
@@ -141,6 +163,7 @@ export const useDebugStore = create<DebugState>((set, get) => ({
 
     try {
       const backend = getDebugBackend()
+      debugLog(`Connecting to ${targetUrl}...`)
       await backend.connect(targetUrl)
 
       // Listen for events
@@ -157,11 +180,14 @@ export const useDebugStore = create<DebugState>((set, get) => ({
           eventCounter: s.eventCounter + 1,
         }))
 
+        debugRecv(method, params)
+
         // Handle specific events
         handleDebugEvent(method, params)
       })
 
       backend.onDisconnect(() => {
+        debugWarn('Disconnected from debug runtime')
         set({
           status: 'disconnected',
           sessionId: null,
@@ -171,11 +197,16 @@ export const useDebugStore = create<DebugState>((set, get) => ({
           stoppedAt: null,
           availableFlows: [],
           flowInfos: [],
+          verifiedBreakpoints: new Set(),
+          rejectedBreakpoints: new Set(),
         })
       })
 
       // Attach
+      debugSend('debug.attach', { clientName: 'mycel-studio' })
       const result = await backend.send('debug.attach', { clientName: 'mycel-studio' }) as { sessionId: string; flows: string[] }
+      debugRecv('debug.attach', result)
+      debugLog(`Connected! Session: ${result.sessionId}, Flows: [${(result.flows || []).join(', ')}]`)
       set({
         status: 'connected',
         sessionId: result.sessionId,
@@ -184,39 +215,65 @@ export const useDebugStore = create<DebugState>((set, get) => ({
 
       // Fetch flow details
       try {
+        debugSend('inspect.flows')
         const flows = await backend.send('inspect.flows') as FlowInfo[]
+        debugRecv('inspect.flows', flows)
         set({ flowInfos: flows || [] })
       } catch {
-        // inspect.flows may not be available
+        debugWarn('inspect.flows not available on this runtime')
       }
 
       // Re-apply breakpoints that were set before connecting
       const bps = get().breakpoints
+      if (bps.size === 0) {
+        debugLog('No breakpoints to re-apply')
+      }
+      const verified = new Set<string>()
+      const rejected = new Set<string>()
       for (const [flow, specs] of bps) {
         if (specs.length > 0) {
           try {
-            // Strip empty conditions before sending
             const cleanSpecs = specs.map(s => ({
               stage: s.stage,
               ruleIndex: s.ruleIndex,
               ...(s.condition ? { condition: s.condition } : {}),
             }))
-            console.log(`[debug] Sending breakpoints for flow "${flow}":`, cleanSpecs)
-            await backend.send('debug.setBreakpoints', { flow, breakpoints: cleanSpecs })
+            debugSend('debug.setBreakpoints', { flow, breakpoints: cleanSpecs })
+            const sendResult = await backend.send('debug.setBreakpoints', { flow, breakpoints: cleanSpecs })
+            debugRecv('debug.setBreakpoints', sendResult)
+            for (const s of specs) {
+              verified.add(breakpointKey(flow, s.stage, s.ruleIndex))
+            }
           } catch (err) {
-            console.error(`[debug] Failed to set breakpoints for flow "${flow}":`, err)
+            debugError(`Failed to set breakpoints for flow "${flow}": ${err}`)
+            for (const s of specs) {
+              rejected.add(breakpointKey(flow, s.stage, s.ruleIndex))
+            }
           }
         }
       }
+      set({ verifiedBreakpoints: verified, rejectedBreakpoints: rejected })
+
+      // Complete handshake: signal ready
+      debugLog('Sending debug.ready handshake...')
+      try {
+        await get().sendReady()
+        debugLog('Handshake complete')
+      } catch (err) {
+        debugError(`Handshake failed: ${err}`)
+      }
     } catch (err) {
+      debugError(`Connection failed: ${err}`)
       set({ status: 'disconnected' })
       throw err
     }
   },
 
   disconnect: () => {
+    debugLog('Disconnecting...')
     const backend = getDebugBackend()
     try {
+      debugSend('debug.detach')
       backend.send('debug.detach').catch(() => {})
     } catch { /* ignore */ }
     backend.disconnect()
@@ -227,7 +284,59 @@ export const useDebugStore = create<DebugState>((set, get) => ({
       activeThreadId: null,
       variables: null,
       stoppedAt: null,
+      ready: false,
+      sources: [],
+      consuming: new Set(),
+      verifiedBreakpoints: new Set(),
+      rejectedBreakpoints: new Set(),
     })
+  },
+
+  sendReady: async () => {
+    const backend = getDebugBackend()
+    try {
+      debugSend('debug.ready')
+      const result = await backend.send('debug.ready') as { ok: boolean; sources?: SourceCapability[] }
+      debugRecv('debug.ready', result)
+      const sources = result.sources || []
+      set({ ready: true, sources })
+      if (sources.length > 0) {
+        const manual = sources.filter(s => s.manualConsume)
+        const push = sources.filter(s => !s.manualConsume)
+        if (manual.length > 0) {
+          debugLog(`Manual consume sources: ${manual.map(s => `${s.connector} (${s.type}: ${s.source})`).join(', ')}`)
+        }
+        if (push.length > 0) {
+          debugLog(`Auto-throttled sources: ${push.map(s => `${s.connector} (${s.type}: ${s.source})`).join(', ')}`)
+        }
+      } else {
+        debugLog('No event-driven sources (REST/gRPC only)')
+      }
+    } catch (err) {
+      debugWarn(`debug.ready failed (runtime may not support handshake): ${err}`)
+      // Still mark ready for older runtimes that don't have debug.ready
+      set({ ready: true, sources: [] })
+    }
+  },
+
+  consume: async (connector: string) => {
+    const backend = getDebugBackend()
+    const newConsuming = new Set(get().consuming)
+    newConsuming.add(connector)
+    set({ consuming: newConsuming })
+    try {
+      debugSend('debug.consume', { connector })
+      debugLog(`Waiting for message from "${connector}"...`)
+      const result = await backend.send('debug.consume', { connector })
+      debugRecv('debug.consume', result)
+      debugLog(`Message from "${connector}" fully processed`)
+    } catch (err) {
+      debugError(`Consume from "${connector}" failed: ${err}`)
+    } finally {
+      const updated = new Set(get().consuming)
+      updated.delete(connector)
+      set({ consuming: updated })
+    }
   },
 
   setBreakpoints: async (flow: string, specs: BreakpointSpec[]) => {
@@ -241,17 +350,40 @@ export const useDebugStore = create<DebugState>((set, get) => ({
 
     if (get().status === 'connected') {
       const backend = getDebugBackend()
+      const verified = new Set(get().verifiedBreakpoints)
+      const rejected = new Set(get().rejectedBreakpoints)
+
+      // Remove old keys for this flow
+      for (const key of [...verified, ...rejected]) {
+        if (key.startsWith(`${flow}:`)) {
+          verified.delete(key)
+          rejected.delete(key)
+        }
+      }
+
       try {
         const cleanSpecs = specs.map(s => ({
           stage: s.stage,
           ruleIndex: s.ruleIndex,
           ...(s.condition ? { condition: s.condition } : {}),
         }))
-        console.log(`[debug] Setting breakpoints for flow "${flow}":`, cleanSpecs)
-        await backend.send('debug.setBreakpoints', { flow, breakpoints: cleanSpecs })
+        debugSend('debug.setBreakpoints', { flow, breakpoints: cleanSpecs })
+        const result = await backend.send('debug.setBreakpoints', { flow, breakpoints: cleanSpecs })
+        debugRecv('debug.setBreakpoints', result)
+
+        // Mark all specs as verified on success
+        for (const s of specs) {
+          verified.add(breakpointKey(flow, s.stage, s.ruleIndex))
+        }
       } catch (err) {
-        console.error(`[debug] Failed to set breakpoints for flow "${flow}":`, err)
+        debugError(`Failed to set breakpoints for flow "${flow}": ${err}`)
+        // Mark all specs as rejected on failure
+        for (const s of specs) {
+          rejected.add(breakpointKey(flow, s.stage, s.ruleIndex))
+        }
       }
+
+      set({ verifiedBreakpoints: verified, rejectedBreakpoints: rejected })
     }
   },
 
@@ -284,6 +416,7 @@ export const useDebugStore = create<DebugState>((set, get) => ({
     const tid = threadId || get().activeThreadId
     if (!tid) return
     const backend = getDebugBackend()
+    debugSend('debug.continue', { threadId: tid })
     await backend.send('debug.continue', { threadId: tid })
     set({ stoppedAt: null, variables: null })
   },
@@ -292,6 +425,7 @@ export const useDebugStore = create<DebugState>((set, get) => ({
     const tid = threadId || get().activeThreadId
     if (!tid) return
     const backend = getDebugBackend()
+    debugSend('debug.next', { threadId: tid })
     await backend.send('debug.next', { threadId: tid })
     set({ stoppedAt: null, variables: null })
   },
@@ -300,6 +434,7 @@ export const useDebugStore = create<DebugState>((set, get) => ({
     const tid = threadId || get().activeThreadId
     if (!tid) return
     const backend = getDebugBackend()
+    debugSend('debug.stepInto', { threadId: tid })
     await backend.send('debug.stepInto', { threadId: tid })
     set({ stoppedAt: null, variables: null })
   },

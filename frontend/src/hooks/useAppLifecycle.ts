@@ -6,9 +6,10 @@ import { useSettingsStore } from '../stores/useSettingsStore'
 import { useProjectStore } from '../stores/useProjectStore'
 import { isWailsRuntime } from '../lib/api'
 import { saveWorkspace } from '../stores/useWorkspaceStore'
+import { persistMultiProjectState } from './useMultiProjectPersistence'
 
-// Save window size to settings (desktop only)
-async function saveWindowSize() {
+// Save window size and position to settings (desktop only)
+async function saveWindowGeometry() {
   if (!isWailsRuntime()) return
   try {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -17,18 +18,26 @@ async function saveWindowSize() {
       const size = await app.GetWindowSize()
       useSettingsStore.getState().setWindowSize(size)
     }
+    if (app?.GetWindowPosition) {
+      const pos = await app.GetWindowPosition()
+      useSettingsStore.getState().setWindowPosition(pos)
+    }
   } catch { /* ignore */ }
 }
 
-// Restore window size from settings (desktop only)
-function restoreWindowSize() {
+// Restore window size and position from settings (desktop only)
+function restoreWindowGeometry() {
   if (!isWailsRuntime()) return
-  const { windowSize } = useSettingsStore.getState()
-  if (!windowSize) return
+  const { windowSize, windowPosition } = useSettingsStore.getState()
   try {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const app = (window as any).go?.main?.App
-    app?.SetWindowSize(windowSize.width, windowSize.height)
+    if (windowPosition) {
+      app?.SetWindowPosition(windowPosition.x, windowPosition.y)
+    }
+    if (windowSize) {
+      app?.SetWindowSize(windowSize.width, windowSize.height)
+    }
   } catch { /* ignore */ }
 }
 
@@ -41,7 +50,7 @@ export function useAppLifecycle() {
     if (didReopen.current) return
     didReopen.current = true
 
-    restoreWindowSize()
+    restoreWindowGeometry()
 
     const { lastProjectPath } = useSettingsStore.getState()
     if (!lastProjectPath) return
@@ -67,9 +76,10 @@ export function useAppLifecycle() {
       if (runtime?.EventsOn) {
         runtime.EventsOn('app:before-close', async () => {
           const viewport = getViewport()
+          persistMultiProjectState()
           await Promise.all([
             saveWorkspace(viewport),
-            saveWindowSize(),
+            saveWindowGeometry(),
           ])
         })
         return () => runtime.EventsOff('app:before-close')
@@ -80,6 +90,7 @@ export function useAppLifecycle() {
     // Browser: beforeunload event — save workspace and optionally confirm
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
       const viewport = getViewport()
+      persistMultiProjectState()
       saveWorkspace(viewport)
 
       const { confirmOnClose } = useSettingsStore.getState()

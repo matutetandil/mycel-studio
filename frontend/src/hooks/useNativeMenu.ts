@@ -8,6 +8,7 @@ interface NativeMenuCallbacks {
   onNewProject: () => void
   onNewTemplate: () => void
   onOpenProject: () => void
+  onAttachProject?: () => void
   onSaveProject: () => void
   onCloseProject: () => void
   onUndo: () => void
@@ -40,6 +41,7 @@ export function useNativeMenu(callbacks: NativeMenuCallbacks) {
     on('menu:new-project', callbacks.onNewProject)
     on('menu:new-template', callbacks.onNewTemplate)
     on('menu:open-project', callbacks.onOpenProject)
+    if (callbacks.onAttachProject) on('menu:attach-project', callbacks.onAttachProject)
     on('menu:save-project', callbacks.onSaveProject)
     on('menu:close-project', callbacks.onCloseProject)
     on('menu:undo', callbacks.onUndo)

@@ -41,15 +41,13 @@ func (a *App) Startup(ctx context.Context) {
 	a.updater.app = a
 	a.updater.cleanupOldBinary()
 
-	// Check for updates periodically (first check after 3s, then every hour)
+	// Check for updates periodically (first check after 5s, then every 4 hours)
+	// Auto-downloads and installs silently; frontend only sees "restart now/later"
 	go func() {
-		time.Sleep(3 * time.Second)
+		time.Sleep(5 * time.Second)
 		for {
-			info, err := a.updater.CheckForUpdates()
-			if err == nil && info.Available {
-				wailsRuntime.EventsEmit(a.ctx, "updater:update-available", info)
-			}
-			time.Sleep(1 * time.Hour)
+			a.updater.CheckAndAutoInstall()
+			time.Sleep(4 * time.Hour)
 		}
 	}()
 }
@@ -191,6 +189,17 @@ func (a *App) GetWindowSize() map[string]int {
 // SetWindowSize sets the window width and height.
 func (a *App) SetWindowSize(width, height int) {
 	wailsRuntime.WindowSetSize(a.ctx, width, height)
+}
+
+// GetWindowPosition returns the current window x and y coordinates.
+func (a *App) GetWindowPosition() map[string]int {
+	x, y := wailsRuntime.WindowGetPosition(a.ctx)
+	return map[string]int{"x": x, "y": y}
+}
+
+// SetWindowPosition sets the window x and y coordinates.
+func (a *App) SetWindowPosition(x, y int) {
+	wailsRuntime.WindowSetPosition(a.ctx, x, y)
 }
 
 // ShowConfirmDialog shows a native confirmation dialog and returns the user's choice.

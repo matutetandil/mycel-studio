@@ -910,13 +910,53 @@ En vez de escribir HCL manualmente, el usuario:
   - `useWorkspaceStore.ts` — `applyWorkspace()` passes saved terminal names when restoring
 - **Build:** ✅ TypeScript + Vite + Go build exitosos
 
+### 2026-03-20 - Multi-Project Support (Attach + New Tab) — v2.0.0
+- **Estado:** ✅ Completado
+- **Phase 1 — Multi-Project Store:**
+  - `useMultiProjectStore.ts` — Manages multiple ProjectInstance objects, each with isolated nodes, edges, configs, files, git state
+  - `snapshotStores()` / `restoreToStores()` — Save/restore all live store state when switching projects
+  - `registerCurrentAsProject()` — Helper to register current stores as a project in the multi-project store
+- **Phase 2 — Canvas as EditorPanel Tab:**
+  - `EditorTab` extended: `type: 'file' | 'canvas'`, `projectId` field
+  - `openCanvas()` method in `useEditorPanelStore` — Opens a canvas tab for a specific project
+  - `CanvasTab.tsx` — Wraps Canvas with its own ReactFlowProvider for tab rendering
+  - `EditorGroup.tsx` — Renders CanvasTab for canvas-type tabs, Monaco for file tabs
+  - `TabBar.tsx` — LayoutGrid icon for canvas tabs, project switching on click
+- **Phase 3 — Visual-First/Text-First with Multi-Canvas:**
+  - `CanvasPanel.tsx` — Tab-based canvas area in visual-first mode
+  - Shows project tabs when multiple projects attached, direct Canvas when single project
+  - `App.tsx` — Uses CanvasPanel instead of Canvas in visual-first center area
+- **Phase 4 — FileTree Multi-Root:**
+  - `MultiProjectRoot` component — Project root with expand/collapse, git branch badge, detach button
+  - When multiple projects: each shown as separate root with click-to-switch
+  - When 0-1 projects: falls back to single project tree (backward-compatible)
+- **Phase 5 — Open/Attach Dialog:**
+  - `AttachDialog.tsx` — "Attach to Workspace" (shared IDE) / "Open in New Tab" (independent instance)
+  - `useProjectOpen.ts` — Intercepts open/new project flow, shows dialog when project already open
+  - `MenuBar.tsx` — `onNewProject`/`onOpenProject` override props
+  - `menu.go` — "Attach Project..." menu item
+  - `useNativeMenu.ts` — `onAttachProject` callback
+- **Phase 6 — Instance Tabs (New Tab):**
+  - `useInstanceStore.ts` — Chrome-like workspace instances. Each has full snapshot/restore
+  - `InstanceTabBar.tsx` — Top-level tab bar (above everything), close/add/switch
+  - `captureSnapshot()` / `restoreSnapshot()` — Serializes/restores entire workspace state
+  - Shown when >1 instances exist
+- **Phase 7 — Debug Multi-Project:**
+  - `DebugToolbar.tsx` — Project selector dropdown when multiple projects attached
+  - Each project stores its own `runtimeUrl` in ProjectInstance
+  - Switching debug target updates runtime URL and reconnects
+- **Workspace Persistence:**
+  - `useWorkspaceStore.ts` — Tab serialization handles new `type` field, skips canvas tabs
+- **Build:** ✅ TypeScript + Vite + Go build exitosos
+
 ---
 
 ## Próximos pasos (pendientes para siguiente sesión)
 
-### Todas las fases principales COMPLETADAS (3-9) + UX Polish + Connector Alignment + Desktop App + v1.8.0
+### Todas las fases principales COMPLETADAS (3-9) + UX Polish + Connector Alignment + Desktop App + v1.8.0 + Multi-Project v2.0.0
 
 ### Pendientes (por prioridad):
+- **Multi-project persistence:** Save/restore multi-project + instance state across app restarts
 - **Homebrew Cask:** Crear fórmula para distribución macOS
 - **Mycel v1.12.1 compatibility:** Aspect patterns → flow names, unique name validation para todos los tipos
 - **Mycel v1.12.2 compatibility:** Structured error object in on_error aspects

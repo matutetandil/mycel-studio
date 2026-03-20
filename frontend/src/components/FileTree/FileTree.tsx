@@ -11,12 +11,15 @@ import {
   FolderInput,
   FolderPlus,
   FilePlus,
+  X,
+  GitBranch,
 } from 'lucide-react'
 import { useState, useMemo, useEffect, useRef, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import { useProjectStore, type ProjectFile } from '../../stores/useProjectStore'
 import { useStudioStore } from '../../stores/useStudioStore'
 import { useEditorPanelStore } from '../../stores/useEditorPanelStore'
+import { useMultiProjectStore } from '../../stores/useMultiProjectStore'
 import { generateProject, toIdentifier, type GeneratedFile } from '../../utils/hclGenerator'
 import type { ConnectorNodeData, FlowNodeData } from '../../types'
 import ContextMenu, { type ContextMenuItem } from '../ContextMenu'
@@ -227,7 +230,7 @@ function NewFileDialog({
   )
 }
 
-export default function FileTree() {
+function SingleProjectFileTree() {
   const { projectName, files, activeFile, setActiveFile, openProject, createFile, createDirectory, deleteFile, renameFile, capabilities, mycelRoot } = useProjectStore()
   const { nodes, edges, selectedNodeId, serviceConfig, authConfig, envConfig, securityConfig, pluginConfig } = useStudioStore()
   const editorActiveTabId = useEditorPanelStore(s => s.groups.find(g => g.id === s.activeGroupId)?.activeTabId || null)
@@ -846,6 +849,90 @@ function FileTreeNode({
           {sortedFiles.map(renderFile)}
         </div>
       )}
+    </div>
+  )
+}
+
+// Multi-root file tree wrapper
+// When multiple projects are attached, shows each as a separate root
+// Falls back to single project tree when 0-1 projects
+function MultiProjectRoot({ projectId, projectName, isActive, gitBranch, onActivate, onDetach }: {
+  projectId: string
+  projectName: string
+  isActive: boolean
+  gitBranch: string | null
+  onActivate: () => void
+  onDetach: () => void
+}) {
+  const [isExpanded, setIsExpanded] = useState(true)
+
+  return (
+    <div className={`${isActive ? '' : 'opacity-70'}`}>
+      <div
+        className={`flex items-center gap-1 px-2 py-1.5 hover:bg-neutral-800 font-medium cursor-pointer group ${
+          isActive ? 'text-white' : 'text-neutral-400'
+        }`}
+        onClick={() => { onActivate(); setIsExpanded(!isExpanded) }}
+      >
+        {isExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+        {isExpanded ? <FolderOpen className="w-4 h-4 text-amber-500" /> : <Folder className="w-4 h-4 text-amber-500" />}
+        <span className="truncate flex-1">{projectName}</span>
+        {gitBranch && (
+          <span className="text-xs text-neutral-500 flex items-center gap-0.5 shrink-0">
+            <GitBranch className="w-3 h-3" />
+            {gitBranch}
+          </span>
+        )}
+        <button
+          onClick={(e) => { e.stopPropagation(); onDetach() }}
+          className="p-0.5 rounded opacity-0 group-hover:opacity-100 hover:bg-neutral-700 shrink-0"
+          title="Remove from workspace"
+        >
+          <X className="w-3 h-3 text-neutral-400" />
+        </button>
+      </div>
+      {isExpanded && isActive && (
+        <div className="pl-2">
+          {/* Render the single project tree content inline (re-uses live store state) */}
+          <SingleProjectFileTree />
+        </div>
+      )}
+      {isExpanded && !isActive && (
+        <div className="pl-4 py-1 text-xs text-neutral-500">
+          Click to switch to this project
+        </div>
+      )}
+    </div>
+  )
+}
+
+export default function FileTree() {
+  const multiProjectStore = useMultiProjectStore()
+  const { projectOrder, projects, activeProjectId } = multiProjectStore
+
+  // If there are 0-1 projects in multi-project store, use single project tree directly
+  if (projectOrder.length <= 1) {
+    return <SingleProjectFileTree />
+  }
+
+  // Multiple projects — show each as a separate root
+  return (
+    <div className="text-sm">
+      {projectOrder.map(id => {
+        const project = projects.get(id)
+        if (!project) return null
+        return (
+          <MultiProjectRoot
+            key={id}
+            projectId={id}
+            projectName={project.projectName || 'Unnamed Project'}
+            isActive={id === activeProjectId}
+            gitBranch={project.gitBranch}
+            onActivate={() => multiProjectStore.setActiveProject(id)}
+            onDetach={() => multiProjectStore.removeProject(id)}
+          />
+        )
+      })}
     </div>
   )
 }

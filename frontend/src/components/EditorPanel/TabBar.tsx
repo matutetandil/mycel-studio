@@ -1,8 +1,9 @@
 import { useState, useRef, useMemo } from 'react'
-import { X, Columns2, Rows2, Copy, Check, Download, XCircle } from 'lucide-react'
+import { X, Columns2, Rows2, Copy, Check, Download, XCircle, LayoutGrid } from 'lucide-react'
 import { useEditorPanelStore, type EditorTab } from '../../stores/useEditorPanelStore'
 import { useStudioStore } from '../../stores/useStudioStore'
 import { useProjectStore } from '../../stores/useProjectStore'
+import { useMultiProjectStore } from '../../stores/useMultiProjectStore'
 import { toIdentifier } from '../../utils/hclGenerator'
 import type { ConnectorNodeData } from '../../types'
 import { getFileTypeInfo } from '../../utils/fileIcons'
@@ -155,7 +156,18 @@ export default function TabBar({ groupId, tabs, activeTabId, isSecondary, onCopy
               onDragOver={(e) => handleDragOver(e, index)}
               onDragLeave={handleDragLeave}
               onDrop={(e) => handleDrop(e, index)}
-              onClick={() => { setActiveTab(groupId, tab.id); selectNodeForFile(tab.filePath) }}
+              onClick={() => {
+                setActiveTab(groupId, tab.id)
+                if (tab.type === 'canvas' && tab.projectId) {
+                  // Activate the project this canvas belongs to
+                  const multi = useMultiProjectStore.getState()
+                  if (multi.activeProjectId !== tab.projectId) {
+                    multi.setActiveProject(tab.projectId)
+                  }
+                } else {
+                  selectNodeForFile(tab.filePath)
+                }
+              }}
               className={`
                 group flex items-center gap-1.5 px-3 py-1.5 text-xs border-r border-neutral-800 cursor-pointer shrink-0 select-none
                 ${activeTabId === tab.id
@@ -164,7 +176,9 @@ export default function TabBar({ groupId, tabs, activeTabId, isSecondary, onCopy
                 ${dragOverIndex === index ? 'border-l-2 border-l-indigo-500' : ''}
               `}
             >
-              {(() => { const ft = getFileTypeInfo(tab.fileName); const Icon = ft.icon; return <Icon className={`w-3 h-3 shrink-0 ${activeTabId === tab.id ? ft.color : 'text-neutral-500'}`} /> })()}
+              {tab.type === 'canvas'
+                ? <LayoutGrid className={`w-3 h-3 shrink-0 ${activeTabId === tab.id ? 'text-indigo-400' : 'text-neutral-500'}`} />
+                : (() => { const ft = getFileTypeInfo(tab.fileName); const Icon = ft.icon; return <Icon className={`w-3 h-3 shrink-0 ${activeTabId === tab.id ? ft.color : 'text-neutral-500'}`} /> })()}
               <span className={`max-w-32 truncate ${nameColor}`}>{tab.fileName}</span>
               {badgeLetter && (
                 <span className={`text-[9px] font-bold leading-none ${badgeColor}`}>{badgeLetter}</span>

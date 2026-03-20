@@ -81,6 +81,65 @@ body {
   flex-shrink: 0;
 }
 
+/* Verified breakpoint: red circle with white checkmark */
+.debug-bp-verified-linenum {
+  color: transparent !important;
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: flex-end;
+  position: relative;
+}
+.debug-bp-verified-linenum::before {
+  content: '';
+  position: absolute;
+  right: 0;
+  width: 14px;
+  height: 14px;
+  background: #ef4444;
+  border-radius: 50%;
+}
+.debug-bp-verified-linenum::after {
+  content: '✓';
+  position: relative;
+  z-index: 1;
+  width: 14px;
+  font-size: 10px;
+  font-weight: bold;
+  color: white;
+  text-align: center;
+  line-height: 14px;
+}
+
+/* Rejected breakpoint: red circle with white exclamation */
+.debug-bp-rejected-linenum {
+  color: transparent !important;
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: flex-end;
+  position: relative;
+}
+.debug-bp-rejected-linenum::before {
+  content: '';
+  position: absolute;
+  right: 0;
+  width: 14px;
+  height: 14px;
+  background: #ef4444;
+  border-radius: 50%;
+  opacity: 0.5;
+}
+.debug-bp-rejected-linenum::after {
+  content: '!';
+  position: relative;
+  z-index: 1;
+  width: 14px;
+  font-size: 10px;
+  font-weight: bold;
+  color: white;
+  text-align: center;
+  line-height: 14px;
+}
+
 .debug-breakpoint-line {
   background: rgba(239, 68, 68, 0.08);
 }

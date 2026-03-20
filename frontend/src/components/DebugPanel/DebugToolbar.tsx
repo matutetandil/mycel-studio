@@ -8,12 +8,17 @@ import {
   Plug,
   Trash2,
   ChevronDown,
+  Download,
+  Loader2,
 } from 'lucide-react'
 import { useDebugStore } from '../../stores/useDebugStore'
+import { useMultiProjectStore } from '../../stores/useMultiProjectStore'
 
 export default function DebugToolbar() {
-  const { status, stoppedAt, threads, activeThreadId, runtimeUrl } = useDebugStore()
-  const { connect, disconnect, debugContinue, debugNext, debugStepInto, setActiveThread, setRuntimeUrl, clearEvents } = useDebugStore()
+  const { status, stoppedAt, threads, activeThreadId, runtimeUrl, ready, sources, consuming } = useDebugStore()
+  const { connect, disconnect, debugContinue, debugNext, debugStepInto, consume, setActiveThread, setRuntimeUrl, clearEvents } = useDebugStore()
+  const multiProject = useMultiProjectStore()
+  const hasMultipleProjects = multiProject.projectOrder.length > 1
   const [showUrlInput, setShowUrlInput] = useState(false)
   const [urlDraft, setUrlDraft] = useState(runtimeUrl)
   const [connecting, setConnecting] = useState(false)
@@ -21,6 +26,7 @@ export default function DebugToolbar() {
 
   const isPaused = stoppedAt !== null
   const isConnected = status === 'connected'
+  const manualSources = sources.filter(s => s.manualConsume)
 
   const handleConnect = async () => {
     setConnecting(true)
@@ -36,7 +42,7 @@ export default function DebugToolbar() {
   }
 
   return (
-    <div className="flex items-center gap-1 px-2 py-1 bg-neutral-900 border-b border-neutral-800 min-h-[33px]">
+    <div className="flex items-center gap-1 px-2 py-1 bg-neutral-900 border-b border-neutral-800 min-h-[33px] flex-wrap">
       {/* Connect button (only when disconnected) */}
       {!isConnected && (
         <div className="flex items-center gap-1">
@@ -128,6 +134,35 @@ export default function DebugToolbar() {
         </div>
       )}
 
+      {/* Manual consume buttons */}
+      {isConnected && ready && manualSources.length > 0 && (
+        <>
+          <div className="w-px h-5 bg-neutral-700 mx-1" />
+          {manualSources.map(source => {
+            const isConsuming = consuming.has(source.connector)
+            return (
+              <button
+                key={source.connector}
+                onClick={() => consume(source.connector)}
+                disabled={isConsuming}
+                title={`Consume next message from ${source.connector} (${source.type}: ${source.source})`}
+                className={`flex items-center gap-1.5 px-2 py-1 rounded text-xs font-medium border ${
+                  isConsuming
+                    ? 'bg-amber-900/30 text-amber-400 border-amber-800/50 cursor-wait'
+                    : 'bg-indigo-900/30 text-indigo-400 hover:bg-indigo-900/50 border-indigo-800/50'
+                }`}
+              >
+                {isConsuming
+                  ? <Loader2 className="w-3 h-3 animate-spin" />
+                  : <Download className="w-3 h-3" />
+                }
+                <span>{source.connector}</span>
+              </button>
+            )
+          })}
+        </>
+      )}
+
       {/* Spacer */}
       <div className="flex-1" />
 
@@ -160,13 +195,54 @@ export default function DebugToolbar() {
         </button>
       )}
 
+      {/* Project selector (when multiple projects attached) */}
+      {hasMultipleProjects && (
+        <div className="flex items-center gap-1">
+          <select
+            value={multiProject.activeProjectId || ''}
+            onChange={e => {
+              const id = e.target.value
+              if (id) {
+                multiProject.setActiveProject(id)
+                // Load the debug URL for that project
+                const project = multiProject.getProject(id)
+                if (project) {
+                  setRuntimeUrl(project.runtimeUrl)
+                  setUrlDraft(project.runtimeUrl)
+                }
+              }
+            }}
+            className="text-xs bg-neutral-800 text-neutral-300 px-1.5 py-1 rounded border border-neutral-700 outline-none max-w-32"
+            title="Debug target project"
+          >
+            {multiProject.projectOrder.map(id => {
+              const project = multiProject.projects.get(id)
+              return (
+                <option key={id} value={id}>
+                  {project?.projectName || 'Unnamed'}
+                </option>
+              )
+            })}
+          </select>
+        </div>
+      )}
+
       {/* Connection status indicator */}
-      <div className="flex items-center gap-1.5 ml-1" title={isConnected ? runtimeUrl : 'Not connected'}>
+      <div className="flex items-center gap-1.5 ml-1" title={isConnected ? `${runtimeUrl}${ready ? ' (ready)' : ' (handshake...)'}` : 'Not connected'}>
         <div className={`w-2 h-2 rounded-full ${
-          isConnected ? 'bg-green-400 shadow-[0_0_4px_rgba(74,222,128,0.5)]' : 'bg-neutral-600'
+          isConnected && ready ? 'bg-green-400 shadow-[0_0_4px_rgba(74,222,128,0.5)]' :
+          isConnected ? 'bg-amber-400 shadow-[0_0_4px_rgba(251,191,36,0.5)]' :
+          'bg-neutral-600'
         }`} />
-        <span className={`text-xs ${isConnected ? 'text-green-400' : 'text-neutral-500'}`}>
-          {status === 'connecting' ? 'Connecting...' : isConnected ? 'Connected' : 'Disconnected'}
+        <span className={`text-xs ${
+          isConnected && ready ? 'text-green-400' :
+          isConnected ? 'text-amber-400' :
+          'text-neutral-500'
+        }`}>
+          {status === 'connecting' ? 'Connecting...' :
+           isConnected && !ready ? 'Handshake...' :
+           isConnected ? 'Ready' :
+           'Disconnected'}
         </span>
       </div>
     </div>

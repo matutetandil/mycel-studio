@@ -69,6 +69,15 @@ It ships as a **cross-platform desktop app** for macOS, Windows, and Linux (via 
 
 ## Features
 
+### Multi-Project Workspace
+
+- **Attach multiple projects** to a single workspace — each project gets its own canvas, file tree root, and git state
+- **Instance tabs** (Chrome-style) — open independent workspaces, each with its own set of attached projects and layout
+- **Canvas as editor tab** — in Text First mode, each project's canvas opens as a tab alongside HCL files
+- **Attach/New Tab dialog** — when opening a second project, choose to attach it to the current workspace or open it in a new instance tab
+- **Multi-root file explorer** — each attached project appears as a separate root with its git branch badge; click to switch active project
+- **Per-project debug** — project selector in the debug toolbar so each project can connect to a different Mycel runtime
+
 ### Visual Canvas
 
 - Drag-and-drop **26 connector types** and **flow nodes** onto a React Flow canvas
@@ -141,6 +150,7 @@ Mycel Studio aims to:
 - Support the full Mycel feature set (connectors, flows, types, validators, transforms, aspects, sagas, state machines)
 - Generate valid, production-ready HCL2 that the Mycel runtime can execute
 - Work as a native desktop IDE (macOS, Windows, Linux) and a browser-based editor
+- Scale to multi-service repositories through multi-project workspace support
 
 Read the [Roadmap](ROADMAP.md) for planned features and the [Changelog](CHANGELOG.md) for version history.
 

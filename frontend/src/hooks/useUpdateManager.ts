@@ -37,28 +37,7 @@ export function useUpdateManager(): UpdateManagerState {
   const [isDownloading, setIsDownloading] = useState(false)
   const [updateReady, setUpdateReady] = useState(false)
   const [whatsNewOpen, setWhatsNewOpen] = useState(false)
-  const [updateNotifId, setUpdateNotifId] = useState<string | null>(null)
-
-  const handleUpdate = useCallback(async (info: UpdateInfo) => {
-    try {
-      setIsDownloading(true)
-      setDownloadProgress({ percent: 0, message: 'Starting download...' })
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const updater = (window as any).go?.main?.Updater
-      await updater?.DownloadAndInstall(info.assetURL, info.checksumURL, info.assetName)
-    } catch (err) {
-      setIsDownloading(false)
-      setDownloadProgress(null)
-      addNotification({
-        type: 'error',
-        title: 'Update failed',
-        message: String(err),
-        actions: [
-          { label: 'Retry', onClick: () => handleUpdate(info), primary: true },
-        ],
-      })
-    }
-  }, [addNotification])
+  const [restartNotifId, setRestartNotifId] = useState<string | null>(null)
 
   const handleRestart = useCallback(async () => {
     try {
@@ -79,31 +58,33 @@ export function useUpdateManager(): UpdateManagerState {
 
     const cleanups: Array<() => void> = []
 
-    // Update available
-    rt.EventsOn('updater:update-available', (data: UpdateInfo) => {
+    // Update ready — auto-downloaded and installed, just needs restart
+    rt.EventsOn('updater:update-ready', (data: UpdateInfo) => {
       setUpdateInfo(data)
+      setIsDownloading(false)
+      setDownloadProgress(null)
+      setUpdateReady(true)
 
-      // Remove previous update notification if any
-      if (updateNotifId) {
-        removeNotification(updateNotifId)
+      // Remove previous restart notification if still showing
+      if (restartNotifId) {
+        removeNotification(restartNotifId)
       }
 
       const id = addNotification({
-        type: 'info',
-        title: `Mycel Studio v${data.latestVersion} available`,
-        message: `You are running v${data.currentVersion}. A new version is ready to download.`,
+        type: 'success',
+        title: `Mycel Studio v${data.latestVersion} ready`,
+        message: 'A new version has been downloaded and installed. Restart to apply.',
         actions: [
-          { label: 'Update Now', onClick: () => handleUpdate(data), primary: true },
+          { label: 'Restart Now', onClick: () => handleRestart(), primary: true },
           { label: "What's New", onClick: () => setWhatsNewOpen(true) },
           { label: 'Later', onClick: () => removeNotification(id) },
         ],
-        dismissable: true,
       })
-      setUpdateNotifId(id)
+      setRestartNotifId(id)
     })
-    cleanups.push(() => rt.EventsOff('updater:update-available'))
+    cleanups.push(() => rt.EventsOff('updater:update-ready'))
 
-    // Download progress — update status bar state, not new notifications
+    // Download progress — shown in status bar during background download
     rt.EventsOn('updater:progress', (data: UpdateProgress) => {
       if (data.stage === 'downloading' || data.stage === 'verifying' || data.stage === 'installing') {
         setIsDownloading(true)
@@ -111,34 +92,16 @@ export function useUpdateManager(): UpdateManagerState {
       } else if (data.stage === 'done') {
         setIsDownloading(false)
         setDownloadProgress(null)
-        setUpdateReady(true)
-
-        addNotification({
-          type: 'success',
-          title: 'Update installed successfully',
-          message: 'Restart Mycel Studio to apply the update.',
-          actions: [
-            { label: 'Restart Now', onClick: () => handleRestart(), primary: true },
-            { label: 'Later', onClick: () => {} },
-          ],
-        })
+        // update-ready event will follow with the notification
       } else if (data.stage === 'error') {
         setIsDownloading(false)
         setDownloadProgress(null)
-
-        addNotification({
-          type: 'error',
-          title: 'Update failed',
-          message: data.message,
-          actions: [
-            ...(updateInfo ? [{ label: 'Retry', onClick: () => handleUpdate(updateInfo), primary: true }] : []),
-          ],
-        })
+        // Only show error for manual checks (background failures are silent)
       }
     })
     cleanups.push(() => rt.EventsOff('updater:progress'))
 
-    // Manual check from menu
+    // Manual "Check for Updates" from menu — triggers auto-install flow
     rt.EventsOn('menu:check-updates', async () => {
       try {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -146,22 +109,19 @@ export function useUpdateManager(): UpdateManagerState {
         const result = await updater?.CheckForUpdates()
         if (result?.available) {
           setUpdateInfo(result)
-
-          const id = addNotification({
+          addNotification({
             type: 'info',
-            title: `Mycel Studio v${result.latestVersion} available`,
-            message: `You are running v${result.currentVersion}.`,
-            actions: [
-              { label: 'Update Now', onClick: () => handleUpdate(result), primary: true },
-              { label: "What's New", onClick: () => setWhatsNewOpen(true) },
-            ],
+            title: `Downloading v${result.latestVersion}...`,
+            message: 'The update will be installed automatically.',
+            autoHide: 3000,
           })
-          setUpdateNotifId(id)
+          // Trigger auto-install in the background
+          updater?.CheckAndAutoInstall()
         } else {
           addNotification({
             type: 'success',
             title: 'You are up to date',
-            message: 'You are running the latest version of Mycel Studio.',
+            message: `Running Mycel Studio v${result?.currentVersion || 'dev'}.`,
             autoHide: 4000,
           })
         }

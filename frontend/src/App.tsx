@@ -10,11 +10,13 @@ import { useGitPolling } from './hooks/useGitPolling'
 import { useFileToCanvasSync } from './hooks/useFileToCanvasSync'
 import { useCanvasToFileSync } from './hooks/useCanvasToFileSync'
 import { useAppLifecycle } from './hooks/useAppLifecycle'
+import { useMultiProjectPersistence } from './hooks/useMultiProjectPersistence'
 import { useUpdateManager } from './hooks/useUpdateManager'
 import { isWailsRuntime } from './lib/api'
 import MenuBar from './components/MenuBar/MenuBar'
 import Sidebar from './components/Sidebar/Sidebar'
 import Canvas from './components/Canvas/Canvas'
+import CanvasPanel from './components/Canvas/CanvasPanel'
 import Properties from './components/Properties/Properties'
 import EditorPanel from './components/EditorPanel'
 import ShortcutsDialog from './components/ShortcutsDialog'
@@ -25,10 +27,14 @@ import StatusBar from './components/StatusBar'
 import NotificationToast from './components/NotificationToast'
 import NotificationPopup from './components/NotificationPopup'
 import WhatsNewDialog from './components/WhatsNewDialog'
+import AttachDialog from './components/AttachDialog'
+import InstanceTabBar from './components/InstanceTabs/InstanceTabBar'
 import { useProjectStore } from './stores/useProjectStore'
 import { useStudioStore } from './stores/useStudioStore'
 import { useEditorPanelStore } from './stores/useEditorPanelStore'
 import { useLayoutStore } from './stores/useLayoutStore'
+import { useInstanceStore } from './stores/useInstanceStore'
+import { useProjectOpen } from './hooks/useProjectOpen'
 import EditorPanelComponent from './components/EditorPanel/EditorPanel'
 import EditorGroupView from './components/EditorPanel/EditorGroup'
 
@@ -114,10 +120,12 @@ function AppInner() {
   const { theme, toggleTheme } = useThemeStore()
   const { showShortcuts, setShowShortcuts, showTemplates, setShowTemplates, showSettings, setShowSettings } = useKeyboardShortcuts()
   const [showAbout, setShowAbout] = useState(false)
-  const { newProject, openProject, saveProject, closeProject } = useProjectStore()
+  const { saveProject, closeProject } = useProjectStore()
   const { undo, redo, duplicateNode } = useStudioStore()
   const { toggleCollapse } = useEditorPanelStore()
   const viewMode = useLayoutStore((s) => s.viewMode)
+  const instanceCount = useInstanceStore(s => s.instances.length)
+  const projectOpen = useProjectOpen()
   useAutoSave()
   useWorkspacePersistence()
   useDebugSync()
@@ -125,6 +133,7 @@ function AppInner() {
   useFileToCanvasSync()
   useCanvasToFileSync()
   useAppLifecycle()
+  useMultiProjectPersistence()
 
   const updateManager = useUpdateManager()
 
@@ -132,9 +141,10 @@ function AppInner() {
 
   // Native macOS menu event handlers
   const menuCallbacks = useMemo(() => ({
-    onNewProject: () => newProject(),
+    onNewProject: () => projectOpen.newProject(),
     onNewTemplate: () => setShowTemplates(true),
-    onOpenProject: () => openProject(),
+    onOpenProject: () => projectOpen.openProject(),
+    onAttachProject: () => projectOpen.openProject(),
     onSaveProject: () => saveProject(),
     onCloseProject: () => closeProject(),
     onUndo: () => undo(),
@@ -159,12 +169,18 @@ function AppInner() {
   return (
     <div className={`h-screen flex flex-col ${theme === 'dark' ? 'bg-neutral-950 text-white' : 'bg-white text-gray-900'}`}>
       {/* Menu Bar — only shown in browser/Docker mode */}
+      {/* Instance tab bar — shown when there are multiple workspace instances */}
+      {instanceCount > 1 && <InstanceTabBar />}
+
+      {/* Menu Bar — only shown in browser/Docker mode */}
       {!isDesktop && (
         <MenuBar
           onShowShortcuts={() => setShowShortcuts(true)}
           onShowTemplates={() => setShowTemplates(true)}
           onShowAbout={() => setShowAbout(true)}
           onShowSettings={() => setShowSettings(true)}
+          onNewProject={() => projectOpen.newProject()}
+          onOpenProject={() => projectOpen.openProject()}
         />
       )}
 
@@ -177,7 +193,7 @@ function AppInner() {
         <div className="flex-1 flex flex-col overflow-hidden">
           {/* Main area */}
           <div className="flex-1 min-h-0">
-            {viewMode === 'visual-first' ? <Canvas /> : <MainEditorArea />}
+            {viewMode === 'visual-first' ? <CanvasPanel /> : <MainEditorArea />}
           </div>
           {/* Bottom panel (always) */}
           <EditorPanel />
@@ -209,18 +225,18 @@ function AppInner() {
         onClose={() => updateManager.setWhatsNewOpen(false)}
         version={updateManager.updateInfo?.latestVersion ?? ''}
         releaseNotes={updateManager.updateInfo?.releaseNotes ?? ''}
-        onUpdateNow={updateManager.updateInfo ? () => {
-          // Trigger download via the update manager's event system
+        onRestartNow={updateManager.updateReady ? async () => {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const updater = (window as any).go?.main?.Updater
-          if (updater && updateManager.updateInfo) {
-            updater.DownloadAndInstall(
-              updateManager.updateInfo.assetURL,
-              updateManager.updateInfo.checksumURL,
-              updateManager.updateInfo.assetName
-            )
-          }
+          await updater?.RestartApp()
         } : undefined}
+      />
+      <AttachDialog
+        isOpen={projectOpen.showAttachDialog}
+        projectName="the selected project"
+        onAttach={projectOpen.handleAttach}
+        onNewTab={projectOpen.handleNewTab}
+        onCancel={projectOpen.handleCancel}
       />
     </div>
   )

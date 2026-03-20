@@ -1,9 +1,11 @@
 import { create } from 'zustand'
 
 export interface EditorTab {
-  id: string        // Same as filePath
-  filePath: string
-  fileName: string
+  id: string        // Same as filePath (for files) or `canvas:{projectId}` (for canvas)
+  type: 'file' | 'canvas'
+  filePath: string  // For files: relative path. For canvas: `canvas:{projectId}`
+  fileName: string  // For files: filename. For canvas: project name
+  projectId?: string // Which project this tab belongs to
 }
 
 export interface EditorGroup {
@@ -24,6 +26,7 @@ interface EditorPanelState {
   revealLine: number | null  // Line to scroll to in active editor
 
   openFile: (filePath: string, fileName: string, groupId?: string) => void
+  openCanvas: (projectId: string, projectName: string, groupId?: string) => void
   renameTab: (oldFilePath: string, newFilePath: string, newFileName: string) => void
   setRevealLine: (line: number | null) => void
   closeTab: (groupId: string, tabId: string) => void
@@ -65,7 +68,44 @@ export const useEditorPanelStore = create<EditorPanelState>((set, get) => ({
     }
 
     // Add new tab to target group
-    const newTab: EditorTab = { id: filePath, filePath, fileName }
+    const newTab: EditorTab = { id: filePath, type: 'file', filePath, fileName }
+    set({
+      groups: state.groups.map(g =>
+        g.id === targetGroupId
+          ? { ...g, tabs: [...g.tabs, newTab], activeTabId: newTab.id }
+          : g
+      ),
+      activeGroupId: targetGroupId,
+    })
+  },
+
+  openCanvas: (projectId, projectName, groupId?) => {
+    const state = get()
+    const targetGroupId = groupId || state.activeGroupId
+    const canvasPath = `canvas:${projectId}`
+
+    // Check if canvas tab already exists in any group
+    for (const group of state.groups) {
+      const existing = group.tabs.find(t => t.filePath === canvasPath)
+      if (existing) {
+        set({
+          groups: state.groups.map(g =>
+            g.id === group.id ? { ...g, activeTabId: existing.id } : g
+          ),
+          activeGroupId: group.id,
+        })
+        return
+      }
+    }
+
+    // Add new canvas tab
+    const newTab: EditorTab = {
+      id: canvasPath,
+      type: 'canvas',
+      filePath: canvasPath,
+      fileName: projectName,
+      projectId,
+    }
     set({
       groups: state.groups.map(g =>
         g.id === targetGroupId
@@ -82,7 +122,7 @@ export const useEditorPanelStore = create<EditorPanelState>((set, get) => ({
         ...g,
         tabs: g.tabs.map(t =>
           t.filePath === oldFilePath
-            ? { id: newFilePath, filePath: newFilePath, fileName: newFileName }
+            ? { ...t, id: newFilePath, filePath: newFilePath, fileName: newFileName }
             : t
         ),
         activeTabId: g.activeTabId === oldFilePath ? newFilePath : g.activeTabId,

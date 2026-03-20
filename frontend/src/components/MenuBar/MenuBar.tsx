@@ -84,9 +84,11 @@ interface MenuBarProps {
   onShowTemplates?: () => void
   onShowAbout?: () => void
   onShowSettings?: () => void
+  onNewProject?: () => void
+  onOpenProject?: () => void
 }
 
-export default function MenuBar({ onShowShortcuts, onShowTemplates, onShowAbout, onShowSettings }: MenuBarProps) {
+export default function MenuBar({ onShowShortcuts, onShowTemplates, onShowAbout, onShowSettings, onNewProject, onOpenProject }: MenuBarProps) {
   const { theme, toggleTheme } = useThemeStore()
   const { projectName, files, isLoading, gitBranch, capabilities, newProject, openProject, saveProject, closeProject } = useProjectStore()
   const { undo, redo, copyNode, pasteNode, duplicateNode, selectedNodeId, clipboard } = useStudioStore()
@@ -117,7 +119,7 @@ export default function MenuBar({ onShowShortcuts, onShowTemplates, onShowAbout,
       {
         label: 'New Project...',
         shortcut: 'Ctrl+Shift+N',
-        onClick: () => newProject(),
+        onClick: () => (onNewProject || newProject)(),
       },
       {
         label: 'New from Template...',
@@ -128,7 +130,7 @@ export default function MenuBar({ onShowShortcuts, onShowTemplates, onShowAbout,
       {
         label: getOpenLabel(),
         shortcut: 'Ctrl+O',
-        onClick: () => openProject(),
+        onClick: () => (onOpenProject || openProject)(),
       },
       {
         label: getSaveLabel(),

@@ -17,7 +17,7 @@ export interface WorkspaceState {
   }
   nodes: Record<string, { x: number; y: number }>
   editor: {
-    openTabs: Array<{ filePath: string; fileName: string }>
+    openTabs: Array<{ filePath: string; fileName: string; type?: 'file' | 'canvas'; projectId?: string }>
     activeTab: string | null
     panelHeight: number
     collapsed: boolean
@@ -82,8 +82,9 @@ export function applyWorkspace(ws: WorkspaceState) {
       editorStore.openFile(tab.filePath, tab.fileName)
     }
     if (ws.editor.activeTab) {
-      // Find which group has the active tab
-      for (const group of editorStore.groups) {
+      // Re-read state after all tabs have been opened
+      const currentGroups = useEditorPanelStore.getState().groups
+      for (const group of currentGroups) {
         if (group.tabs.some(t => t.filePath === ws.editor.activeTab)) {
           editorStore.setActiveTab(group.id, ws.editor.activeTab)
           break
@@ -154,10 +155,10 @@ export async function buildWorkspace(
     nodePositions[node.id] = { x: node.position.x, y: node.position.y }
   }
 
-  // Collect open tabs from all groups
+  // Collect open tabs from all groups (skip canvas tabs — they're ephemeral)
   const allTabs: EditorTab[] = []
   for (const group of editorStore.groups) {
-    allTabs.push(...group.tabs)
+    allTabs.push(...group.tabs.filter(t => t.type !== 'canvas'))
   }
   const activeGroup = editorStore.groups.find(g => g.id === editorStore.activeGroupId)
   const activeTab = activeGroup?.activeTabId || null

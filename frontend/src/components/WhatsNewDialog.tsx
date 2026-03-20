@@ -5,10 +5,10 @@ interface WhatsNewDialogProps {
   onClose: () => void
   version: string
   releaseNotes: string
-  onUpdateNow?: () => void
+  onRestartNow?: () => void
 }
 
-export default function WhatsNewDialog({ isOpen, onClose, version, releaseNotes, onUpdateNow }: WhatsNewDialogProps) {
+export default function WhatsNewDialog({ isOpen, onClose, version, releaseNotes, onRestartNow }: WhatsNewDialogProps) {
   if (!isOpen) return null
 
   return (
@@ -40,17 +40,17 @@ export default function WhatsNewDialog({ isOpen, onClose, version, releaseNotes,
             onClick={onClose}
             className="px-3 py-1.5 text-xs text-neutral-400 hover:text-neutral-200 hover:bg-neutral-700 rounded"
           >
-            Update Later
+            Close
           </button>
-          {onUpdateNow && (
+          {onRestartNow && (
             <button
               onClick={() => {
-                onUpdateNow()
+                onRestartNow()
                 onClose()
               }}
-              className="px-3 py-1.5 text-xs bg-indigo-600 hover:bg-indigo-500 text-white rounded font-medium"
+              className="px-3 py-1.5 text-xs bg-green-600 hover:bg-green-500 text-white rounded font-medium"
             >
-              Update Now
+              Restart Now
             </button>
           )}
         </div>

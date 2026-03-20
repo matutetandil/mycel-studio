@@ -5,7 +5,7 @@ import { setupMonaco } from '../../monaco'
 import { useEditorPanelStore } from '../../stores/useEditorPanelStore'
 import { useStudioStore } from '../../stores/useStudioStore'
 import { useProjectStore } from '../../stores/useProjectStore'
-import { useDebugStore } from '../../stores/useDebugStore'
+import { useDebugStore, breakpointKey } from '../../stores/useDebugStore'
 import { generateProject, type GeneratedFile } from '../../utils/hclGenerator'
 import { computeLineDiff, type LineDiffResult } from '../../utils/lineDiff'
 import { apiGetGitFileContent } from '../../lib/api'
@@ -14,12 +14,42 @@ import { triggerAutoSave } from '../../hooks/useAutoSave'
 import { useSettingsStore } from '../../stores/useSettingsStore'
 import { applyKeymap } from '../../monaco/keymaps'
 import TabBar from './TabBar'
+import CanvasTab from './CanvasTab'
 import JSZip from 'jszip'
 
 interface LineStageInfo {
   flow: string
   stage: string
   ruleIndex: number
+}
+
+// Valid pipeline stages that support breakpoints (from Mycel debug protocol)
+const VALID_STAGES = new Set([
+  'sanitize', 'filter', 'dedupe', 'validate_input',
+  'enrich', 'transform', 'step', 'validate_output',
+  'read', 'write', 'cache_hit', 'cache_miss', 'response',
+])
+
+// Only 'transform' and 'response' have per-CEL-rule breakpoints (ruleIndex 0+)
+// All other stages only support stage-level breakpoints (ruleIndex -1)
+const STAGES_WITH_RULES = new Set(['transform', 'response'])
+
+// Map HCL block names to pipeline stage names
+const BLOCK_TO_STAGE: Record<string, string> = {
+  from: '', // 'from' is not a breakpointable stage
+  to: 'write',
+  transform: 'transform',
+  response: 'response',
+  error_handling: '', // not a stage
+  validate: 'validate_input',
+  cache: 'cache_hit',
+  lock: '', // not a stage
+  semaphore: '', // not a stage
+  dedupe: 'dedupe',
+  step: 'step',
+  batch: 'write',
+  enrich: 'enrich',
+  filter: 'filter',
 }
 
 // Parse HCL content to find which lines correspond to which flow stages
@@ -30,6 +60,7 @@ function buildLineStageMap(content: string, filePath: string): Map<number, LineS
   const lines = content.split('\n')
   let currentFlow: string | null = null
   let currentBlock: string | null = null
+  let currentStage: string | null = null
   let braceDepth = 0
   let flowBraceStart = 0
   let ruleIndex = 0
@@ -45,9 +76,8 @@ function buildLineStageMap(content: string, filePath: string): Map<number, LineS
       flowBraceStart = braceDepth
       braceDepth++
       currentBlock = null
+      currentStage = null
       ruleIndex = 0
-      // The flow declaration line itself maps to 'input' stage
-      map.set(lineNum, { flow: currentFlow, stage: 'input', ruleIndex: -1 })
       continue
     }
 
@@ -59,38 +89,30 @@ function buildLineStageMap(content: string, filePath: string): Map<number, LineS
       // Detect sub-blocks within flow
       if (braceDepth === flowBraceStart + 1) {
         // Top-level block inside flow
-        const blockMatch = line.match(/^(from|to|transform|response|error_handling|validate|cache|lock|semaphore|dedupe|step|batch|enrich)\s*\{?/)
+        const blockMatch = line.match(/^(from|to|transform|response|error_handling|validate|cache|lock|semaphore|dedupe|step|batch|enrich|filter)\s*\{?/)
         if (blockMatch) {
-          const blockName = blockMatch[1]
-          // Map block names to pipeline stages
-          const stageMap: Record<string, string> = {
-            from: 'input',
-            to: 'write',
-            transform: 'transform',
-            response: 'read',
-            error_handling: 'write',
-            validate: 'validate_input',
-            cache: 'cache_hit',
-            lock: 'write',
-            semaphore: 'write',
-            dedupe: 'dedupe',
-            step: 'step',
-            batch: 'write',
-            enrich: 'enrich',
-          }
-          currentBlock = stageMap[blockName] || blockName
+          currentBlock = blockMatch[1]
+          currentStage = BLOCK_TO_STAGE[currentBlock] || ''
           ruleIndex = 0
+
+          // Map the block declaration line itself as stage-level breakpoint
+          if (currentStage && VALID_STAGES.has(currentStage)) {
+            map.set(lineNum, { flow: currentFlow, stage: currentStage, ruleIndex: -1 })
+          }
         }
       }
 
-      // Map lines to stages
-      if (currentBlock && line && !line.startsWith('//') && !line.startsWith('#')) {
-        // Lines with assignments (field = value) are individual rules
-        if (line.match(/^\w[\w.]*\s*=/) && !line.startsWith('}')) {
-          map.set(lineNum, { flow: currentFlow, stage: currentBlock, ruleIndex })
+      // Map content lines to stages
+      if (currentStage && VALID_STAGES.has(currentStage) && line && !line.startsWith('//') && !line.startsWith('#')) {
+        const isAssignment = line.match(/^\w[\w.]*\s*=/) && !line.startsWith('}')
+
+        if (isAssignment && STAGES_WITH_RULES.has(currentStage)) {
+          // Per-rule breakpoint (only for transform/response)
+          map.set(lineNum, { flow: currentFlow, stage: currentStage, ruleIndex })
           ruleIndex++
-        } else if (!line.startsWith('{') && !line.startsWith('}') && line.length > 0) {
-          map.set(lineNum, { flow: currentFlow, stage: currentBlock, ruleIndex: -1 })
+        } else if (isAssignment) {
+          // Config line in non-rule stage — map as stage-level
+          map.set(lineNum, { flow: currentFlow, stage: currentStage, ruleIndex: -1 })
         }
       }
 
@@ -98,6 +120,7 @@ function buildLineStageMap(content: string, filePath: string): Map<number, LineS
       if (closeBraces > openBraces && braceDepth - closeBraces + openBraces <= flowBraceStart) {
         currentFlow = null
         currentBlock = null
+        currentStage = null
       }
     }
 
@@ -157,6 +180,8 @@ export default function EditorGroupView({ groupId, isSecondary }: EditorGroupPro
   // Debug subscriptions
   const debugStoppedAt = useDebugStore(s => s.stoppedAt)
   const debugBreakpoints = useDebugStore(s => s.breakpoints)
+  const verifiedBreakpoints = useDebugStore(s => s.verifiedBreakpoints)
+  const rejectedBreakpoints = useDebugStore(s => s.rejectedBreakpoints)
   const decorationsRef = useRef<string[]>([])
   const hoverDecoRef = useRef<string[]>([])
   const [hoveredLine, setHoveredLine] = useState<number | null>(null)
@@ -200,13 +225,26 @@ export default function EditorGroupView({ groupId, isSecondary }: EditorGroupPro
     const newDecorations: editor.IModelDeltaDecoration[] = []
 
     // Breakpoint decorations — red circle replacing line number
+    // Verified: checkmark, Rejected: exclamation, Default: plain red circle
     for (const line of breakpointLines) {
+      const info = lineStageMap.get(line)
       const isStopped = stoppedLine === line
+      let lineNumClass = 'debug-bp-linenum'
+      if (isStopped) {
+        lineNumClass = 'debug-stopped-bp-linenum'
+      } else if (info) {
+        const key = breakpointKey(info.flow, info.stage, info.ruleIndex)
+        if (rejectedBreakpoints.has(key)) {
+          lineNumClass = 'debug-bp-rejected-linenum'
+        } else if (verifiedBreakpoints.has(key)) {
+          lineNumClass = 'debug-bp-verified-linenum'
+        }
+      }
       newDecorations.push({
         range: { startLineNumber: line, startColumn: 1, endLineNumber: line, endColumn: 1 },
         options: {
           isWholeLine: true,
-          lineNumberClassName: isStopped ? 'debug-stopped-bp-linenum' : 'debug-bp-linenum',
+          lineNumberClassName: lineNumClass,
           className: isStopped ? 'debug-stopped-line' : 'debug-breakpoint-line',
         },
       })
@@ -225,7 +263,7 @@ export default function EditorGroupView({ groupId, isSecondary }: EditorGroupPro
     }
 
     decorationsRef.current = ed.deltaDecorations(decorationsRef.current, newDecorations)
-  }, [breakpointLines, stoppedLine])
+  }, [breakpointLines, stoppedLine, lineStageMap, verifiedBreakpoints, rejectedBreakpoints])
 
   // Apply hover decoration — faded red circle on breakpointable line
   const applyHoverDecoration = useCallback(() => {
@@ -364,7 +402,9 @@ export default function EditorGroupView({ groupId, isSecondary }: EditorGroupPro
       />
 
       <div className="flex-1 min-h-0">
-        {activeFile ? (
+        {activeTab?.type === 'canvas' && activeTab.projectId ? (
+          <CanvasTab projectId={activeTab.projectId} />
+        ) : activeFile ? (
           <MonacoEditor
             key={activeFile.path}
             height="100%"
