@@ -33,12 +33,22 @@ interface SettingsState {
   workspaceInstances: PersistedInstance[]
   activeInstanceId: string | null
 
+  // Debug panel layout
+  debugLayout: {
+    leftTabs: string[]
+    leftActive: string
+    rightTabs: string[] | null
+    rightActive: string
+    splitRatio: number
+  } | null
+
   setKeymap: (keymap: KeymapType) => void
   setConfirmOnClose: (confirm: boolean) => void
   setLastProjectPath: (path: string | null) => void
   setWindowSize: (size: WindowSize) => void
   setWindowPosition: (pos: WindowPosition) => void
   setWorkspaceInstances: (instances: PersistedInstance[], activeId: string | null) => void
+  setDebugLayout: (layout: SettingsState['debugLayout']) => void
 }
 
 // Sync confirmOnClose to Go backend (desktop only)
@@ -61,6 +71,7 @@ export const useSettingsStore = create<SettingsState>()(
       windowPosition: null,
       workspaceInstances: [],
       activeInstanceId: null,
+      debugLayout: null,
       setKeymap: (keymap) => set({ keymap }),
       setConfirmOnClose: (confirmOnClose) => {
         syncConfirmOnCloseToGo(confirmOnClose)
@@ -70,6 +81,7 @@ export const useSettingsStore = create<SettingsState>()(
       setWindowSize: (windowSize) => set({ windowSize }),
       setWindowPosition: (windowPosition) => set({ windowPosition }),
       setWorkspaceInstances: (workspaceInstances, activeInstanceId) => set({ workspaceInstances, activeInstanceId }),
+      setDebugLayout: (debugLayout) => set({ debugLayout }),
     }),
     {
       name: 'mycel-studio-settings',

@@ -29,6 +29,10 @@ class WailsDebugBackend implements DebugBackend {
   private _connected = false
 
   async connect(url: string): Promise<void> {
+    // Clean up any previous listeners before reconnecting
+    this.runtime?.EventsOff('debug:event')
+    this.runtime?.EventsOff('debug:disconnected')
+
     await this.app.DebugConnect(url)
     this._connected = true
   }
@@ -36,6 +40,9 @@ class WailsDebugBackend implements DebugBackend {
   disconnect(): void {
     this.app.DebugDisconnect()
     this._connected = false
+    // Clean up listeners
+    this.runtime?.EventsOff('debug:event')
+    this.runtime?.EventsOff('debug:disconnected')
   }
 
   isConnected(): boolean {
@@ -49,15 +56,24 @@ class WailsDebugBackend implements DebugBackend {
   }
 
   onEvent(callback: (method: string, params: unknown) => void): () => void {
+    // Remove any previous listener first to prevent duplicates
+    this.runtime.EventsOff('debug:event')
+
     const handler = (data: string) => {
       const parsed = JSON.parse(data)
-      callback(parsed.method, JSON.parse(parsed.params))
+      // parsed.params is already a JS object (json.RawMessage embeds as raw JSON)
+      // Do NOT double-parse it
+      const params = typeof parsed.params === 'string' ? JSON.parse(parsed.params) : parsed.params
+      callback(parsed.method, params)
     }
     this.runtime.EventsOn('debug:event', handler)
     return () => this.runtime.EventsOff('debug:event')
   }
 
   onDisconnect(callback: () => void): () => void {
+    // Remove any previous listener first to prevent duplicates
+    this.runtime.EventsOff('debug:disconnected')
+
     this.runtime.EventsOn('debug:disconnected', () => {
       this._connected = false
       callback()

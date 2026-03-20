@@ -47,13 +47,43 @@ func NewDebugClient(app *App) *DebugClient {
 }
 
 // Connect opens a WebSocket to the Mycel debug endpoint.
+// If already connected, disconnects first (allows reconnection without restart).
 func (d *DebugClient) Connect(url string) error {
 	d.mu.Lock()
-	defer d.mu.Unlock()
 
+	// Clean up previous connection if any
 	if d.conn != nil {
-		return fmt.Errorf("already connected")
+		d.conn.Close()
+		d.conn = nil
 	}
+	if d.done != nil {
+		select {
+		case <-d.done:
+			// already closed
+		default:
+			close(d.done)
+		}
+		d.done = nil
+	}
+
+	// Clear pending requests from previous session
+	d.pendingMu.Lock()
+	for id, ch := range d.pending {
+		close(ch)
+		delete(d.pending, id)
+	}
+	d.pendingMu.Unlock()
+
+	d.mu.Unlock()
+
+	// Small delay to let the old readLoop exit cleanly
+	// (it may still be processing the close)
+	if d.conn == nil {
+		// readLoop should exit quickly after conn.Close()
+	}
+
+	d.mu.Lock()
+	defer d.mu.Unlock()
 
 	conn, _, err := websocket.DefaultDialer.Dial(url, nil)
 	if err != nil {
@@ -72,16 +102,21 @@ func (d *DebugClient) Connect(url string) error {
 // Disconnect closes the WebSocket connection.
 func (d *DebugClient) Disconnect() {
 	d.mu.Lock()
-	defer d.mu.Unlock()
 
 	if d.conn != nil {
 		d.conn.Close()
 		d.conn = nil
 	}
 	if d.done != nil {
-		close(d.done)
+		select {
+		case <-d.done:
+		default:
+			close(d.done)
+		}
 		d.done = nil
 	}
+
+	d.mu.Unlock()
 
 	// Clear pending requests
 	d.pendingMu.Lock()
@@ -192,12 +227,14 @@ func (d *DebugClient) readLoop() {
 		} else if resp.Method != "" {
 			// Event notification — forward to frontend
 			if d.app != nil && d.app.ctx != nil {
-				eventData := map[string]interface{}{
-					"method": resp.Method,
-					"params": json.RawMessage(resp.Params),
+				// Build JSON manually to avoid json.RawMessage being base64-encoded
+				// when stored in map[string]interface{}
+				paramsStr := "{}"
+				if len(resp.Params) > 0 {
+					paramsStr = string(resp.Params)
 				}
-				data, _ := json.Marshal(eventData)
-				wailsRuntime.EventsEmit(d.app.ctx, "debug:event", string(data))
+				data := fmt.Sprintf(`{"method":%q,"params":%s}`, resp.Method, paramsStr)
+				wailsRuntime.EventsEmit(d.app.ctx, "debug:event", data)
 			}
 		}
 	}

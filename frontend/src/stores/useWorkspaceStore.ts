@@ -119,14 +119,17 @@ export function applyWorkspace(ws: WorkspaceState) {
   }
 
   // Restore terminals sequentially (order matters)
+  // Only restore if no terminals exist yet (prevents duplication on re-apply)
   if (ws.terminals && ws.terminals.length > 0) {
     const termStore = useTerminalStore.getState()
-    const restoreTerminals = async () => {
-      for (const saved of ws.terminals!) {
-        await termStore.createTerminal(saved.workDir, saved.name)
+    if (termStore.terminals.length === 0) {
+      const restoreTerminals = async () => {
+        for (const saved of ws.terminals!) {
+          await termStore.createTerminal(saved.workDir, saved.name)
+        }
       }
+      restoreTerminals()
     }
-    restoreTerminals()
   }
 }
 

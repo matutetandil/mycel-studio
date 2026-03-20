@@ -134,6 +134,10 @@ interface DebugState {
   clearEvents: () => void
 }
 
+// Cleanup functions for event listeners (prevent duplicate registrations)
+let _eventCleanup: (() => void) | null = null
+let _disconnectCleanup: (() => void) | null = null
+
 export const useDebugStore = create<DebugState>((set, get) => ({
   status: 'disconnected',
   sessionId: null,
@@ -166,8 +170,12 @@ export const useDebugStore = create<DebugState>((set, get) => ({
       debugLog(`Connecting to ${targetUrl}...`)
       await backend.connect(targetUrl)
 
+      // Clean up any previous listeners before registering new ones
+      if (_eventCleanup) { _eventCleanup(); _eventCleanup = null }
+      if (_disconnectCleanup) { _disconnectCleanup(); _disconnectCleanup = null }
+
       // Listen for events
-      backend.onEvent((method, params) => {
+      _eventCleanup = backend.onEvent((method, params) => {
         const state = get()
         const event: DebugEvent = {
           id: state.eventCounter + 1,
@@ -186,7 +194,7 @@ export const useDebugStore = create<DebugState>((set, get) => ({
         handleDebugEvent(method, params)
       })
 
-      backend.onDisconnect(() => {
+      _disconnectCleanup = backend.onDisconnect(() => {
         debugWarn('Disconnected from debug runtime')
         set({
           status: 'disconnected',

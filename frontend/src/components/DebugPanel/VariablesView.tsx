@@ -1,9 +1,32 @@
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
 import { ChevronDown, ChevronRight } from 'lucide-react'
 import { useDebugStore } from '../../stores/useDebugStore'
 
-function ValueNode({ name, value, depth = 0 }: { name: string; value: unknown; depth?: number }) {
-  const [expanded, setExpanded] = useState(depth < 2)
+// Persistent expand/collapse state that survives re-renders when variables change.
+// Keys are dot-paths like "input", "input.body", "input.body.payload", etc.
+const expandedPaths = new Set<string>()
+
+function togglePath(path: string) {
+  if (expandedPaths.has(path)) {
+    expandedPaths.delete(path)
+  } else {
+    expandedPaths.add(path)
+  }
+}
+
+function ValueNode({ name, value, path, depth = 0, onToggle }: {
+  name: string
+  value: unknown
+  path: string
+  depth?: number
+  onToggle: () => void // triggers re-render from parent
+}) {
+  const expanded = expandedPaths.has(path)
+
+  const handleToggle = useCallback(() => {
+    togglePath(path)
+    onToggle()
+  }, [path, onToggle])
 
   if (value === null || value === undefined) {
     return (
@@ -21,7 +44,7 @@ function ValueNode({ name, value, depth = 0 }: { name: string; value: unknown; d
     return (
       <div>
         <button
-          onClick={() => setExpanded(!expanded)}
+          onClick={handleToggle}
           className="flex items-center gap-1 py-0.5 hover:bg-neutral-800 w-full text-left"
           style={{ paddingLeft: depth * 16 }}
         >
@@ -30,7 +53,7 @@ function ValueNode({ name, value, depth = 0 }: { name: string; value: unknown; d
           <span className="text-neutral-600 text-xs ml-1">{`{${entries.length}}`}</span>
         </button>
         {expanded && entries.map(([k, v]) => (
-          <ValueNode key={k} name={k} value={v} depth={depth + 1} />
+          <ValueNode key={k} name={k} value={v} path={`${path}.${k}`} depth={depth + 1} onToggle={onToggle} />
         ))}
       </div>
     )
@@ -40,7 +63,7 @@ function ValueNode({ name, value, depth = 0 }: { name: string; value: unknown; d
     return (
       <div>
         <button
-          onClick={() => setExpanded(!expanded)}
+          onClick={handleToggle}
           className="flex items-center gap-1 py-0.5 hover:bg-neutral-800 w-full text-left"
           style={{ paddingLeft: depth * 16 }}
         >
@@ -49,7 +72,7 @@ function ValueNode({ name, value, depth = 0 }: { name: string; value: unknown; d
           <span className="text-neutral-600 text-xs ml-1">[{value.length}]</span>
         </button>
         {expanded && value.map((v, i) => (
-          <ValueNode key={i} name={String(i)} value={v} depth={depth + 1} />
+          <ValueNode key={i} name={String(i)} value={v} path={`${path}.${i}`} depth={depth + 1} onToggle={onToggle} />
         ))}
       </div>
     )
@@ -74,6 +97,9 @@ function ValueNode({ name, value, depth = 0 }: { name: string; value: unknown; d
 
 export default function VariablesView() {
   const { variables, stoppedAt } = useDebugStore()
+  // Counter to force re-render when expand/collapse changes (since expandedPaths is external)
+  const [, setTick] = useState(0)
+  const forceUpdate = useCallback(() => setTick(t => t + 1), [])
 
   if (!stoppedAt) {
     return (
@@ -93,10 +119,10 @@ export default function VariablesView() {
 
   return (
     <div className="h-full overflow-auto text-xs font-mono p-1">
-      {variables.input && <ValueNode name="input" value={variables.input} />}
-      {variables.output && Object.keys(variables.output).length > 0 && <ValueNode name="output" value={variables.output} />}
-      {variables.enriched && Object.keys(variables.enriched).length > 0 && <ValueNode name="enriched" value={variables.enriched} />}
-      {variables.steps && Object.keys(variables.steps).length > 0 && <ValueNode name="steps" value={variables.steps} />}
+      {variables.input && <ValueNode name="input" value={variables.input} path="input" onToggle={forceUpdate} />}
+      {variables.output && Object.keys(variables.output).length > 0 && <ValueNode name="output" value={variables.output} path="output" onToggle={forceUpdate} />}
+      {variables.enriched && Object.keys(variables.enriched).length > 0 && <ValueNode name="enriched" value={variables.enriched} path="enriched" onToggle={forceUpdate} />}
+      {variables.steps && Object.keys(variables.steps).length > 0 && <ValueNode name="steps" value={variables.steps} path="steps" onToggle={forceUpdate} />}
       {variables.rule && (
         <div className="mt-2 border-t border-neutral-800 pt-1">
           <div className="text-neutral-500 text-[10px] uppercase tracking-wider mb-1 px-1">Current Rule</div>
