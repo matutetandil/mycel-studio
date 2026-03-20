@@ -7,6 +7,7 @@ import { useWorkspacePersistence } from './hooks/useWorkspacePersistence'
 import { useDebugSync } from './hooks/useDebugSync'
 import { useNativeMenu } from './hooks/useNativeMenu'
 import { useGitPolling } from './hooks/useGitPolling'
+import { useFilePolling } from './hooks/useFilePolling'
 import { useFileToCanvasSync } from './hooks/useFileToCanvasSync'
 import { useCanvasToFileSync } from './hooks/useCanvasToFileSync'
 import { useAppLifecycle } from './hooks/useAppLifecycle'
@@ -129,6 +130,7 @@ function AppInner() {
   useWorkspacePersistence()
   useDebugSync()
   useGitPolling()
+  useFilePolling()
   useFileToCanvasSync()
   useCanvasToFileSync()
   useAppLifecycle()

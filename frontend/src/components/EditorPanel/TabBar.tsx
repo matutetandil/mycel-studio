@@ -16,6 +16,11 @@ const gitNameColors: Record<string, string> = {
   untracked: 'text-green-400',
   deleted: 'text-red-400',
   ignored: 'text-neutral-600',
+  staged: 'text-emerald-300',
+  staged_added: 'text-emerald-300',
+  staged_deleted: 'text-red-300',
+  staged_renamed: 'text-emerald-300',
+  staged_modified: 'text-amber-300',
 }
 const gitBadgeColors: Record<string, string> = {
   modified: 'text-sky-400',
@@ -24,6 +29,11 @@ const gitBadgeColors: Record<string, string> = {
   untracked: 'text-green-400',
   deleted: 'text-red-400',
   ignored: 'text-neutral-600',
+  staged: 'text-emerald-400',
+  staged_added: 'text-emerald-400',
+  staged_deleted: 'text-red-400',
+  staged_renamed: 'text-emerald-400',
+  staged_modified: 'text-amber-400',
 }
 const gitBadgeLetters: Record<string, string> = {
   modified: 'M',
@@ -31,6 +41,11 @@ const gitBadgeLetters: Record<string, string> = {
   added: 'A',
   untracked: 'U',
   deleted: 'D',
+  staged: 'S',
+  staged_added: 'S',
+  staged_deleted: 'D',
+  staged_renamed: 'R',
+  staged_modified: 'SM',
 }
 
 interface TabBarProps {

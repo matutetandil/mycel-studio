@@ -8,6 +8,11 @@ export type GitFileStatus =
   | 'deleted'
   | 'untracked'
   | 'ignored'
+  | 'staged'
+  | 'staged_added'
+  | 'staged_deleted'
+  | 'staged_renamed'
+  | 'staged_modified'
 
 export interface GitStatus {
   branch: string | null

@@ -1,176 +1,98 @@
-// Persists multi-project and instance state across app restarts.
-// Saves project paths and instance structure to localStorage (via useSettingsStore).
-// On startup, reopens all attached projects and restores instance tabs.
+// Persists multi-project state across app restarts.
+// Saves attached project paths to localStorage (via useSettingsStore).
+// On startup, reopens additional attached projects after the first one loads.
 
 import { useEffect, useRef } from 'react'
-import { useSettingsStore, type PersistedInstance } from '../stores/useSettingsStore'
-import { useMultiProjectStore } from '../stores/useMultiProjectStore'
-import { useInstanceStore } from '../stores/useInstanceStore'
+import { useSettingsStore } from '../stores/useSettingsStore'
+import { useMultiProjectStore, registerCurrentAsProject } from '../stores/useMultiProjectStore'
 import { useProjectStore } from '../stores/useProjectStore'
+import { useEditorPanelStore } from '../stores/useEditorPanelStore'
+import { useStudioStore } from '../stores/useStudioStore'
 import { isWailsRuntime } from '../lib/api'
 
-// Save current multi-project + instance state to settings
+// Save current attached project paths to settings
 export function persistMultiProjectState() {
-  const instanceStore = useInstanceStore.getState()
   const multiStore = useMultiProjectStore.getState()
-
-  // Snapshot active project before persisting
   multiStore.snapshotActiveProject()
 
-  const persistedInstances: PersistedInstance[] = instanceStore.instances.map(inst => {
-    if (inst.id === instanceStore.activeInstanceId) {
-      // Active instance — read live state
-      const projectPaths = multiStore.projectOrder
-        .map(id => multiStore.projects.get(id)?.projectPath)
-        .filter((p): p is string => p !== null && p !== undefined)
+  // Collect all project paths in order
+  const projectPaths = multiStore.projectOrder
+    .map(id => multiStore.projects.get(id)?.projectPath)
+    .filter((p): p is string => !!p)
 
-      const activeProject = multiStore.activeProjectId
-        ? multiStore.projects.get(multiStore.activeProjectId)
-        : undefined
-
-      return {
-        id: inst.id,
-        label: useProjectStore.getState().projectName || inst.label,
-        projectPaths,
-        activeProjectPath: activeProject?.projectPath ?? null,
-      }
-    }
-
-    // Inactive instance — read from snapshot
-    if (inst.snapshot) {
-      const projectPaths = inst.snapshot.projectOrder
-        .map(id => {
-          const entry = inst.snapshot!.projects.find(([k]) => k === id)
-          return entry?.[1]?.projectPath
-        })
-        .filter((p): p is string => p !== null && p !== undefined)
-
-      const activeEntry = inst.snapshot.activeProjectId
-        ? inst.snapshot.projects.find(([k]) => k === inst.snapshot!.activeProjectId)
-        : undefined
-
-      return {
-        id: inst.id,
-        label: inst.label,
-        projectPaths,
-        activeProjectPath: activeEntry?.[1]?.projectPath ?? null,
-      }
-    }
-
-    return {
-      id: inst.id,
-      label: inst.label,
-      projectPaths: [],
-      activeProjectPath: null,
-    }
-  })
+  const activeProject = multiStore.activeProjectId
+    ? multiStore.projects.get(multiStore.activeProjectId)
+    : undefined
 
   useSettingsStore.getState().setWorkspaceInstances(
-    persistedInstances,
-    instanceStore.activeInstanceId,
+    [{
+      id: 'main',
+      label: 'Workspace',
+      projectPaths,
+      activeProjectPath: activeProject?.projectPath ?? null,
+    }],
+    'main',
   )
 }
 
-// Restore multi-project state on startup
-async function restoreMultiProjectState() {
-  const { workspaceInstances, activeInstanceId } = useSettingsStore.getState()
-
-  // Nothing to restore
-  if (workspaceInstances.length === 0) return
-
-  // Only on Wails (desktop) — browser can't reopen by path
+// Restore additional attached projects on startup
+async function restoreAttachedProjects() {
   if (!isWailsRuntime()) return
 
-  // Find the active instance to restore first
-  const activeInstance = workspaceInstances.find(i => i.id === activeInstanceId) || workspaceInstances[0]
-  if (!activeInstance || activeInstance.projectPaths.length === 0) return
+  const { workspaceInstances } = useSettingsStore.getState()
+  if (workspaceInstances.length === 0) return
+
+  const instance = workspaceInstances[0]
+  if (!instance || instance.projectPaths.length <= 1) return
+
+  // Wait for the first project to finish loading (useAppLifecycle handles it via lastProjectPath)
+  await new Promise(resolve => setTimeout(resolve, 2000))
 
   const projectStore = useProjectStore.getState()
+  if (!projectStore.projectName) return // first project didn't load
 
-  // Open the active project of the active instance
-  // (The first project is opened via useAppLifecycle's lastProjectPath)
-  // Open additional attached projects
-  if (activeInstance.projectPaths.length > 1) {
-    // Wait a bit for the first project to load (useAppLifecycle handles it)
-    await new Promise(resolve => setTimeout(resolve, 1500))
+  // Register the first project in multi-project store
+  registerCurrentAsProject()
 
-    const { registerCurrentAsProject } = await import('../stores/useMultiProjectStore')
-    const multiStore = useMultiProjectStore.getState()
+  // Open each additional project
+  for (let i = 1; i < instance.projectPaths.length; i++) {
+    const path = instance.projectPaths[i]
+    if (!path) continue
 
-    // Register the first project if not yet registered
-    if (multiStore.projectOrder.length === 0 && projectStore.projectName) {
-      registerCurrentAsProject()
-    }
+    try {
+      // Snapshot current project
+      useMultiProjectStore.getState().snapshotActiveProject()
 
-    // Open remaining projects
-    for (let i = 1; i < activeInstance.projectPaths.length; i++) {
-      const path = activeInstance.projectPaths[i]
-      if (!path) continue
-
-      // Snapshot current state
-      multiStore.snapshotActiveProject()
+      // Clear UI for new project
+      useEditorPanelStore.setState({
+        groups: [{ id: 'main', tabs: [], activeTabId: null }],
+        activeGroupId: 'main',
+        splitDirection: null,
+      })
+      useStudioStore.setState({
+        nodes: [], edges: [], selectedNodeId: null, activeFlowEditor: null,
+      })
 
       // Open the project
-      try {
-        await projectStore.openProjectAtPath(path)
-        registerCurrentAsProject()
-      } catch (err) {
-        console.error(`Failed to restore project at ${path}:`, err)
-      }
-    }
+      await projectStore.openProjectAtPath(path)
+      const newId = registerCurrentAsProject()
 
-    // Switch back to the originally active project
-    if (activeInstance.activeProjectPath) {
-      const updatedMulti = useMultiProjectStore.getState()
-      for (const [id, proj] of updatedMulti.projects) {
-        if (proj.projectPath === activeInstance.activeProjectPath) {
-          updatedMulti.setActiveProject(id)
-          break
-        }
-      }
+      // Open canvas tab for it
+      const name = useProjectStore.getState().projectName || path.split('/').pop() || 'Project'
+      useEditorPanelStore.getState().openCanvas(newId, name)
+    } catch (err) {
+      console.error(`Failed to restore attached project at ${path}:`, err)
     }
   }
 
-  // Restore additional instance tabs (with their projects)
-  if (workspaceInstances.length > 1) {
-    const instanceStore = useInstanceStore.getState()
-
-    for (const persisted of workspaceInstances) {
-      if (persisted.id === activeInstance.id) continue
-      if (persisted.projectPaths.length === 0) continue
-
-      // Create a new instance
-      const newId = instanceStore.addInstance()
-
-      // Open projects in the new (now active) instance
-      for (let i = 0; i < persisted.projectPaths.length; i++) {
-        const path = persisted.projectPaths[i]
-        if (!path) continue
-
-        try {
-          if (i === 0) {
-            await projectStore.openProjectAtPath(path)
-          } else {
-            const multiStore = useMultiProjectStore.getState()
-            multiStore.snapshotActiveProject()
-            await projectStore.openProjectAtPath(path)
-          }
-          const { registerCurrentAsProject } = await import('../stores/useMultiProjectStore')
-          registerCurrentAsProject()
-        } catch (err) {
-          console.error(`Failed to restore project at ${path}:`, err)
-        }
+  // Switch back to the originally active project
+  if (instance.activeProjectPath) {
+    const multiStore = useMultiProjectStore.getState()
+    for (const [id, proj] of multiStore.projects) {
+      if (proj.projectPath === instance.activeProjectPath) {
+        multiStore.setActiveProject(id)
+        break
       }
-
-      // Update the instance label
-      instanceStore.updateLabel(newId, persisted.label)
-    }
-
-    // Switch back to the original active instance
-    const updatedInstances = useInstanceStore.getState()
-    const originalInstance = updatedInstances.instances[0]
-    if (originalInstance) {
-      instanceStore.switchInstance(originalInstance.id)
     }
   }
 }
@@ -178,22 +100,14 @@ async function restoreMultiProjectState() {
 export function useMultiProjectPersistence() {
   const didRestore = useRef(false)
 
-  // Restore on startup (once, after a delay to let the first project load)
+  // Restore on startup
   useEffect(() => {
     if (didRestore.current) return
     didRestore.current = true
-
-    const { workspaceInstances } = useSettingsStore.getState()
-    if (workspaceInstances.length > 0) {
-      // Only restore additional projects (first is handled by useAppLifecycle)
-      const activeInstance = workspaceInstances.find(i => i.id === useSettingsStore.getState().activeInstanceId)
-      if (activeInstance && activeInstance.projectPaths.length > 1) {
-        restoreMultiProjectState()
-      }
-    }
+    restoreAttachedProjects()
   }, [])
 
-  // Persist before close — hook into existing beforeunload
+  // Persist before close
   useEffect(() => {
     const handleBeforeUnload = () => {
       persistMultiProjectState()
@@ -201,7 +115,6 @@ export function useMultiProjectPersistence() {
 
     window.addEventListener('beforeunload', handleBeforeUnload)
 
-    // Also listen for Wails before-close event
     if (isWailsRuntime()) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const runtime = (window as any).runtime

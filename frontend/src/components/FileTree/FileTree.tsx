@@ -25,7 +25,7 @@ import type { ConnectorNodeData, FlowNodeData } from '../../types'
 import ContextMenu, { type ContextMenuItem } from '../ContextMenu'
 import { getFileTypeInfo, KNOWN_LANGUAGES, setLanguageOverride, getLanguageOverride, removeLanguageOverride, NEW_FILE_TYPES, resolveFileName, type NewFileType } from '../../utils/fileIcons'
 
-// Badge colors (the M/U/A/D indicator)
+// Badge colors (the M/U/A/D/S indicator)
 const gitStatusColors: Record<string, string> = {
   clean: 'text-neutral-500',
   modified: 'text-amber-500',
@@ -34,6 +34,11 @@ const gitStatusColors: Record<string, string> = {
   untracked: 'text-green-500',
   deleted: 'text-red-500',
   ignored: 'text-neutral-600',
+  staged: 'text-emerald-400',
+  staged_added: 'text-emerald-400',
+  staged_deleted: 'text-red-400',
+  staged_renamed: 'text-emerald-400',
+  staged_modified: 'text-amber-400',
 }
 
 // Name text colors (IntelliJ-style: tint the filename itself)
@@ -45,6 +50,11 @@ const gitStatusNameColors: Record<string, string> = {
   untracked: 'text-green-400',
   deleted: 'text-red-400',
   ignored: 'text-neutral-600',
+  staged: 'text-emerald-300',
+  staged_added: 'text-emerald-300',
+  staged_deleted: 'text-red-300',
+  staged_renamed: 'text-emerald-300',
+  staged_modified: 'text-amber-300',
 }
 
 const gitStatusIcons: Record<string, string> = {
@@ -55,6 +65,11 @@ const gitStatusIcons: Record<string, string> = {
   untracked: 'U',
   deleted: 'D',
   ignored: '',
+  staged: 'S',
+  staged_added: 'S',
+  staged_deleted: 'D',
+  staged_renamed: 'R',
+  staged_modified: 'SM',
 }
 
 interface FileItemProps {
@@ -903,26 +918,67 @@ function FileTreeNode({
   )
 }
 
-// Multi-root file tree wrapper
-// When multiple projects are attached, shows each as a separate root
-// Falls back to single project tree when 0-1 projects
-function MultiProjectRoot({ projectId: _projectId, projectName, isActive, gitBranch, onActivate, onDetach }: {
+// Multi-root project header with expand/collapse, git branch, detach, drag reorder
+function MultiProjectRoot({ projectId, projectName, gitBranch, onDetach, index }: {
   projectId: string
   projectName: string
-  isActive: boolean
   gitBranch: string | null
-  onActivate: () => void
   onDetach: () => void
+  index: number
 }) {
   const [isExpanded, setIsExpanded] = useState(true)
+  const multiStore = useMultiProjectStore()
+
+  // When a file is clicked, silently switch active project if needed, then open the file
+  const handleFileClick = useCallback((filePath: string) => {
+    const currentActive = useMultiProjectStore.getState().activeProjectId
+    if (currentActive !== projectId) {
+      useMultiProjectStore.getState().setActiveProject(projectId)
+    }
+    // Small delay to let store switch, then open file
+    setTimeout(() => {
+      useProjectStore.getState().setActiveFile(filePath)
+      openFileInEditor(filePath)
+    }, currentActive !== projectId ? 50 : 0)
+  }, [projectId])
+
+  // Drag reorder
+  const handleDragStart = useCallback((e: React.DragEvent) => {
+    e.dataTransfer.setData('text/plain', String(index))
+    e.dataTransfer.effectAllowed = 'move'
+  }, [index])
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'move'
+  }, [])
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+    const fromIndex = parseInt(e.dataTransfer.getData('text/plain'))
+    if (!isNaN(fromIndex) && fromIndex !== index) {
+      multiStore.reorderProjects(fromIndex, index)
+    }
+  }, [index, multiStore])
+
+  // Get files for this project from snapshot or live store
+  const project = multiStore.projects.get(projectId)
+  const isActiveProject = multiStore.activeProjectId === projectId
+
+  // For the active project, use live store files. For inactive, use snapshot.
+  const projectFiles = isActiveProject
+    ? useProjectStore.getState().files
+    : (project?.files || [])
 
   return (
-    <div className={`${isActive ? '' : 'opacity-70'}`}>
+    <div>
       <div
-        className={`flex items-center gap-1 px-2 py-1.5 hover:bg-neutral-800 font-medium cursor-pointer group ${
-          isActive ? 'text-white' : 'text-neutral-400'
-        }`}
-        onClick={() => { onActivate(); setIsExpanded(!isExpanded) }}
+        draggable
+        onDragStart={handleDragStart}
+        onDragOver={handleDragOver}
+        onDrop={handleDrop}
+        className="flex items-center gap-1 px-2 py-1.5 hover:bg-neutral-800 font-medium cursor-pointer group text-white"
+        onClick={() => setIsExpanded(!isExpanded)}
       >
         {isExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
         {isExpanded ? <FolderOpen className="w-4 h-4 text-amber-500" /> : <Folder className="w-4 h-4 text-amber-500" />}
@@ -941,33 +997,100 @@ function MultiProjectRoot({ projectId: _projectId, projectName, isActive, gitBra
           <X className="w-3 h-3 text-neutral-400" />
         </button>
       </div>
-      {isExpanded && isActive && (
+      {isExpanded && isActiveProject && (
         <div className="pl-2">
           <SingleProjectFileTree hideHeader />
         </div>
       )}
-      {isExpanded && !isActive && (
-        <div className="pl-4 py-1 text-xs text-neutral-500">
-          Click to switch to this project
+      {isExpanded && !isActiveProject && projectFiles.length > 0 && (
+        <div className="pl-2">
+          <StaticFileTree
+            files={projectFiles}
+            onFileClick={handleFileClick}
+          />
         </div>
       )}
     </div>
   )
 }
 
+// Simplified read-only file tree for inactive projects (shows files from snapshot)
+function StaticFileTree({ files, onFileClick }: { files: ProjectFile[]; onFileClick: (path: string) => void }) {
+  const editorActiveTabId = useEditorPanelStore(s => s.groups.find(g => g.id === s.activeGroupId)?.activeTabId || null)
+
+  const HIDDEN_FILES = ['.mycel-studio.json']
+  const visibleFiles = files.filter(f => !HIDDEN_FILES.includes(f.name))
+  const tree = useMemo(() => buildFileTree(visibleFiles), [visibleFiles])
+
+  // Sort: directories first, then files
+  const renderNode = (node: TreeNode, parentPath: string, isRoot?: boolean): React.ReactNode => {
+    const dirPath = isRoot ? parentPath : (parentPath ? `${parentPath}/${node.name}` : node.name)
+    const sortedDirs = [...node.children.entries()].sort((a, b) => a[0].localeCompare(b[0]))
+    const sortedFiles = [...node.files].sort((a, b) => a.name.localeCompare(b.name))
+
+    if (isRoot) {
+      return (
+        <>
+          {sortedDirs.map(([, child]) => renderNode(child, dirPath))}
+          {sortedFiles.map(f => (
+            <FileItem
+              key={f.relativePath}
+              file={f}
+              isActive={editorActiveTabId === f.relativePath}
+              onClick={() => onFileClick(f.relativePath)}
+            />
+          ))}
+        </>
+      )
+    }
+
+    return (
+      <StaticDirNode key={node.name} name={node.name}>
+        {sortedDirs.map(([, child]) => renderNode(child, dirPath))}
+        {sortedFiles.map(f => (
+          <FileItem
+            key={f.relativePath}
+            file={f}
+            isActive={editorActiveTabId === f.relativePath}
+            onClick={() => onFileClick(f.relativePath)}
+          />
+        ))}
+      </StaticDirNode>
+    )
+  }
+
+  return <>{renderNode(tree, '', true)}</>
+}
+
+function StaticDirNode({ name, children }: { name: string; children: React.ReactNode }) {
+  const [isExpanded, setIsExpanded] = useState(true)
+  return (
+    <div>
+      <button
+        onClick={() => setIsExpanded(!isExpanded)}
+        className="w-full flex items-center gap-1 px-2 py-1 hover:bg-neutral-800 text-neutral-300"
+      >
+        {isExpanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+        {isExpanded ? <FolderOpen className="w-3.5 h-3.5 text-amber-600" /> : <Folder className="w-3.5 h-3.5 text-amber-600" />}
+        <span className="truncate">{name}</span>
+      </button>
+      {isExpanded && <div className="pl-4">{children}</div>}
+    </div>
+  )
+}
+
 export default function FileTree() {
-  const multiProjectStore = useMultiProjectStore()
-  const { projectOrder, projects, activeProjectId } = multiProjectStore
+  const { projectOrder, projects } = useMultiProjectStore()
 
   // If there are 0-1 projects in multi-project store, use single project tree directly
   if (projectOrder.length <= 1) {
     return <SingleProjectFileTree />
   }
 
-  // Multiple projects — show each as a separate root
+  // Multiple projects — all expanded independently, no "active" styling difference
   return (
     <div className="text-sm">
-      {projectOrder.map(id => {
+      {projectOrder.map((id, index) => {
         const project = projects.get(id)
         if (!project) return null
         return (
@@ -975,10 +1098,9 @@ export default function FileTree() {
             key={id}
             projectId={id}
             projectName={project.projectName || 'Unnamed Project'}
-            isActive={id === activeProjectId}
             gitBranch={project.gitBranch}
-            onActivate={() => multiProjectStore.setActiveProject(id)}
-            onDetach={() => multiProjectStore.removeProject(id)}
+            onDetach={() => useMultiProjectStore.getState().removeProject(id)}
+            index={index}
           />
         )
       })}

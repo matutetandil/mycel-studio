@@ -12,7 +12,7 @@ export interface ProjectFile {
   relativePath: string
   content: string
   isDirty: boolean
-  gitStatus?: 'clean' | 'modified' | 'new' | 'deleted' | 'ignored' | 'untracked' | 'added'
+  gitStatus?: 'clean' | 'modified' | 'new' | 'deleted' | 'ignored' | 'untracked' | 'added' | 'staged' | 'staged_added' | 'staged_deleted' | 'staged_renamed' | 'staged_modified'
 }
 
 export interface ProjectMetadata {
@@ -656,6 +656,13 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
               break
             case 'ignored':
               gitFileStatus = 'ignored'
+              break
+            case 'staged':
+            case 'staged_added':
+            case 'staged_deleted':
+            case 'staged_renamed':
+            case 'staged_modified':
+              gitFileStatus = status as ProjectFile['gitStatus']
               break
             case 'unmodified':
             default:

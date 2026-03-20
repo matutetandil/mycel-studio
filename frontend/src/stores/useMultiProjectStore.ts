@@ -56,6 +56,10 @@ interface MultiProjectState {
   getActiveProject: () => ProjectInstance | undefined
   updateProject: (id: string, updates: Partial<ProjectInstance>) => void
 
+  // Ordering
+  reorderProjects: (fromIndex: number, toIndex: number) => void
+  setProjectOrder: (order: string[]) => void
+
   // Snapshot helpers
   snapshotActiveProject: () => void
   restoreProject: (id: string) => void
@@ -188,9 +192,16 @@ export const useMultiProjectStore = create<MultiProjectState>((set, get) => ({
     const newProjects = new Map(state.projects)
     newProjects.set(id, instance)
 
+    // Insert in alphabetical order by project name
+    const newOrder = [...state.projectOrder, id].sort((a, b) => {
+      const nameA = (newProjects.get(a)?.projectName || '').toLowerCase()
+      const nameB = (newProjects.get(b)?.projectName || '').toLowerCase()
+      return nameA.localeCompare(nameB)
+    })
+
     set({
       projects: newProjects,
-      projectOrder: [...state.projectOrder, id],
+      projectOrder: newOrder,
     })
 
     return id
@@ -233,6 +244,18 @@ export const useMultiProjectStore = create<MultiProjectState>((set, get) => ({
         splitDirection: null,
       })
     }
+  },
+
+  reorderProjects: (fromIndex, toIndex) => {
+    const state = get()
+    const order = [...state.projectOrder]
+    const [moved] = order.splice(fromIndex, 1)
+    order.splice(toIndex, 0, moved)
+    set({ projectOrder: order })
+  },
+
+  setProjectOrder: (order) => {
+    set({ projectOrder: order })
   },
 
   setActiveProject: (id) => {

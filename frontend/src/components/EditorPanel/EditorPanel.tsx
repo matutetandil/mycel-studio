@@ -12,7 +12,7 @@ import EditorGroupView from './EditorGroup'
 import TerminalPanel from './TerminalPanel'
 import DebugPanel from '../DebugPanel/DebugPanel'
 import OutputPanel from './OutputPanel'
-import Canvas from '../Canvas/Canvas'
+import CanvasPanel from '../Canvas/CanvasPanel'
 
 type PanelTab = 'editor' | 'terminal' | 'debug' | 'output'
 
@@ -220,8 +220,8 @@ export default function EditorPanel() {
             style={{ display: activePanel === 'editor' ? undefined : 'none' }}
           >
             {viewMode === 'text-first' ? (
-              /* In text-first mode, the bottom panel shows Canvas */
-              <Canvas />
+              /* In text-first mode, the bottom panel shows Canvas with project tabs */
+              <CanvasPanel />
             ) : (
               <>
                 {/* Main group */}

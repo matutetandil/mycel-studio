@@ -45,8 +45,9 @@ func (a *App) GetGitFileStatuses(path string) (map[string]string, error) {
 			continue
 		}
 		// Porcelain format: XY filename
-		// X = index status, Y = work tree status
-		xy := line[:2]
+		// X = index (staged) status, Y = work tree (unstaged) status
+		x := line[0] // staged
+		y := line[1] // unstaged
 		file := strings.TrimSpace(line[3:])
 
 		// Handle renames: "R  old -> new"
@@ -58,18 +59,30 @@ func (a *App) GetGitFileStatuses(path string) (map[string]string, error) {
 		file = filepath.ToSlash(file)
 
 		switch {
-		case xy == "??" :
+		case x == '?' && y == '?':
 			statuses[file] = "untracked"
-		case xy == "!!" :
+		case x == '!' && y == '!':
 			statuses[file] = "ignored"
-		case xy[0] == 'A' || xy[1] == 'A':
-			statuses[file] = "added"
-		case xy[0] == 'D' || xy[1] == 'D':
-			statuses[file] = "deleted"
-		case xy[0] == 'R' || xy[1] == 'R':
-			statuses[file] = "renamed"
-		case xy[0] == 'M' || xy[1] == 'M':
+		case x != ' ' && x != '?' && y != ' ' && y != '?':
+			// Both staged AND has unstaged changes
+			statuses[file] = "staged_modified"
+		case x == 'A' && y == ' ':
+			statuses[file] = "staged_added"
+		case x == 'D' && y == ' ':
+			statuses[file] = "staged_deleted"
+		case x == 'R' && y == ' ':
+			statuses[file] = "staged_renamed"
+		case x == 'M' && y == ' ':
+			statuses[file] = "staged"
+		case x != ' ' && x != '?' && y == ' ':
+			// Staged (catch-all for other staged states)
+			statuses[file] = "staged"
+		case y == 'M':
 			statuses[file] = "modified"
+		case y == 'D':
+			statuses[file] = "deleted"
+		case y == 'A':
+			statuses[file] = "added"
 		default:
 			statuses[file] = "modified"
 		}
