@@ -143,7 +143,6 @@ function AppInner() {
     onNewProject: () => projectOpen.newProject(),
     onNewTemplate: () => setShowTemplates(true),
     onOpenProject: () => projectOpen.openProject(),
-    onAttachProject: () => projectOpen.openProject(),
     onSaveProject: () => saveProject(),
     onCloseProject: () => closeProject(),
     onUndo: () => undo(),
@@ -232,7 +231,7 @@ function AppInner() {
       />
       <AttachDialog
         isOpen={projectOpen.showAttachDialog}
-        projectName="the selected project"
+        projectName={projectOpen.pendingProjectName}
         onAttach={projectOpen.handleAttach}
         onNewTab={projectOpen.handleNewTab}
         onCancel={projectOpen.handleCancel}

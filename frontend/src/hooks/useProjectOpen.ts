@@ -1,126 +1,152 @@
 // Hook that manages the project open/attach/new-tab flow.
-// When a project is already open and the user opens another,
-// shows the Attach/New Tab dialog and routes accordingly.
+// IntelliJ-style: picker opens first, THEN if there's already a project open,
+// shows the Attach/New Tab dialog.
 
 import { useState, useCallback } from 'react'
 import { useProjectStore } from '../stores/useProjectStore'
+import { useStudioStore } from '../stores/useStudioStore'
 import { useMultiProjectStore, registerCurrentAsProject } from '../stores/useMultiProjectStore'
 import { useInstanceStore } from '../stores/useInstanceStore'
 import { useEditorPanelStore } from '../stores/useEditorPanelStore'
+import { isWailsRuntime } from '../lib/api'
 
-export type AttachMode = 'attach' | 'new-tab'
+interface PendingProject {
+  path: string
+  name: string
+}
 
-interface PendingOpen {
-  type: 'open' | 'new'
-  path?: string // for openProjectAtPath
+// Open native directory picker and return the selected path (without loading files)
+async function pickDirectory(): Promise<string | null> {
+  if (isWailsRuntime()) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const app = (window as any).go?.main?.App
+    if (!app?.OpenDirectoryDialog) return null
+    const path: string = await app.OpenDirectoryDialog()
+    return path || null
+  }
+  return null
+}
+
+// Check if there's currently a project open (reads fresh from store, no stale closure)
+function hasProject(): boolean {
+  return !!useProjectStore.getState().projectName
+}
+
+// Clear editor tabs and canvas state for a clean project switch
+function clearCurrentProjectUI() {
+  useEditorPanelStore.setState({
+    groups: [{ id: 'main', tabs: [], activeTabId: null }],
+    activeGroupId: 'main',
+    splitDirection: null,
+  })
+  useStudioStore.setState({
+    nodes: [],
+    edges: [],
+    selectedNodeId: null,
+    activeFlowEditor: null,
+  })
 }
 
 export function useProjectOpen() {
   const [showAttachDialog, setShowAttachDialog] = useState(false)
-  const [pendingOpen, setPendingOpen] = useState<PendingOpen | null>(null)
+  const [pendingProject, setPendingProject] = useState<PendingProject | null>(null)
 
-  const hasExistingProject = useProjectStore(s => !!s.projectName)
+  // NOTE: All callbacks read hasProject() fresh from the store inside the function,
+  // NOT from a closure. This avoids stale state from useMemo/useCallback deps.
 
-  // Execute the actual open/new after dialog choice
-  const executeOpen = useCallback(async (pending: PendingOpen, mode: AttachMode) => {
-    const projectStore = useProjectStore.getState()
-    const multiStore = useMultiProjectStore.getState()
-    const instanceStore = useInstanceStore.getState()
-
-    if (mode === 'new-tab') {
-      // Create a new instance tab, then open the project there
-      instanceStore.addInstance()
-      // Now we're in a clean workspace — proceed with normal open
-      if (pending.type === 'new') {
-        await projectStore.newProject()
-      } else if (pending.path) {
-        await projectStore.openProjectAtPath(pending.path)
-      } else {
-        await projectStore.openProject()
-      }
-      // Register as first project in this instance
-      registerCurrentAsProject()
+  const openProject = useCallback(async () => {
+    if (!hasProject()) {
+      clearCurrentProjectUI()
+      const success = await useProjectStore.getState().openProject()
+      if (success) registerCurrentAsProject()
       return
     }
 
-    // Attach mode: save current project to multi-project store, then open new one
-    // Ensure current project is registered
+    // Already have a project — pick directory first, then show dialog
+    const path = await pickDirectory()
+    if (!path) return // user cancelled
+
+    const name = path.split('/').pop() || path
+    setPendingProject({ path, name })
+    setShowAttachDialog(true)
+  }, [])
+
+  const newProject = useCallback(async () => {
+    if (!hasProject()) {
+      clearCurrentProjectUI()
+      const success = await useProjectStore.getState().newProject()
+      if (success) registerCurrentAsProject()
+      return
+    }
+
+    // Already have a project — pick directory first, then show dialog
+    const path = await pickDirectory()
+    if (!path) return // user cancelled
+
+    const name = path.split('/').pop() || path
+    setPendingProject({ path, name })
+    setShowAttachDialog(true)
+  }, [])
+
+  const openProjectAtPath = useCallback(async (path: string) => {
+    if (!hasProject()) {
+      clearCurrentProjectUI()
+      const success = await useProjectStore.getState().openProjectAtPath(path)
+      if (success) registerCurrentAsProject()
+      return
+    }
+
+    const name = path.split('/').pop() || path
+    setPendingProject({ path, name })
+    setShowAttachDialog(true)
+  }, [])
+
+  // User chose "Attach" — add to current workspace
+  const handleAttach = useCallback(async () => {
+    setShowAttachDialog(false)
+    if (!pendingProject) return
+
+    const multiStore = useMultiProjectStore.getState()
+    const projectStore = useProjectStore.getState()
+
+    // Register current project if not yet in multi-project store
     if (multiStore.projectOrder.length === 0 && projectStore.projectName) {
       registerCurrentAsProject()
     } else {
-      // Snapshot the currently active project before opening new one
       multiStore.snapshotActiveProject()
     }
 
-    // Open the new project (this replaces the live stores)
-    let success = false
-    if (pending.type === 'new') {
-      success = await projectStore.newProject()
-    } else if (pending.path) {
-      success = await projectStore.openProjectAtPath(pending.path)
-    } else {
-      success = await projectStore.openProject()
-    }
+    // Clear UI and open the new project
+    clearCurrentProjectUI()
+    const success = await projectStore.openProjectAtPath(pendingProject.path)
 
     if (success) {
-      // Register the newly opened project
       const newProjectId = registerCurrentAsProject()
-
-      // Open a canvas tab for the new project
-      const newProjectName = projectStore.projectName || 'Project'
+      const newProjectName = useProjectStore.getState().projectName || pendingProject.name
       useEditorPanelStore.getState().openCanvas(newProjectId, newProjectName)
     }
-  }, [])
 
-  const openProject = useCallback(async () => {
-    if (hasExistingProject) {
-      setPendingOpen({ type: 'open' })
-      setShowAttachDialog(true)
-    } else {
-      await useProjectStore.getState().openProject()
-      registerCurrentAsProject()
-    }
-  }, [hasExistingProject])
+    setPendingProject(null)
+  }, [pendingProject])
 
-  const openProjectAtPath = useCallback(async (path: string) => {
-    if (hasExistingProject) {
-      setPendingOpen({ type: 'open', path })
-      setShowAttachDialog(true)
-    } else {
-      await useProjectStore.getState().openProjectAtPath(path)
-      registerCurrentAsProject()
-    }
-  }, [hasExistingProject])
-
-  const newProject = useCallback(async () => {
-    if (hasExistingProject) {
-      setPendingOpen({ type: 'new' })
-      setShowAttachDialog(true)
-    } else {
-      await useProjectStore.getState().newProject()
-      registerCurrentAsProject()
-    }
-  }, [hasExistingProject])
-
-  const handleAttach = useCallback(async () => {
-    setShowAttachDialog(false)
-    if (pendingOpen) {
-      await executeOpen(pendingOpen, 'attach')
-      setPendingOpen(null)
-    }
-  }, [pendingOpen, executeOpen])
-
+  // User chose "New Tab" — open in independent workspace instance
   const handleNewTab = useCallback(async () => {
     setShowAttachDialog(false)
-    if (pendingOpen) {
-      await executeOpen(pendingOpen, 'new-tab')
-      setPendingOpen(null)
-    }
-  }, [pendingOpen, executeOpen])
+    if (!pendingProject) return
+
+    // Create a new instance (snapshots current, clears stores)
+    useInstanceStore.getState().addInstance()
+
+    // Open the project in the clean workspace
+    await useProjectStore.getState().openProjectAtPath(pendingProject.path)
+    registerCurrentAsProject()
+
+    setPendingProject(null)
+  }, [pendingProject])
 
   const handleCancel = useCallback(() => {
     setShowAttachDialog(false)
-    setPendingOpen(null)
+    setPendingProject(null)
   }, [])
 
   return {
@@ -128,6 +154,7 @@ export function useProjectOpen() {
     openProjectAtPath,
     newProject,
     showAttachDialog,
+    pendingProjectName: pendingProject?.name || '',
     handleAttach,
     handleNewTab,
     handleCancel,

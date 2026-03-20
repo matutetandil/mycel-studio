@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { getFileSystemProvider, getCapabilities, type FSCapabilities } from '../lib/fileSystem'
 import { loadWorkspace, applyWorkspace } from './useWorkspaceStore'
+import { useEditorPanelStore } from './useEditorPanelStore'
 import { generateProject } from '../utils/hclGenerator'
 import { apiParse, apiConfirm } from '../lib/api'
 import { useSettingsStore } from './useSettingsStore'
@@ -247,6 +248,12 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       metadata: null,
       error: null,
       gitBranch: null,
+    })
+    // Clear editor tabs so no stale tabs remain
+    useEditorPanelStore.setState({
+      groups: [{ id: 'main', tabs: [], activeTabId: null }],
+      activeGroupId: 'main',
+      splitDirection: null,
     })
   },
 

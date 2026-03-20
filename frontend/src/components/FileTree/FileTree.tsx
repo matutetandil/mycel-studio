@@ -230,7 +230,7 @@ function NewFileDialog({
   )
 }
 
-function SingleProjectFileTree() {
+function SingleProjectFileTree({ hideHeader }: { hideHeader?: boolean } = {}) {
   const { projectName, files, activeFile, setActiveFile, openProject, createFile, createDirectory, deleteFile, renameFile, capabilities, mycelRoot } = useProjectStore()
   const { nodes, edges, selectedNodeId, serviceConfig, authConfig, envConfig, securityConfig, pluginConfig } = useStudioStore()
   const editorActiveTabId = useEditorPanelStore(s => s.groups.find(g => g.id === s.activeGroupId)?.activeTabId || null)
@@ -534,6 +534,68 @@ function SingleProjectFileTree() {
     openFileInEditor(path)
   }
 
+  const treeContent = (
+    <FileTreeNode
+      node={tree}
+      activeFile={currentActiveFile}
+      onFileClick={handleFileClick}
+      onContextMenu={handleFileContextMenu}
+      onDirContextMenu={handleDirContextMenu}
+      editingFile={editingFile}
+      onEditChange={(name) => setEditingFile(prev => prev ? { ...prev, newName: name } : null)}
+      onEditCommit={handleCommitRename}
+      onEditCancel={() => setEditingFile(null)}
+      isRoot
+      parentPath=""
+    />
+  )
+
+  // When used inside MultiProjectRoot, skip the header (MultiProjectRoot provides its own)
+  if (hideHeader) {
+    return (
+      <div className="text-sm">
+        {treeContent}
+
+        {/* File context menu */}
+        {fileContextMenu && (
+          <ContextMenu
+            x={fileContextMenu.x}
+            y={fileContextMenu.y}
+            items={fileContextMenuItems}
+            onClose={() => setFileContextMenu(null)}
+          />
+        )}
+
+        {/* Directory context menu */}
+        {dirContextMenu && (
+          <ContextMenu
+            x={dirContextMenu.x}
+            y={dirContextMenu.y}
+            items={dirContextMenuItems}
+            onClose={() => setDirContextMenu(null)}
+          />
+        )}
+
+        {/* New file/folder dialog */}
+        {newFileDialog && (
+          <NewFileDialog
+            fileType={newFileDialog.fileType}
+            dirPath={newFileDialog.dirPath}
+            onConfirm={(path) => {
+              if (newFileDialog.fileType) {
+                handleCreateFile(path)
+              } else {
+                handleCreateDirectory(path)
+              }
+              setNewFileDialog(null)
+            }}
+            onCancel={() => setNewFileDialog(null)}
+          />
+        )}
+      </div>
+    )
+  }
+
   return (
     <div className="text-sm">
       <button
@@ -548,19 +610,7 @@ function SingleProjectFileTree() {
 
       {isExpanded && (
         <div className="pl-2">
-          <FileTreeNode
-            node={tree}
-            activeFile={currentActiveFile}
-            onFileClick={handleFileClick}
-            onContextMenu={handleFileContextMenu}
-            onDirContextMenu={handleDirContextMenu}
-            editingFile={editingFile}
-            onEditChange={(name) => setEditingFile(prev => prev ? { ...prev, newName: name } : null)}
-            onEditCommit={handleCommitRename}
-            onEditCancel={() => setEditingFile(null)}
-            isRoot
-            parentPath=""
-          />
+          {treeContent}
         </div>
       )}
 
@@ -893,8 +943,7 @@ function MultiProjectRoot({ projectId: _projectId, projectName, isActive, gitBra
       </div>
       {isExpanded && isActive && (
         <div className="pl-2">
-          {/* Render the single project tree content inline (re-uses live store state) */}
-          <SingleProjectFileTree />
+          <SingleProjectFileTree hideHeader />
         </div>
       )}
       {isExpanded && !isActive && (

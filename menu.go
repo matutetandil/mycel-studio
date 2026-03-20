@@ -26,9 +26,6 @@ func (a *App) buildMenu() *menu.Menu {
 	fileMenu.AddText("Open Project...", keys.CmdOrCtrl("o"), func(_ *menu.CallbackData) {
 		wailsRuntime.EventsEmit(a.ctx, "menu:open-project")
 	})
-	fileMenu.AddText("Attach Project...", nil, func(_ *menu.CallbackData) {
-		wailsRuntime.EventsEmit(a.ctx, "menu:attach-project")
-	})
 	fileMenu.AddSeparator()
 	fileMenu.AddText("Save All", keys.CmdOrCtrl("s"), func(_ *menu.CallbackData) {
 		wailsRuntime.EventsEmit(a.ctx, "menu:save-project")
