@@ -4,7 +4,6 @@ import { useStudioStore } from './useStudioStore'
 import { useProjectStore } from './useProjectStore'
 import { useEditorPanelStore, type EditorGroup, type SplitDirection } from './useEditorPanelStore'
 import { useLayoutStore, type ViewMode } from './useLayoutStore'
-import { useDebugStore } from './useDebugStore'
 
 // Serialized snapshot of an entire workspace instance
 export interface WorkspaceInstanceSnapshot {
@@ -130,19 +129,22 @@ function restoreSnapshot(snapshot: WorkspaceInstanceSnapshot) {
   // Restore layout
   useLayoutStore.getState().setViewMode(snapshot.viewMode)
 
-  // Restore live stores
-  useStudioStore.setState({
-    nodes: snapshot.studioSnapshot.nodes as Parameters<typeof useStudioStore.setState>[0]['nodes'],
-    edges: snapshot.studioSnapshot.edges as Parameters<typeof useStudioStore.setState>[0]['edges'],
+  // Restore live stores — use eslint-disable for the any casts (Zustand setState overloads)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const studioState: any = {
+    nodes: snapshot.studioSnapshot.nodes,
+    edges: snapshot.studioSnapshot.edges,
     selectedNodeId: snapshot.studioSnapshot.selectedNodeId,
-    serviceConfig: snapshot.studioSnapshot.serviceConfig as Parameters<typeof useStudioStore.setState>[0]['serviceConfig'],
-    authConfig: snapshot.studioSnapshot.authConfig as Parameters<typeof useStudioStore.setState>[0]['authConfig'],
-    envConfig: snapshot.studioSnapshot.envConfig as Parameters<typeof useStudioStore.setState>[0]['envConfig'],
-    securityConfig: snapshot.studioSnapshot.securityConfig as Parameters<typeof useStudioStore.setState>[0]['securityConfig'],
-    pluginConfig: snapshot.studioSnapshot.pluginConfig as Parameters<typeof useStudioStore.setState>[0]['pluginConfig'],
-  })
+    serviceConfig: snapshot.studioSnapshot.serviceConfig,
+    authConfig: snapshot.studioSnapshot.authConfig,
+    envConfig: snapshot.studioSnapshot.envConfig,
+    securityConfig: snapshot.studioSnapshot.securityConfig,
+    pluginConfig: snapshot.studioSnapshot.pluginConfig,
+  }
+  useStudioStore.setState(studioState)
 
-  useProjectStore.setState(snapshot.projectSnapshot as Parameters<typeof useProjectStore.setState>[0])
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  useProjectStore.setState(snapshot.projectSnapshot as any)
 
   useEditorPanelStore.setState(snapshot.editorSnapshot)
 }

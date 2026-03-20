@@ -2,7 +2,6 @@
 // When multiple projects are attached, shows a tab bar to switch between canvases.
 // When only one project, renders Canvas directly (no tab overhead).
 
-import { ReactFlowProvider } from '@xyflow/react'
 import { LayoutGrid, X } from 'lucide-react'
 import { useMultiProjectStore } from '../../stores/useMultiProjectStore'
 import Canvas from './Canvas'

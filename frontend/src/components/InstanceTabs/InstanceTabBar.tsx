@@ -7,7 +7,7 @@ import { useInstanceStore } from '../../stores/useInstanceStore'
 
 export default function InstanceTabBar() {
   const { instances, activeInstanceId, addInstance, removeInstance, switchInstance, getInstanceLabel } = useInstanceStore()
-  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null)
+  const [dragOverIndex] = useState<number | null>(null)
 
   return (
     <div className="flex items-center bg-neutral-950 border-b border-neutral-800 min-h-[30px] shrink-0 select-none"

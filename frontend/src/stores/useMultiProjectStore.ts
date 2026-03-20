@@ -163,7 +163,7 @@ export const useMultiProjectStore = create<MultiProjectState>((set, get) => ({
       files: partial.files ?? [],
       activeFile: partial.activeFile ?? null,
       gitBranch: partial.gitBranch ?? null,
-      capabilities: partial.capabilities ?? { canOpenFolder: false, canSaveFiles: false, canGetGitStatus: false },
+      capabilities: partial.capabilities ?? { canOpenFolder: false, canWatchChanges: false, canGetGitStatus: false, persistsAcrossSessions: false, providerName: 'fallback' as const },
 
       nodes: partial.nodes ? JSON.parse(JSON.stringify(partial.nodes)) : [],
       edges: partial.edges ? JSON.parse(JSON.stringify(partial.edges)) : [],

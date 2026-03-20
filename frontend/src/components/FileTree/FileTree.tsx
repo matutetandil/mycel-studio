@@ -856,7 +856,7 @@ function FileTreeNode({
 // Multi-root file tree wrapper
 // When multiple projects are attached, shows each as a separate root
 // Falls back to single project tree when 0-1 projects
-function MultiProjectRoot({ projectId, projectName, isActive, gitBranch, onActivate, onDetach }: {
+function MultiProjectRoot({ projectId: _projectId, projectName, isActive, gitBranch, onActivate, onDetach }: {
   projectId: string
   projectName: string
   isActive: boolean
