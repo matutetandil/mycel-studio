@@ -21,6 +21,7 @@ import { useStudioStore } from '../../stores/useStudioStore'
 import { useEditorPanelStore, scopedPath, unscopePath } from '../../stores/useEditorPanelStore'
 import { useMultiProjectStore } from '../../stores/useMultiProjectStore'
 import { generateProject, toIdentifier, type GeneratedFile } from '../../utils/hclGenerator'
+import { cursorDrivenSelection } from '../EditorPanel/EditorGroup'
 import type { ConnectorNodeData, FlowNodeData } from '../../types'
 import ContextMenu, { type ContextMenuItem } from '../ContextMenu'
 import { getFileTypeInfo, KNOWN_LANGUAGES, setLanguageOverride, getLanguageOverride, removeLanguageOverride, NEW_FILE_TYPES, resolveFileName, type NewFileType } from '../../utils/fileIcons'
@@ -159,10 +160,12 @@ export function selectNodeForFile(filePath: string) {
     if (node) { selectNode(node.id); return }
   }
 
-  // Also match by hclFile field on any node
+  // Match by hclFile field on any node (try all path variants)
   const nodeByHclFile = nodes.find(n => {
-    const data = n.data as Record<string, unknown>
-    return data.hclFile === filePath || data.hclFile === relPath
+    const hf = (n.data as Record<string, unknown>).hclFile as string | undefined
+    if (!hf) return false
+    return hf === unscopedPath || hf === relPath || hf === filePath
+      || (mycelRoot && hf === mycelRoot + relPath)
   })
   if (nodeByHclFile) { selectNode(nodeByHclFile.id); return }
 
@@ -194,8 +197,10 @@ function openFileInEditor(filePath: string, revealLine?: number, projectPath?: s
   // Auto-expand editor if collapsed
   const { isCollapsed, toggleCollapse } = useEditorPanelStore.getState()
   if (isCollapsed) toggleCollapse()
-  // Select the corresponding canvas node → updates Properties panel
-  selectNodeForFile(filePath)
+  // For non-HCL files, select node by file path (HCL files use cursor-aware selection in EditorGroup)
+  if (!filePath.endsWith('.hcl')) {
+    selectNodeForFile(filePath)
+  }
   // Scroll to specific line if provided
   if (revealLine) {
     // Small delay to let the editor mount/switch tab first
@@ -341,6 +346,9 @@ function SingleProjectFileTree({ hideHeader }: { hideHeader?: boolean } = {}) {
   useEffect(() => {
     if (selectedNodeId === prevSelectedNodeIdRef.current) return
     prevSelectedNodeIdRef.current = selectedNodeId
+
+    // Skip file navigation when selection was driven by cursor movement in the editor
+    if (cursorDrivenSelection) return
 
     if (selectedNodeId && nodes.length > 0) {
       const selectedNode = nodes.find(n => n.id === selectedNodeId)

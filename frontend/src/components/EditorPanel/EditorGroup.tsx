@@ -7,13 +7,14 @@ import { useStudioStore } from '../../stores/useStudioStore'
 import { useProjectStore } from '../../stores/useProjectStore'
 import { useMultiProjectStore } from '../../stores/useMultiProjectStore'
 import { useDebugStore, breakpointKey } from '../../stores/useDebugStore'
-import { generateProject, type GeneratedFile } from '../../utils/hclGenerator'
+import { generateProject, toIdentifier, type GeneratedFile } from '../../utils/hclGenerator'
 import { computeLineDiff, type LineDiffResult } from '../../utils/lineDiff'
 import { apiGetGitFileContent } from '../../lib/api'
 import { getFileTypeInfo, getLanguageForFile } from '../../utils/fileIcons'
 import { triggerAutoSave } from '../../hooks/useAutoSave'
 import { useSettingsStore } from '../../stores/useSettingsStore'
 import { applyKeymap } from '../../monaco/keymaps'
+import { getPreviewerForFile, PreviewToggle } from '../../file-previewers'
 import TabBar from './TabBar'
 import CanvasTab from './CanvasTab'
 import JSZip from 'jszip'
@@ -51,6 +52,83 @@ const BLOCK_TO_STAGE: Record<string, string> = {
   batch: 'write',
   enrich: 'enrich',
   filter: 'filter',
+}
+
+// Top-level HCL block types that map to canvas nodes
+const HCL_BLOCK_TYPES = new Set([
+  'connector', 'flow', 'type', 'validator', 'transform', 'aspect', 'saga', 'state_machine',
+])
+
+interface HclBlockRange {
+  type: string   // e.g., 'connector', 'flow'
+  name: string   // e.g., 'magento-db', 'create_user'
+  startLine: number
+  endLine: number
+}
+
+// Parse HCL content and return line ranges for each top-level block
+function buildBlockRanges(content: string): HclBlockRange[] {
+  if (!content) return []
+  const ranges: HclBlockRange[] = []
+  const lines = content.split('\n')
+  let braceDepth = 0
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim()
+    // Match top-level block: type "name" {
+    if (braceDepth === 0) {
+      const match = line.match(/^(\w+)\s+"([^"]+)"\s*\{/)
+      if (match && HCL_BLOCK_TYPES.has(match[1])) {
+        const blockType = match[1]
+        const blockName = match[2]
+        const startLine = i + 1 // 1-based
+        // Find the closing brace
+        let depth = 0
+        let endLine = startLine
+        for (let j = i; j < lines.length; j++) {
+          depth += (lines[j].match(/\{/g) || []).length
+          depth -= (lines[j].match(/\}/g) || []).length
+          if (depth === 0) {
+            endLine = j + 1 // 1-based
+            break
+          }
+        }
+        ranges.push({ type: blockType, name: blockName, startLine, endLine })
+      }
+    }
+    braceDepth += (line.match(/\{/g) || []).length
+    braceDepth -= (line.match(/\}/g) || []).length
+    if (braceDepth < 0) braceDepth = 0
+  }
+  return ranges
+}
+
+// Flag to prevent FileTree's selectedNodeId effect from re-opening the file
+// when the selection was triggered by cursor movement in the editor
+export let cursorDrivenSelection = false
+
+// Find the canvas node matching an HCL block type+name
+function selectNodeByBlock(blockType: string, blockName: string) {
+  const { nodes, selectNode } = useStudioStore.getState()
+  // Map HCL block type to canvas node type
+  const nodeTypeMap: Record<string, string> = {
+    connector: 'connector', flow: 'flow', type: 'type', validator: 'validator',
+    transform: 'transform', aspect: 'aspect', saga: 'saga', state_machine: 'state_machine',
+  }
+  const nodeType = nodeTypeMap[blockType]
+  if (!nodeType) { selectNode(null); return }
+
+  // Find node by matching the HCL name against the node's identifier
+  const node = nodes.find(n => {
+    if (n.type !== nodeType) return false
+    const data = n.data as { label?: string }
+    if (!data.label) return false
+    return toIdentifier(data.label) === blockName || data.label === blockName
+  })
+  cursorDrivenSelection = true
+  selectNode(node?.id ?? null)
+  // Reset flag after React processes the state update
+  setTimeout(() => { cursorDrivenSelection = false }, 0)
 }
 
 // Parse HCL content to find which lines correspond to which flow stages
@@ -147,6 +225,8 @@ export default function EditorGroupView({ groupId, isSecondary }: EditorGroupPro
   const updateFile = useProjectStore(s => s.updateFile)
   const projectName = useProjectStore(s => s.projectName)
   const projectPath = useProjectStore(s => s.projectPath)
+  const previewModes = useEditorPanelStore(s => s.previewModes)
+  const setPreviewMode = useEditorPanelStore(s => s.setPreviewMode)
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null)
   const [copied, setCopied] = useState(false)
   const gitDecoRef = useRef<string[]>([])
@@ -242,6 +322,28 @@ export default function EditorGroupView({ groupId, isSecondary }: EditorGroupPro
   const [hoveredLine, setHoveredLine] = useState<number | null>(null)
 
   // Map HCL lines to breakpointable stages
+  // Build block ranges for cursor-aware node selection
+  const blockRanges = useMemo(() => {
+    if (!activeFile?.content || !activeFile.name.endsWith('.hcl')) return []
+    return buildBlockRanges(activeFile.content)
+  }, [activeFile?.content, activeFile?.name])
+
+  // Track which block the cursor is in — select the corresponding canvas node
+  const lastSelectedBlockRef = useRef<string | null>(null)
+  const handleCursorChange = useCallback((lineNumber: number) => {
+    if (blockRanges.length === 0) return
+    const block = blockRanges.find(b => lineNumber >= b.startLine && lineNumber <= b.endLine)
+    const blockKey = block ? `${block.type}:${block.name}` : null
+    if (blockKey !== lastSelectedBlockRef.current) {
+      lastSelectedBlockRef.current = blockKey
+      if (block) {
+        selectNodeByBlock(block.type, block.name)
+      } else {
+        useStudioStore.getState().selectNode(null)
+      }
+    }
+  }, [blockRanges])
+
   const lineStageMap = useMemo(() => {
     if (!activeFile?.content) return new Map<number, LineStageInfo>()
     return buildLineStageMap(activeFile.content, activeFile.path)
@@ -459,7 +561,24 @@ export default function EditorGroupView({ groupId, isSecondary }: EditorGroupPro
       <div className="flex-1 min-h-0">
         {activeTab?.type === 'canvas' && activeTab.projectId ? (
           <CanvasTab projectId={activeTab.projectId} />
-        ) : activeFile ? (
+        ) : activeFile ? (() => {
+          const previewer = getPreviewerForFile(activeFile.name)
+          const currentMode = previewModes[activeFile.name] || 'source'
+          const PreviewComponent = previewer?.component
+          return (
+            <div className="relative h-full">
+              {previewer && activeTab && (
+                <PreviewToggle
+                  mode={currentMode}
+                  onToggle={(mode) => setPreviewMode(activeFile.name, mode)}
+                  label={previewer.label}
+                />
+              )}
+              {currentMode === 'preview' && PreviewComponent ? (
+                <div className="h-full overflow-y-auto bg-neutral-900 p-6">
+                  <PreviewComponent content={activeFile.content} fileName={activeFile.name} />
+                </div>
+              ) : (
           <MonacoEditor
             key={activeFile.path}
             height="100%"
@@ -471,6 +590,13 @@ export default function EditorGroupView({ groupId, isSecondary }: EditorGroupPro
               editorRef.current = monacoEditor
               // Apply keymap (IDEA/VS Code)
               applyKeymap(monacoInstance, monacoEditor, useSettingsStore.getState().keymap)
+              // Cursor-aware block selection (HCL files)
+              monacoEditor.onDidChangeCursorPosition((e) => {
+                handleCursorChange(e.position.lineNumber)
+              })
+              // Also trigger on initial mount
+              const pos = monacoEditor.getPosition()
+              if (pos) handleCursorChange(pos.lineNumber)
               // Auto-save when editor loses focus (click canvas, properties, etc.)
               monacoEditor.onDidBlurEditorText(() => {
                 triggerAutoSave()
@@ -520,7 +646,10 @@ export default function EditorGroupView({ groupId, isSecondary }: EditorGroupPro
               glyphMargin: false,
             }}
           />
-        ) : (
+              )}
+            </div>
+          )
+        })() : (
           <div className="h-full flex items-center justify-center text-neutral-500 text-sm">
             <div className="text-center">
               {(() => { const ft = getFileTypeInfo('untitled.txt'); const Icon = ft.icon; return <Icon className="w-10 h-10 mx-auto mb-2 opacity-20" /> })()}

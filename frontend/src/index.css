@@ -228,3 +228,35 @@ body {
   border-top: 4px solid #ef4444;
   border-bottom: 4px solid transparent;
 }
+
+/* Markdown preview styling */
+.markdown-preview {
+  color: #d4d4d4;
+  line-height: 1.7;
+  font-size: 14px;
+  max-width: 820px;
+}
+.markdown-preview h1 { font-size: 1.8em; font-weight: 700; margin: 1.2em 0 0.6em; color: #e5e5e5; border-bottom: 1px solid #404040; padding-bottom: 0.3em; }
+.markdown-preview h2 { font-size: 1.4em; font-weight: 600; margin: 1em 0 0.5em; color: #e5e5e5; border-bottom: 1px solid #333; padding-bottom: 0.25em; }
+.markdown-preview h3 { font-size: 1.15em; font-weight: 600; margin: 0.8em 0 0.4em; color: #e5e5e5; }
+.markdown-preview h4, .markdown-preview h5, .markdown-preview h6 { font-size: 1em; font-weight: 600; margin: 0.6em 0 0.3em; color: #e5e5e5; }
+.markdown-preview p { margin: 0.5em 0; }
+.markdown-preview a { color: #818cf8; text-decoration: none; }
+.markdown-preview a:hover { text-decoration: underline; }
+.markdown-preview strong { color: #e5e5e5; font-weight: 600; }
+.markdown-preview code { background: #262626; padding: 0.15em 0.4em; border-radius: 4px; font-size: 0.9em; font-family: 'JetBrains Mono', 'Fira Code', monospace; }
+.markdown-preview pre { background: #1a1a1a; border: 1px solid #333; border-radius: 6px; padding: 12px 16px; overflow-x: auto; margin: 0.8em 0; }
+.markdown-preview pre code { background: none; padding: 0; font-size: 0.85em; }
+.markdown-preview blockquote { border-left: 3px solid #525252; padding-left: 12px; color: #a3a3a3; margin: 0.5em 0; }
+.markdown-preview ul, .markdown-preview ol { padding-left: 1.5em; margin: 0.5em 0; }
+.markdown-preview li { margin: 0.2em 0; }
+.markdown-preview li::marker { color: #737373; }
+.markdown-preview ul li { list-style-type: disc; }
+.markdown-preview ol li { list-style-type: decimal; }
+.markdown-preview hr { border: none; border-top: 1px solid #404040; margin: 1.5em 0; }
+.markdown-preview img { max-width: 100%; border-radius: 6px; margin: 0.5em 0; }
+.markdown-preview table { border-collapse: collapse; margin: 0.8em 0; width: 100%; }
+.markdown-preview th { background: #262626; padding: 8px 12px; text-align: left; font-weight: 600; color: #e5e5e5; border: 1px solid #404040; }
+.markdown-preview td { padding: 6px 12px; border: 1px solid #333; }
+.markdown-preview tr:nth-child(even) td { background: #1a1a1a; }
+.markdown-preview input[type="checkbox"] { margin-right: 6px; accent-color: #818cf8; }

@@ -38,11 +38,13 @@ interface EditorPanelState {
   splitDirection: SplitDirection
   splitRatio: number
   revealLine: number | null  // Line to scroll to in active editor
+  previewModes: Record<string, 'source' | 'preview'>  // per-file preview mode (keyed by relative path)
 
   openFile: (filePath: string, fileName: string, groupId?: string, projectPath?: string | null) => void
   openCanvas: (projectId: string, projectName: string, groupId?: string) => void
   renameTab: (oldFilePath: string, newFilePath: string, newFileName: string) => void
   setRevealLine: (line: number | null) => void
+  setPreviewMode: (tabId: string, mode: 'source' | 'preview') => void
   closeTab: (groupId: string, tabId: string) => void
   setActiveTab: (groupId: string, tabId: string) => void
   reorderTab: (groupId: string, fromIndex: number, toIndex: number) => void
@@ -62,6 +64,10 @@ export const useEditorPanelStore = create<EditorPanelState>((set, get) => ({
   splitDirection: null,
   splitRatio: 0.5,
   revealLine: null,
+  previewModes: (() => {
+    try { return JSON.parse(localStorage.getItem('mycel-preview-modes') || '{}') }
+    catch { return {} }
+  })(),
 
   openFile: (filePath, fileName, groupId?, projectPath?) => {
     const state = get()
@@ -307,5 +313,15 @@ export const useEditorPanelStore = create<EditorPanelState>((set, get) => ({
 
   setRevealLine: (line) => {
     set({ revealLine: line })
+  },
+
+  setPreviewMode: (filePath, mode) => {
+    set(state => {
+      const next = { ...state.previewModes, [filePath]: mode }
+      // Remove entries set to 'source' to keep storage clean (source is the default)
+      if (mode === 'source') delete next[filePath]
+      try { localStorage.setItem('mycel-preview-modes', JSON.stringify(next)) } catch { /* ignore */ }
+      return { previewModes: next }
+    })
   },
 }))
