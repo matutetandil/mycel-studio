@@ -51,6 +51,15 @@ async function restoreAttachedProjects() {
   const projectStore = useProjectStore.getState()
   if (!projectStore.projectName) return // first project didn't load
 
+  // If the project's .mycel-studio.json has workspace attachments (v1.1),
+  // the new parent-child architecture handles restoration via loadAttachedProjects().
+  // Skip the old localStorage-based restoration to avoid duplicates.
+  const multiStore = useMultiProjectStore.getState()
+  if (multiStore.projects.size > 1) {
+    // loadAttachedProjects already ran and restored everything — nothing to do
+    return
+  }
+
   // Register the first project in multi-project store
   registerCurrentAsProject()
 

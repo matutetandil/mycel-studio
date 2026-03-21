@@ -224,7 +224,7 @@ export function useSync() {
 }
 
 // Convert parsed project to React Flow nodes
-function convertProjectToNodes(project: ParsedProject): {
+export function convertProjectToNodes(project: ParsedProject): {
   newNodes: StudioNode[]
   newEdges: Array<{ id: string; source: string; target: string }>
 } {

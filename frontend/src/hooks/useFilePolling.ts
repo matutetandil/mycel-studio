@@ -3,6 +3,7 @@
 
 import { useEffect, useRef } from 'react'
 import { useProjectStore, type ProjectFile } from '../stores/useProjectStore'
+import { useMultiProjectStore } from '../stores/useMultiProjectStore'
 import { isWailsRuntime } from '../lib/api'
 
 const POLL_INTERVAL = 5000
@@ -59,6 +60,9 @@ async function refreshFiles() {
 
     // Also refresh git status for the new files
     useProjectStore.getState().refreshGitStatus()
+
+    // Refresh git status for all attached projects (inactive ones)
+    useMultiProjectStore.getState().refreshAllProjectsGitStatus()
   } catch {
     // Ignore errors — polling is best-effort
   }

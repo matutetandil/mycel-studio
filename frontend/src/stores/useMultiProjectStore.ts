@@ -46,6 +46,7 @@ export interface ProjectInstance {
 interface MultiProjectState {
   projects: Map<string, ProjectInstance>
   activeProjectId: string | null
+  rootProjectId: string | null // The project opened first (parent in workspace hierarchy)
   projectOrder: string[] // for rendering order in FileTree/tabs
 
   // Actions
@@ -66,6 +67,9 @@ interface MultiProjectState {
 
   // Find project by path prefix
   findProjectByFilePath: (filePath: string) => ProjectInstance | undefined
+
+  // Refresh git status for ALL projects (not just active)
+  refreshAllProjectsGitStatus: () => Promise<void>
 }
 
 function generateId(): string {
@@ -110,8 +114,10 @@ function snapshotStores(): Omit<ProjectInstance, 'id'> {
 }
 
 // Restore a ProjectInstance into the live stores
-function restoreToStores(instance: ProjectInstance) {
-  // Restore studio store
+// When preserveEditor is true, don't touch editor tabs (used in multi-project attach mode
+// where files from multiple projects coexist in the same editor)
+function restoreToStores(instance: ProjectInstance, preserveEditor = false) {
+  // Restore studio store (canvas nodes, edges, configs)
   const studio = useStudioStore.getState()
   studio.setNodes(instance.nodes as Parameters<typeof studio.setNodes>[0])
   studio.setEdges(instance.edges)
@@ -124,7 +130,7 @@ function restoreToStores(instance: ProjectInstance) {
     pluginConfig: instance.pluginConfig,
   })
 
-  // Restore project store
+  // Restore project store (files, path, git)
   useProjectStore.setState({
     projectPath: instance.projectPath,
     projectName: instance.projectName,
@@ -135,15 +141,17 @@ function restoreToStores(instance: ProjectInstance) {
     capabilities: instance.capabilities,
   })
 
-  // Restore editor panel store
-  useEditorPanelStore.setState({
-    groups: instance.editorGroups,
-    activeGroupId: instance.editorActiveGroupId,
-    splitDirection: instance.editorSplitDirection,
-    splitRatio: instance.editorSplitRatio,
-    panelHeight: instance.editorPanelHeight,
-    isCollapsed: instance.editorIsCollapsed,
-  })
+  // Only restore editor state when doing a full switch (instance tabs, NOT multi-project attach)
+  if (!preserveEditor) {
+    useEditorPanelStore.setState({
+      groups: instance.editorGroups,
+      activeGroupId: instance.editorActiveGroupId,
+      splitDirection: instance.editorSplitDirection,
+      splitRatio: instance.editorSplitRatio,
+      panelHeight: instance.editorPanelHeight,
+      isCollapsed: instance.editorIsCollapsed,
+    })
+  }
 
   // Restore debug URL
   useDebugStore.getState().setRuntimeUrl(instance.runtimeUrl)
@@ -152,6 +160,7 @@ function restoreToStores(instance: ProjectInstance) {
 export const useMultiProjectStore = create<MultiProjectState>((set, get) => ({
   projects: new Map(),
   activeProjectId: null,
+  rootProjectId: null,
   projectOrder: [],
 
   addProject: (partial) => {
@@ -226,7 +235,7 @@ export const useMultiProjectStore = create<MultiProjectState>((set, get) => ({
     // If we switched active project, restore it
     if (newActiveId && newActiveId !== id) {
       const project = newProjects.get(newActiveId)
-      if (project) restoreToStores(project)
+      if (project) restoreToStores(project, true)
     } else if (!newActiveId) {
       // No projects left — clear stores
       useStudioStore.setState({ nodes: [], edges: [], selectedNodeId: null })
@@ -271,7 +280,9 @@ export const useMultiProjectStore = create<MultiProjectState>((set, get) => ({
     }
 
     set({ activeProjectId: id })
-    restoreToStores(target)
+    // Preserve editor tabs — in multi-project mode, files from all projects
+    // coexist in the same editor. Only canvas/files/configs switch.
+    restoreToStores(target, true)
   },
 
   getProject: (id) => {
@@ -322,6 +333,62 @@ export const useMultiProjectStore = create<MultiProjectState>((set, get) => ({
       }
     }
     return undefined
+  },
+
+  refreshAllProjectsGitStatus: async () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const app = (window as any).go?.main?.App
+    if (!app?.IsGitRepo || !app?.GetGitFileStatuses || !app?.GetGitBranch) return
+
+    const state = get()
+    const newProjects = new Map(state.projects)
+    let changed = false
+
+    for (const [id, project] of state.projects) {
+      if (!project.projectPath) continue
+
+      // Skip the active project — its git status is handled by useProjectStore.refreshGitStatus()
+      if (id === state.activeProjectId) continue
+
+      try {
+        const isRepo = await app.IsGitRepo(project.projectPath)
+        if (!isRepo) continue
+
+        const [branch, statuses] = await Promise.all([
+          app.GetGitBranch(project.projectPath),
+          app.GetGitFileStatuses(project.projectPath),
+        ])
+
+        const updatedFiles = project.files.map(f => {
+          const status = statuses[f.relativePath]
+          let gitStatus: ProjectFile['gitStatus'] = 'clean'
+          if (status) {
+            switch (status) {
+              case 'modified': gitStatus = 'modified'; break
+              case 'added': gitStatus = 'added'; break
+              case 'deleted': gitStatus = 'deleted'; break
+              case 'untracked': gitStatus = 'untracked'; break
+              case 'ignored': gitStatus = 'ignored'; break
+              case 'staged': case 'staged_added': case 'staged_deleted':
+              case 'staged_renamed': case 'staged_modified':
+                gitStatus = status as ProjectFile['gitStatus']; break
+              default: gitStatus = 'clean'
+            }
+          }
+          return { ...f, gitStatus }
+        })
+
+        const updated = { ...project, gitBranch: branch, files: updatedFiles }
+        newProjects.set(id, updated)
+        changed = true
+      } catch {
+        // Git status is best-effort per project
+      }
+    }
+
+    if (changed) {
+      set({ projects: newProjects })
+    }
   },
 }))
 

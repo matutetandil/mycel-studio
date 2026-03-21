@@ -18,7 +18,7 @@ import { useState, useMemo, useEffect, useRef, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import { useProjectStore, type ProjectFile } from '../../stores/useProjectStore'
 import { useStudioStore } from '../../stores/useStudioStore'
-import { useEditorPanelStore } from '../../stores/useEditorPanelStore'
+import { useEditorPanelStore, scopedPath, unscopePath } from '../../stores/useEditorPanelStore'
 import { useMultiProjectStore } from '../../stores/useMultiProjectStore'
 import { generateProject, toIdentifier, type GeneratedFile } from '../../utils/hclGenerator'
 import type { ConnectorNodeData, FlowNodeData } from '../../types'
@@ -133,12 +133,69 @@ function FileItem({ file, isActive, onClick, isGenerated, onContextMenu, isEditi
   )
 }
 
-function openFileInEditor(filePath: string, revealLine?: number) {
+// Select the canvas node that corresponds to a file path (updates Properties panel)
+// Accepts both scoped ({projectPath}::{relativePath}) and unscoped paths
+export function selectNodeForFile(filePath: string) {
+  const { nodes, selectNode } = useStudioStore.getState()
+
+  // Unscope if needed (TabBar passes scoped paths)
+  const { relativePath: unscopedPath } = unscopePath(filePath)
+
+  // Handle mycelRoot prefix — strip it for matching
+  const mycelRoot = useProjectStore.getState().mycelRoot
+  const relPath = mycelRoot && unscopedPath.startsWith(mycelRoot)
+    ? unscopedPath.slice(mycelRoot.length)
+    : unscopedPath
+
+  // connectors/{name}.hcl → find connector with that identifier
+  const connectorMatch = relPath.match(/^connectors\/(.+)\.hcl$/)
+  if (connectorMatch) {
+    const identifier = connectorMatch[1]
+    const node = nodes.find(n => {
+      if (n.type !== 'connector') return false
+      const data = n.data as ConnectorNodeData
+      return toIdentifier(data.label) === identifier
+    })
+    if (node) { selectNode(node.id); return }
+  }
+
+  // Also match by hclFile field on any node
+  const nodeByHclFile = nodes.find(n => {
+    const data = n.data as Record<string, unknown>
+    return data.hclFile === filePath || data.hclFile === relPath
+  })
+  if (nodeByHclFile) { selectNode(nodeByHclFile.id); return }
+
+  // Shared files → select first node of that type
+  const typeMap: Record<string, string> = {
+    'flows/flows.hcl': 'flow',
+    'types/types.hcl': 'type',
+    'validators/validators.hcl': 'validator',
+    'transforms/transforms.hcl': 'transform',
+    'aspects/aspects.hcl': 'aspect',
+    'sagas/sagas.hcl': 'saga',
+    'machines/machines.hcl': 'state_machine',
+  }
+  const nodeType = typeMap[relPath]
+  if (nodeType) {
+    const node = nodes.find(n => n.type === nodeType)
+    if (node) { selectNode(node.id); return }
+  }
+
+  // config.hcl, auth, security, plugins, env files → deselect (show ServiceProperties)
+  selectNode(null)
+}
+
+function openFileInEditor(filePath: string, revealLine?: number, projectPath?: string | null) {
   const fileName = filePath.split('/').pop() || filePath
-  useEditorPanelStore.getState().openFile(filePath, fileName)
+  // Pass projectPath so EditorPanelStore can create scoped tab IDs
+  const pp = projectPath ?? useProjectStore.getState().projectPath
+  useEditorPanelStore.getState().openFile(filePath, fileName, undefined, pp)
   // Auto-expand editor if collapsed
   const { isCollapsed, toggleCollapse } = useEditorPanelStore.getState()
   if (isCollapsed) toggleCollapse()
+  // Select the corresponding canvas node → updates Properties panel
+  selectNodeForFile(filePath)
   // Scroll to specific line if provided
   if (revealLine) {
     // Small delay to let the editor mount/switch tab first
@@ -246,7 +303,7 @@ function NewFileDialog({
 }
 
 function SingleProjectFileTree({ hideHeader }: { hideHeader?: boolean } = {}) {
-  const { projectName, files, activeFile, setActiveFile, openProject, createFile, createDirectory, deleteFile, renameFile, capabilities, mycelRoot } = useProjectStore()
+  const { projectPath, projectName, files, activeFile, setActiveFile, openProject, createFile, createDirectory, deleteFile, renameFile, capabilities, mycelRoot } = useProjectStore()
   const { nodes, edges, selectedNodeId, serviceConfig, authConfig, envConfig, securityConfig, pluginConfig } = useStudioStore()
   const editorActiveTabId = useEditorPanelStore(s => s.groups.find(g => g.id === s.activeGroupId)?.activeTabId || null)
   const [isExpanded, setIsExpanded] = useState(true)
@@ -320,13 +377,19 @@ function SingleProjectFileTree({ hideHeader }: { hideHeader?: boolean } = {}) {
           if (prevPath && prevPath !== filePath) {
             // Label changed — rename existing tab instead of opening new one
             const fileName = filePath.split('/').pop() || filePath
-            useEditorPanelStore.getState().renameTab(prevPath, filePath, fileName)
+            // Use scoped paths for rename so tab IDs stay consistent
+            const scopedOld = scopedPath(projectPath, prevPath)
+            useEditorPanelStore.getState().renameTab(scopedOld, filePath, fileName)
+            // Also try unscoped for backward compat
+            if (scopedOld !== prevPath) {
+              useEditorPanelStore.getState().renameTab(prevPath, filePath, fileName)
+            }
             if (revealLine) {
               setTimeout(() => useEditorPanelStore.getState().setRevealLine(revealLine!), 50)
             }
           } else {
             // Open file (or activate existing tab) and scroll to block
-            openFileInEditor(filePath, revealLine)
+            openFileInEditor(filePath, revealLine, projectPath)
           }
 
           prevNodeFileRef.current[selectedNodeId] = filePath
@@ -369,12 +432,13 @@ function SingleProjectFileTree({ hideHeader }: { hideHeader?: boolean } = {}) {
 
     if (newPath !== oldPath) {
       await renameFile(oldPath, newPath)
-      // Update editor tab if open
+      // Update editor tab if open (use scoped path)
       const fileName = editingFile.newName.trim()
-      useEditorPanelStore.getState().renameTab(oldPath, newPath, fileName)
+      const scopedOld = scopedPath(projectPath, oldPath)
+      useEditorPanelStore.getState().renameTab(scopedOld, newPath, fileName)
     }
     setEditingFile(null)
-  }, [editingFile, renameFile])
+  }, [editingFile, renameFile, projectPath])
 
   const handleMoveFile = useCallback(async (path: string) => {
     const newPath = prompt('Move to (relative path):', path)
@@ -391,15 +455,17 @@ function SingleProjectFileTree({ hideHeader }: { hideHeader?: boolean } = {}) {
     const confirmed = confirm(`Delete "${path}"?`)
     if (confirmed) {
       await deleteFile(path)
-      // Close editor tab if open
+      // Close editor tab if open (check both scoped and unscoped)
       const editorStore = useEditorPanelStore.getState()
+      const scoped = scopedPath(projectPath, path)
       for (const group of editorStore.groups) {
-        if (group.tabs.some(t => t.filePath === path)) {
-          editorStore.closeTab(group.id, path)
+        const tab = group.tabs.find(t => t.id === scoped || t.id === path)
+        if (tab) {
+          editorStore.closeTab(group.id, tab.id)
         }
       }
     }
-  }, [deleteFile])
+  }, [deleteFile, projectPath])
 
   const handleCreateFile = useCallback(async (path: string) => {
     await createFile(path)
@@ -501,7 +567,10 @@ function SingleProjectFileTree({ hideHeader }: { hideHeader?: boolean } = {}) {
 
   // Build nested tree from merged file list (must be before early returns — hooks order)
   const tree = useMemo(() => buildFileTree(mergedFiles), [mergedFiles])
-  const currentActiveFile = editorActiveTabId || activeFile
+  // Unscope the active tab ID so it can match against relative file paths in the tree
+  const currentActiveFile = editorActiveTabId
+    ? unscopePath(editorActiveTabId).relativePath
+    : activeFile
 
   const getOpenLabel = () => {
     if (capabilities.canOpenFolder) {
@@ -546,7 +615,7 @@ function SingleProjectFileTree({ hideHeader }: { hideHeader?: boolean } = {}) {
 
   const handleFileClick = (path: string) => {
     setActiveFile(path)
-    openFileInEditor(path)
+    openFileInEditor(path, undefined, projectPath)
   }
 
   const treeContent = (
@@ -935,10 +1004,12 @@ function MultiProjectRoot({ projectId, projectName, gitBranch, onDetach, index }
     if (currentActive !== projectId) {
       useMultiProjectStore.getState().setActiveProject(projectId)
     }
-    // Small delay to let store switch, then open file
+    // Always pass the project's path so tabs get scoped IDs
+    const proj = useMultiProjectStore.getState().projects.get(projectId)
+    const pp = proj?.projectPath ?? null
     setTimeout(() => {
       useProjectStore.getState().setActiveFile(filePath)
-      openFileInEditor(filePath)
+      openFileInEditor(filePath, undefined, pp)
     }, currentActive !== projectId ? 50 : 0)
   }, [projectId])
 
@@ -1006,6 +1077,7 @@ function MultiProjectRoot({ projectId, projectName, gitBranch, onDetach, index }
         <div className="pl-2">
           <StaticFileTree
             files={projectFiles}
+            projectPath={project?.projectPath}
             onFileClick={handleFileClick}
           />
         </div>
@@ -1015,8 +1087,15 @@ function MultiProjectRoot({ projectId, projectName, gitBranch, onDetach, index }
 }
 
 // Simplified read-only file tree for inactive projects (shows files from snapshot)
-function StaticFileTree({ files, onFileClick }: { files: ProjectFile[]; onFileClick: (path: string) => void }) {
+function StaticFileTree({ files, projectPath: treeProjPath, onFileClick }: { files: ProjectFile[]; projectPath?: string | null; onFileClick: (path: string) => void }) {
   const editorActiveTabId = useEditorPanelStore(s => s.groups.find(g => g.id === s.activeGroupId)?.activeTabId || null)
+  // Unscope the active tab ID and check if it belongs to this project
+  const activeRelPath = editorActiveTabId ? (() => {
+    const { projectPath: pp, relativePath } = unscopePath(editorActiveTabId)
+    // Only highlight if this tab belongs to this project (or is unscoped)
+    if (pp && treeProjPath && pp !== treeProjPath) return null
+    return relativePath
+  })() : null
 
   const HIDDEN_FILES = ['.mycel-studio.json']
   const visibleFiles = files.filter(f => !HIDDEN_FILES.includes(f.name))
@@ -1036,7 +1115,7 @@ function StaticFileTree({ files, onFileClick }: { files: ProjectFile[]; onFileCl
             <FileItem
               key={f.relativePath}
               file={f}
-              isActive={editorActiveTabId === f.relativePath}
+              isActive={activeRelPath === f.relativePath}
               onClick={() => onFileClick(f.relativePath)}
             />
           ))}
@@ -1051,7 +1130,7 @@ function StaticFileTree({ files, onFileClick }: { files: ProjectFile[]; onFileCl
           <FileItem
             key={f.relativePath}
             file={f}
-            isActive={editorActiveTabId === f.relativePath}
+            isActive={activeRelPath === f.relativePath}
             onClick={() => onFileClick(f.relativePath)}
           />
         ))}
@@ -1099,7 +1178,33 @@ export default function FileTree() {
             projectId={id}
             projectName={project.projectName || 'Unnamed Project'}
             gitBranch={project.gitBranch}
-            onDetach={() => useMultiProjectStore.getState().removeProject(id)}
+            onDetach={async () => {
+              const proj = useMultiProjectStore.getState().projects.get(id)
+              useMultiProjectStore.getState().removeProject(id)
+              // Clean up workspace files — remove attachment from child and parent
+              if (proj?.projectPath) {
+                try {
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  const app = (window as any).go?.main?.App
+                  if (app?.WriteFileAtPath) {
+                    // Remove workspace role from detached project (make it standalone)
+                    const detachedWsPath = `${proj.projectPath}/.mycel-studio.json`
+                    try {
+                      const content = await app.ReadFileAtPath(detachedWsPath)
+                      const ws = JSON.parse(content)
+                      delete ws.workspace
+                      ws.version = '1.0'
+                      await app.WriteFileAtPath(detachedWsPath, JSON.stringify(ws, null, 2))
+                    } catch { /* file may not exist */ }
+                  }
+                  // Re-save remaining projects' workspace
+                  const { saveAllProjectWorkspaces } = await import('../../stores/useWorkspaceStore')
+                  saveAllProjectWorkspaces(null)
+                } catch (err) {
+                  console.error('Failed to clean up workspace on detach:', err)
+                }
+              }
+            }}
             index={index}
           />
         )

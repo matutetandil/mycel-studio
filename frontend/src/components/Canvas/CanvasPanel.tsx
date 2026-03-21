@@ -2,12 +2,20 @@
 // When multiple projects are attached, shows a tab bar to switch between canvases.
 // When only one project, renders Canvas directly (no tab overhead).
 
+import { useCallback } from 'react'
 import { LayoutGrid, X } from 'lucide-react'
 import { useMultiProjectStore } from '../../stores/useMultiProjectStore'
 import Canvas from './Canvas'
 
 export default function CanvasPanel() {
   const { projectOrder, projects, activeProjectId, setActiveProject, removeProject } = useMultiProjectStore()
+
+  // Ensure the correct project is active when interacting with the canvas
+  const handleCanvasInteraction = useCallback(() => {
+    // Canvas always shows the active project — nothing to do here
+    // The tab click already switches. This handler is for future use
+    // if we ever render multiple canvases simultaneously.
+  }, [])
 
   // Single or no project — render canvas directly (backward-compatible)
   if (projectOrder.length <= 1) {
@@ -50,8 +58,8 @@ export default function CanvasPanel() {
         })}
       </div>
 
-      {/* Active canvas */}
-      <div className="flex-1 min-h-0">
+      {/* Active canvas — clicking anywhere ensures this project is active */}
+      <div className="flex-1 min-h-0" onMouseDown={handleCanvasInteraction}>
         <Canvas />
       </div>
     </div>

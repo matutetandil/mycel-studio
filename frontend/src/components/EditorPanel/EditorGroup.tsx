@@ -2,9 +2,10 @@ import { useState, useMemo, useRef, useEffect, useCallback } from 'react'
 import MonacoEditor from '@monaco-editor/react'
 import type { editor } from 'monaco-editor'
 import { setupMonaco } from '../../monaco'
-import { useEditorPanelStore } from '../../stores/useEditorPanelStore'
+import { useEditorPanelStore, unscopePath } from '../../stores/useEditorPanelStore'
 import { useStudioStore } from '../../stores/useStudioStore'
 import { useProjectStore } from '../../stores/useProjectStore'
+import { useMultiProjectStore } from '../../stores/useMultiProjectStore'
 import { useDebugStore, breakpointKey } from '../../stores/useDebugStore'
 import { generateProject, type GeneratedFile } from '../../utils/hclGenerator'
 import { computeLineDiff, type LineDiffResult } from '../../utils/lineDiff'
@@ -159,14 +160,68 @@ export default function EditorGroupView({ groupId, isSecondary }: EditorGroupPro
 
   // Compute active file (safe when group is null)
   const activeTab = group?.tabs.find(t => t.id === group.activeTabId)
-  const realProjectFile = activeTab ? projectFiles.find(f => f.relativePath === activeTab.filePath) : undefined
-  const generatedFile = activeTab ? project.files.find(f => f.path === activeTab.filePath) : undefined
-  const isRealFile = !!realProjectFile && !!projectName
-  const activeFile: GeneratedFile | undefined = activeTab
-    ? (realProjectFile
-        ? { path: activeTab.filePath, name: activeTab.fileName, content: realProjectFile.content }
-        : generatedFile)
-    : undefined
+
+  // Resolve file content — may come from a different project than the active one
+  const { activeFile, isRealFile } = useMemo(() => {
+    if (!activeTab || activeTab.type === 'canvas') return { activeFile: undefined, isRealFile: false }
+
+    const { projectPath: tabProjPath, relativePath: relPath } = unscopePath(activeTab.filePath)
+
+    // Determine which project's data to use
+    const multiStore = useMultiProjectStore.getState()
+    let resolvedFiles = projectFiles
+    let resolvedNodes = nodes
+    let resolvedEdges = edges
+    let resolvedServiceConfig = serviceConfig
+    let resolvedAuthConfig = authConfig
+    let resolvedEnvConfig = envConfig
+    let resolvedSecurityConfig = securityConfig
+    let resolvedPluginConfig = pluginConfig
+    let resolvedMycelRoot = mycelRoot
+    let resolvedProjectName = projectName
+
+    // If the tab belongs to a different project, use that project's snapshot
+    if (tabProjPath && multiStore.projects.size > 0) {
+      for (const proj of multiStore.projects.values()) {
+        if (proj.projectPath === tabProjPath) {
+          const isActive = multiStore.activeProjectId === proj.id
+          if (!isActive) {
+            // Use snapshot data for inactive project
+            resolvedFiles = proj.files
+            resolvedNodes = proj.nodes as typeof nodes
+            resolvedEdges = proj.edges
+            resolvedServiceConfig = proj.serviceConfig
+            resolvedAuthConfig = proj.authConfig
+            resolvedEnvConfig = proj.envConfig
+            resolvedSecurityConfig = proj.securityConfig
+            resolvedPluginConfig = proj.pluginConfig
+            resolvedMycelRoot = proj.mycelRoot
+            resolvedProjectName = proj.projectName
+          }
+          break
+        }
+      }
+    }
+
+    // Find in real project files
+    const realFile = resolvedFiles.find(f => f.relativePath === relPath)
+    if (realFile && resolvedProjectName) {
+      return {
+        activeFile: { path: relPath, name: activeTab.fileName, content: realFile.content } as GeneratedFile,
+        isRealFile: true,
+      }
+    }
+
+    // Find in generated files
+    const resolvedExistingPaths = new Set(resolvedFiles.map(f => f.relativePath))
+    const generated = generateProject(
+      resolvedNodes, resolvedEdges, resolvedServiceConfig, resolvedAuthConfig,
+      resolvedEnvConfig, resolvedSecurityConfig, resolvedPluginConfig,
+      resolvedMycelRoot, resolvedExistingPaths
+    )
+    const genFile = generated.files.find(f => f.path === relPath)
+    return { activeFile: genFile, isRealFile: false }
+  }, [activeTab, projectFiles, nodes, edges, serviceConfig, authConfig, envConfig, securityConfig, pluginConfig, mycelRoot, projectName])
 
   // Scroll to specific line when revealLine changes
   useEffect(() => {
@@ -448,7 +503,8 @@ export default function EditorGroupView({ groupId, isSecondary }: EditorGroupPro
               applyGitDecorations()
             }}
             onChange={(value) => {
-              if (value !== undefined && isRealFile) {
+              if (value !== undefined && isRealFile && activeFile) {
+                // Use the unscoped relative path for updating the project store
                 updateFile(activeFile.path, value)
               }
             }}

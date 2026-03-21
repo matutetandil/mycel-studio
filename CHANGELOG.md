@@ -2,6 +2,36 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.1.0] - Multi-Project Parent-Child Architecture
+
+### Fixed
+
+- **Canvas empty/disordered on reopen:** Each project's `.mycel-studio.json` is now saved independently from its own snapshot. Previously, the active project's store state was written to all project files, causing incorrect node positions.
+- **Same-name files both selected across projects:** Editor tab IDs are now scoped with the project path (`{projectPath}::{relativePath}`), so `config.hcl` from project A and project B are distinct tabs.
+- **Git status not showing for attached projects:** Added `refreshAllProjectsGitStatus()` that polls git for all inactive projects alongside the active project refresh.
+
+### Added
+
+- **Persistent parent-child workspace architecture:**
+  - `.mycel-studio.json` schema v1.1 with `workspace` field
+  - Parent projects store `attachments` array with absolute paths to children
+  - Child projects store `parent` reference to the parent project path
+  - Opening a child auto-loads the parent and all siblings
+  - Opening a parent auto-loads all attached children
+  - Detaching removes references from both parent and child workspace files
+
+- **Per-project workspace save (`saveAllProjectWorkspaces`):**
+  - Snapshots each project independently before saving
+  - Parent gets shared UI state (sidebar, terminals, breakpoints, view mode)
+  - Children get only their own canvas, nodes, and editor tabs
+
+- **Scoped editor tab IDs:**
+  - `scopedPath()` / `unscopePath()` helpers in `useEditorPanelStore`
+  - EditorGroup resolves content from the correct project via scoped path
+  - TabBar shows project name in tooltip, switches project on tab click
+
+- **Go bindings:** `WriteFileAtPath()`, `ReadFileAtPath()` for cross-project file operations
+
 ## [2.0.0] - Multi-Project Support
 
 ### Added

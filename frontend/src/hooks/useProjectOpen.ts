@@ -110,10 +110,13 @@ export function useProjectOpen() {
     const projectStore = useProjectStore.getState()
 
     // Register current project if not yet in multi-project store
+    // This project (the one already open) is the ROOT (parent) — it was open when user chose Attach
     if (multiStore.projectOrder.length === 0 && projectStore.projectName) {
-      registerCurrentAsProject()
+      const rootId = registerCurrentAsProject()
+      useMultiProjectStore.setState({ rootProjectId: rootId })
     } else {
       multiStore.snapshotActiveProject()
+      // Keep existing rootProjectId — subsequent attaches don't change the parent
     }
 
     // Clear UI and open the new project
@@ -124,6 +127,10 @@ export function useProjectOpen() {
       const newProjectId = registerCurrentAsProject()
       const newProjectName = useProjectStore.getState().projectName || pendingProject.name
       useEditorPanelStore.getState().openCanvas(newProjectId, newProjectName)
+
+      // Save workspace files with attachment config so they persist across restarts
+      const { saveAllProjectWorkspaces } = await import('../stores/useWorkspaceStore')
+      saveAllProjectWorkspaces(null)
     }
 
     setPendingProject(null)

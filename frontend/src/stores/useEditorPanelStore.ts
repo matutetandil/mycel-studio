@@ -1,11 +1,25 @@
 import { create } from 'zustand'
 
 export interface EditorTab {
-  id: string        // Same as filePath (for files) or `canvas:{projectId}` (for canvas)
+  id: string        // Scoped path: `{projectPath}::{relativePath}` or `canvas:{projectId}`
   type: 'file' | 'canvas'
-  filePath: string  // For files: relative path. For canvas: `canvas:{projectId}`
+  filePath: string  // Scoped path for files, `canvas:{projectId}` for canvas
   fileName: string  // For files: filename. For canvas: project name
   projectId?: string // Which project this tab belongs to
+}
+
+// Scope a relative file path with its project path for unique identification
+// across multiple projects (e.g., both projects have `config.hcl`)
+export function scopedPath(projectPath: string | null, relativePath: string): string {
+  if (!projectPath) return relativePath
+  return `${projectPath}::${relativePath}`
+}
+
+// Extract the project path and relative path from a scoped path
+export function unscopePath(scoped: string): { projectPath: string | null; relativePath: string } {
+  const idx = scoped.indexOf('::')
+  if (idx === -1) return { projectPath: null, relativePath: scoped }
+  return { projectPath: scoped.slice(0, idx), relativePath: scoped.slice(idx + 2) }
 }
 
 export interface EditorGroup {
@@ -25,7 +39,7 @@ interface EditorPanelState {
   splitRatio: number
   revealLine: number | null  // Line to scroll to in active editor
 
-  openFile: (filePath: string, fileName: string, groupId?: string) => void
+  openFile: (filePath: string, fileName: string, groupId?: string, projectPath?: string | null) => void
   openCanvas: (projectId: string, projectName: string, groupId?: string) => void
   renameTab: (oldFilePath: string, newFilePath: string, newFileName: string) => void
   setRevealLine: (line: number | null) => void
@@ -49,13 +63,14 @@ export const useEditorPanelStore = create<EditorPanelState>((set, get) => ({
   splitRatio: 0.5,
   revealLine: null,
 
-  openFile: (filePath, fileName, groupId?) => {
+  openFile: (filePath, fileName, groupId?, projectPath?) => {
     const state = get()
     const targetGroupId = groupId || state.activeGroupId
+    const id = projectPath ? scopedPath(projectPath, filePath) : filePath
 
     // Check if tab already exists in any group
     for (const group of state.groups) {
-      const existing = group.tabs.find(t => t.filePath === filePath)
+      const existing = group.tabs.find(t => t.id === id)
       if (existing) {
         set({
           groups: state.groups.map(g =>
@@ -68,7 +83,7 @@ export const useEditorPanelStore = create<EditorPanelState>((set, get) => ({
     }
 
     // Add new tab to target group
-    const newTab: EditorTab = { id: filePath, type: 'file', filePath, fileName }
+    const newTab: EditorTab = { id, type: 'file', filePath: id, fileName }
     set({
       groups: state.groups.map(g =>
         g.id === targetGroupId
@@ -120,12 +135,27 @@ export const useEditorPanelStore = create<EditorPanelState>((set, get) => ({
     set(state => ({
       groups: state.groups.map(g => ({
         ...g,
-        tabs: g.tabs.map(t =>
-          t.filePath === oldFilePath
-            ? { ...t, id: newFilePath, filePath: newFilePath, fileName: newFileName }
-            : t
-        ),
-        activeTabId: g.activeTabId === oldFilePath ? newFilePath : g.activeTabId,
+        tabs: g.tabs.map(t => {
+          // Match by exact id or by the old file path (for backward compat with unscoped paths)
+          if (t.id === oldFilePath || t.filePath === oldFilePath) {
+            // Preserve project scope prefix if present
+            const { projectPath } = unscopePath(t.id)
+            const newId = projectPath ? scopedPath(projectPath, newFilePath) : newFilePath
+            return { ...t, id: newId, filePath: newId, fileName: newFileName }
+          }
+          return t
+        }),
+        activeTabId: g.activeTabId === oldFilePath
+          ? (() => {
+              // Find the tab to get the correct new id
+              const tab = g.tabs.find(t => t.id === oldFilePath || t.filePath === oldFilePath)
+              if (tab) {
+                const { projectPath: pp } = unscopePath(tab.id)
+                return pp ? scopedPath(pp, newFilePath) : newFilePath
+              }
+              return g.activeTabId
+            })()
+          : g.activeTabId,
       })),
     }))
   },

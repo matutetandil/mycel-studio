@@ -1,11 +1,9 @@
 import { useState, useRef, useMemo } from 'react'
 import { X, Columns2, Rows2, Copy, Check, Download, XCircle, LayoutGrid } from 'lucide-react'
-import { useEditorPanelStore, type EditorTab } from '../../stores/useEditorPanelStore'
-import { useStudioStore } from '../../stores/useStudioStore'
+import { useEditorPanelStore, unscopePath, type EditorTab } from '../../stores/useEditorPanelStore'
 import { useProjectStore } from '../../stores/useProjectStore'
 import { useMultiProjectStore } from '../../stores/useMultiProjectStore'
-import { toIdentifier } from '../../utils/hclGenerator'
-import type { ConnectorNodeData } from '../../types'
+import { selectNodeForFile } from '../FileTree/FileTree'
 import { getFileTypeInfo } from '../../utils/fileIcons'
 
 // Git status colors (same as FileTree)
@@ -58,55 +56,27 @@ interface TabBarProps {
   copied: boolean
 }
 
-// Map a file path to the corresponding canvas node
-function selectNodeForFile(filePath: string) {
-  const { nodes, selectNode } = useStudioStore.getState()
-
-  // connectors/{name}.hcl → find connector with that identifier
-  const connectorMatch = filePath.match(/^connectors\/(.+)\.hcl$/)
-  if (connectorMatch) {
-    const identifier = connectorMatch[1]
-    const node = nodes.find(n => {
-      if (n.type !== 'connector') return false
-      const data = n.data as ConnectorNodeData
-      return toIdentifier(data.label) === identifier
-    })
-    if (node) { selectNode(node.id); return }
-  }
-
-  // Shared files → select first node of that type
-  const typeMap: Record<string, string> = {
-    'flows/flows.hcl': 'flow',
-    'types/types.hcl': 'type',
-    'validators/validators.hcl': 'validator',
-    'transforms/transforms.hcl': 'transform',
-    'aspects/aspects.hcl': 'aspect',
-    'sagas/sagas.hcl': 'saga',
-    'machines/machines.hcl': 'state_machine',
-  }
-
-  const nodeType = typeMap[filePath]
-  if (nodeType) {
-    const node = nodes.find(n => n.type === nodeType)
-    if (node) { selectNode(node.id); return }
-  }
-
-  // config.hcl, auth, security, plugins, env files → deselect (show ServiceProperties)
-  selectNode(null)
-}
-
 export default function TabBar({ groupId, tabs, activeTabId, isSecondary, onCopy, onDownloadZip, copied }: TabBarProps) {
   const { setActiveTab, closeTab, reorderTab, moveTabToGroup, splitEditor, closeSplit } = useEditorPanelStore()
   const projectFiles = useProjectStore(s => s.files)
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null)
   const dragSourceRef = useRef<{ groupId: string; index: number } | null>(null)
 
-  // Build a map of filePath → gitStatus for quick lookup
+  // Build a map of relativePath → gitStatus for quick lookup
   const gitStatusMap = useMemo(() => {
     const map: Record<string, string> = {}
     for (const f of projectFiles) {
       if (f.gitStatus && f.gitStatus !== 'clean' && f.gitStatus !== 'ignored') {
         map[f.relativePath] = f.gitStatus
+      }
+    }
+    // Also include files from all attached projects
+    const multi = useMultiProjectStore.getState()
+    for (const project of multi.projects.values()) {
+      for (const f of project.files) {
+        if (f.gitStatus && f.gitStatus !== 'clean' && f.gitStatus !== 'ignored') {
+          map[f.relativePath] = f.gitStatus
+        }
       }
     }
     return map
@@ -158,10 +128,14 @@ export default function TabBar({ groupId, tabs, activeTabId, isSecondary, onCopy
       {/* Tabs */}
       <div className="flex-1 flex items-center overflow-x-auto">
         {tabs.map((tab, index) => {
-          const gitStatus = gitStatusMap[tab.filePath]
+          // Unscope the file path for display and git status lookup
+          const { projectPath: tabProjectPath, relativePath: tabRelPath } = unscopePath(tab.filePath)
+          const gitStatus = gitStatusMap[tabRelPath]
           const nameColor = gitStatus ? gitNameColors[gitStatus] : ''
           const badgeLetter = gitStatus ? gitBadgeLetters[gitStatus] : ''
           const badgeColor = gitStatus ? gitBadgeColors[gitStatus] : ''
+          // Show project folder name in tooltip when scoped
+          const projectHint = tabProjectPath ? tabProjectPath.split('/').pop() : null
 
           return (
             <div
@@ -171,6 +145,7 @@ export default function TabBar({ groupId, tabs, activeTabId, isSecondary, onCopy
               onDragOver={(e) => handleDragOver(e, index)}
               onDragLeave={handleDragLeave}
               onDrop={(e) => handleDrop(e, index)}
+              title={projectHint ? `${projectHint} / ${tabRelPath}` : tabRelPath}
               onClick={() => {
                 setActiveTab(groupId, tab.id)
                 if (tab.type === 'canvas' && tab.projectId) {
@@ -180,6 +155,16 @@ export default function TabBar({ groupId, tabs, activeTabId, isSecondary, onCopy
                     multi.setActiveProject(tab.projectId)
                   }
                 } else {
+                  // Switch to the tab's project if needed
+                  if (tabProjectPath) {
+                    const multi = useMultiProjectStore.getState()
+                    for (const [id, proj] of multi.projects) {
+                      if (proj.projectPath === tabProjectPath && multi.activeProjectId !== id) {
+                        multi.setActiveProject(id)
+                        break
+                      }
+                    }
+                  }
                   selectNodeForFile(tab.filePath)
                 }
               }}

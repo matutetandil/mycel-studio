@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { getFileSystemProvider, getCapabilities, type FSCapabilities } from '../lib/fileSystem'
-import { loadWorkspace, applyWorkspace } from './useWorkspaceStore'
+import { loadWorkspace, applyWorkspace, type WorkspaceState } from './useWorkspaceStore'
 import { useEditorPanelStore } from './useEditorPanelStore'
 import { generateProject } from '../utils/hclGenerator'
 import { apiParse, apiConfirm } from '../lib/api'
@@ -184,14 +184,238 @@ async function loadProjectIntoStore(set: any, get: any, provider: any, project: 
 
   // Load workspace state (.mycel-studio.json) after nodes are on canvas
   const workspaceFile = files.find((f: ProjectFile) => f.name === '.mycel-studio.json')
+  let loadedWorkspace: WorkspaceState | null = null
   if (workspaceFile) {
-    const ws = loadWorkspace(workspaceFile.content)
-    if (ws) {
-      setTimeout(() => applyWorkspace(ws), 100)
-    }
+    loadedWorkspace = loadWorkspace(workspaceFile.content)
+  }
+
+  // If this project is a CHILD, redirect to load the PARENT as the primary project.
+  // The parent's workspace has the full IDE state (sidebar, view mode, terminals, etc.)
+  if (loadedWorkspace?.workspace?.role === 'child' && loadedWorkspace.workspace.parent) {
+    const parentPath = loadedWorkspace.workspace.parent
+    const currentPath = provider.getProjectPath()
+    // Don't apply child's workspace — the parent's workspace will be applied instead.
+    // Schedule parent-first loading after a short delay to let the current load finish.
+    setTimeout(() => loadParentFirst(parentPath, currentPath), 150)
+    return true
+  }
+
+  // For parent or standalone: apply workspace normally
+  if (loadedWorkspace) {
+    setTimeout(() => applyWorkspace(loadedWorkspace!), 100)
+  }
+
+  // Auto-load attached projects if this is a parent
+  if (loadedWorkspace?.workspace?.role === 'parent' && loadedWorkspace.workspace.attachments) {
+    setTimeout(() => loadChildProjects(loadedWorkspace!.workspace!.attachments!, provider.getProjectPath()), 200)
   }
 
   return true
+}
+
+// When the opened project is a CHILD: load the parent as the primary project,
+// apply the parent's workspace (which has full IDE state), then load all children.
+async function loadParentFirst(parentPath: string, childPath: string) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const app = (window as any).go?.main?.App
+  if (!app?.ReadFileAtPath || !app?.ReadDirectoryTree) return
+
+  const multiProjectModule = await import('./useMultiProjectStore')
+  const { registerCurrentAsProject, useMultiProjectStore } = multiProjectModule
+
+  try {
+    // Read parent's workspace to get the full attachment list and IDE state
+    const parentWsContent = await app.ReadFileAtPath(`${parentPath}/.mycel-studio.json`)
+    const parentWs = loadWorkspace(parentWsContent)
+
+    // Load the parent project into the live store (replaces the child that was loaded)
+    const provider = getFileSystemProvider()
+    if ('openProjectAtPath' in provider) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const project = await (provider as any).openProjectAtPath(parentPath)
+      if (project) {
+        // Manually load parent into stores (reuse loadProjectIntoStore logic inline)
+        const parentFiles: ProjectFile[] = project.files.map((f: { name: string; relativePath: string; content: string }) => ({
+          name: f.name, path: f.relativePath, relativePath: f.relativePath, content: f.content, isDirty: false,
+        }))
+
+        const configFile = parentFiles.find(f => f.name === 'config.hcl')
+        const mycelRoot = configFile ? configFile.relativePath.replace(/\/?config\.hcl$/, '') : ''
+        const normalizedRoot = mycelRoot ? (mycelRoot.endsWith('/') ? mycelRoot : mycelRoot + '/') : ''
+
+        useProjectStore.setState({
+          projectPath: parentPath,
+          projectName: project.name,
+          mycelRoot: normalizedRoot,
+          files: parentFiles,
+          activeFile: parentFiles.find((f: ProjectFile) => f.name.endsWith('.hcl'))?.relativePath ?? null,
+          isLoading: false,
+          capabilities: provider.getCapabilities(),
+        })
+
+        // Parse parent's HCL files
+        const hclFiles = parentFiles.filter(f => f.name.endsWith('.hcl'))
+        if (hclFiles.length > 0) {
+          const { apiParse } = await import('../lib/api')
+          const fileEntries = hclFiles.map(f => ({ path: f.relativePath, content: f.content }))
+          try {
+            const result = await apiParse({ files: fileEntries })
+            if (result.success && result.project) {
+              const { parseProjectToCanvas } = await import('../hooks/useSync')
+              parseProjectToCanvas(result.project as never)
+            }
+          } catch (err) {
+            console.error('Failed to parse parent HCL:', err)
+          }
+        }
+
+        // Apply parent's workspace (this has the full IDE state: sidebar, view mode, terminals, etc.)
+        if (parentWs) {
+          setTimeout(() => applyWorkspace(parentWs), 50)
+        }
+
+        // Refresh git status for parent
+        useProjectStore.getState().refreshGitStatus()
+      }
+    }
+
+    // Register parent in multi-project store and mark it as root
+    const rootId = registerCurrentAsProject()
+    useMultiProjectStore.setState({ rootProjectId: rootId })
+
+    // Now load all children (including the one we originally opened)
+    const allChildren = parentWs?.workspace?.attachments || [childPath]
+    for (const cp of allChildren) {
+      await openAttachedProject(cp, useMultiProjectStore)
+    }
+    // Also load childPath if it wasn't in the attachments list
+    if (!allChildren.includes(childPath)) {
+      await openAttachedProject(childPath, useMultiProjectStore)
+    }
+  } catch (err) {
+    console.error('Failed to load parent project:', err)
+  }
+}
+
+// When the opened project is a PARENT: load all child projects.
+async function loadChildProjects(attachments: string[], _parentPath: string) {
+  const multiProjectModule = await import('./useMultiProjectStore')
+  const { registerCurrentAsProject, useMultiProjectStore } = multiProjectModule
+
+  // Register the parent (current project) first and mark as root
+  const rootId = registerCurrentAsProject()
+  useMultiProjectStore.setState({ rootProjectId: rootId })
+
+  // Open each child
+  for (const childPath of attachments) {
+    await openAttachedProject(childPath, useMultiProjectStore)
+  }
+}
+
+// Open a project at the given path and register it in multi-project store
+async function openAttachedProject(
+  path: string,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  useMultiProjectStore: any,
+) {
+  const multiStore = useMultiProjectStore.getState()
+
+  // Skip if already registered
+  for (const proj of multiStore.projects.values()) {
+    if (proj.projectPath === path) return
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const app = (window as any).go?.main?.App
+  if (!app?.ReadDirectoryTree) return
+
+  try {
+    const entries = await app.ReadDirectoryTree(path)
+    const files: ProjectFile[] = entries
+      .filter((e: { isDirectory: boolean }) => !e.isDirectory)
+      .map((e: { name: string; relativePath: string; content: string }) => ({
+        name: e.name,
+        path: e.relativePath,
+        relativePath: e.relativePath,
+        content: e.content,
+        isDirty: false,
+      }))
+
+    const projectName = path.split('/').pop() || path
+
+    // Detect Mycel root
+    const configFile = files.find(f => f.name === 'config.hcl')
+    const mycelRoot = configFile
+      ? configFile.relativePath.replace(/\/?config\.hcl$/, '')
+      : ''
+    const normalizedRoot = mycelRoot ? (mycelRoot.endsWith('/') ? mycelRoot : mycelRoot + '/') : ''
+
+    // Parse HCL files
+    let parsedNodes: unknown[] = []
+    let parsedEdges: import('@xyflow/react').Edge[] = []
+    const hclFiles = files.filter(f => f.name.endsWith('.hcl'))
+    if (hclFiles.length > 0) {
+      const fileEntries = hclFiles.map(f => ({ path: f.relativePath, content: f.content }))
+      try {
+        const { apiParse } = await import('../lib/api')
+        const result = await apiParse({ files: fileEntries })
+        if (result.success && result.project) {
+          const { convertProjectToNodes } = await import('../hooks/useSync')
+          const converted = convertProjectToNodes(result.project as never)
+          parsedNodes = converted.newNodes
+          parsedEdges = converted.newEdges
+        }
+      } catch (err) {
+        console.error(`Failed to parse HCL for ${path}:`, err)
+      }
+    }
+
+    // Load workspace for node positions
+    const workspaceFile = files.find(f => f.name === '.mycel-studio.json')
+    let nodePositions: Record<string, { x: number; y: number }> = {}
+    if (workspaceFile) {
+      const ws = loadWorkspace(workspaceFile.content)
+      if (ws?.nodes) nodePositions = ws.nodes
+    }
+
+    // Apply positions to nodes
+    const positionedNodes = (parsedNodes as Array<{ id: string; position: { x: number; y: number } }>).map(n => {
+      const saved = nodePositions[n.id]
+      return saved ? { ...n, position: saved } : n
+    })
+
+    // Register in multi-project store
+    const id = multiStore.addProject({
+      projectPath: path,
+      projectName,
+      mycelRoot: normalizedRoot,
+      files,
+      nodes: positionedNodes,
+      edges: parsedEdges,
+      gitBranch: null,
+    })
+
+    // Refresh git status for this project
+    try {
+      const isRepo = await app.IsGitRepo(path)
+      if (isRepo) {
+        const branch = await app.GetGitBranch(path)
+        const statuses = await app.GetGitFileStatuses(path)
+        const updatedFiles = files.map(f => ({
+          ...f,
+          gitStatus: (statuses[f.relativePath] || 'clean') as ProjectFile['gitStatus'],
+        }))
+        multiStore.updateProject(id, {
+          gitBranch: branch,
+          files: updatedFiles,
+        })
+      }
+    } catch {
+      // Git status is best-effort
+    }
+  } catch (err) {
+    console.error(`Failed to open attached project at ${path}:`, err)
+  }
 }
 
 export const useProjectStore = create<ProjectState>((set, get) => ({

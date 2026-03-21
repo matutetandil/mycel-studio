@@ -194,6 +194,25 @@ func (a *App) FileExists(path string) bool {
 	return err == nil
 }
 
+// WriteFileAtPath writes content to an absolute file path (for cross-project writes).
+// Unlike WriteFile, this does not require an open project.
+func (a *App) WriteFileAtPath(absolutePath string, content string) error {
+	dir := filepath.Dir(absolutePath)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return fmt.Errorf("failed to create directory: %w", err)
+	}
+	return os.WriteFile(absolutePath, []byte(content), 0644)
+}
+
+// ReadFileAtPath reads a file from an absolute path (for cross-project reads).
+func (a *App) ReadFileAtPath(absolutePath string) (string, error) {
+	data, err := os.ReadFile(absolutePath)
+	if err != nil {
+		return "", err
+	}
+	return string(data), nil
+}
+
 // SaveFile opens a native save dialog and returns the selected path.
 func (a *App) SaveFileDialog(defaultFilename string) (string, error) {
 	path, err := wailsRuntime.SaveFileDialog(a.ctx, wailsRuntime.SaveDialogOptions{
