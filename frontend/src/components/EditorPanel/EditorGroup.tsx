@@ -660,27 +660,35 @@ export default function EditorGroupView({ groupId, isSecondary }: EditorGroupPro
               editorRef.current = monacoEditor
               // Apply keymap (IDEA/VS Code)
               applyKeymap(monacoInstance, monacoEditor, useSettingsStore.getState().keymap)
-              // Restore cursor position for this file (read fresh from store)
-              let restoringCursor = false
+              // Restore full view state (cursor, scroll, selections, folds)
+              let restoringState = false
               if (activeFile) {
-                const saved = useEditorPanelStore.getState().cursorPositions[activeFile.path]
+                const viewStates = useEditorPanelStore.getState().editorViewStates
+                const saved = viewStates[activeFile.path]
                 if (saved) {
-                  restoringCursor = true
-                  monacoEditor.setPosition({ lineNumber: saved.line, column: saved.column })
-                  monacoEditor.revealPositionInCenter({ lineNumber: saved.line, column: saved.column })
-                  // Allow saves after a tick (skip the initial cursor event from setPosition)
-                  requestAnimationFrame(() => { restoringCursor = false })
+                  restoringState = true
+                  monacoEditor.restoreViewState(saved as editor.ICodeEditorViewState)
+                  requestAnimationFrame(() => { restoringState = false })
                 }
               }
               // Focus the editor so it receives keyboard input
               monacoEditor.focus()
-              // Save cursor position on change + cursor-aware block selection (HCL)
+              // Save view state + cursor position on change, cursor-aware block selection (HCL)
               monacoEditor.onDidChangeCursorPosition((e) => {
-                if (restoringCursor) return
+                if (restoringState) return
                 if (activeFile) {
                   useEditorPanelStore.getState().setCursorPosition(activeFile.path, e.position.lineNumber, e.position.column)
+                  // Save full view state (includes scroll position)
+                  const vs = monacoEditor.saveViewState()
+                  if (vs) useEditorPanelStore.getState().setEditorViewState(activeFile.path, vs)
                 }
                 handleCursorChange(e.position.lineNumber)
+              })
+              // Also save on scroll (cursor might not move but scroll does)
+              monacoEditor.onDidScrollChange(() => {
+                if (restoringState || !activeFile) return
+                const vs = monacoEditor.saveViewState()
+                if (vs) useEditorPanelStore.getState().setEditorViewState(activeFile.path, vs)
               })
               // Also trigger block selection on initial mount
               const pos = monacoEditor.getPosition()

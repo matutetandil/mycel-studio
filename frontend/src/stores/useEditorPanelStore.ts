@@ -40,6 +40,7 @@ interface EditorPanelState {
   revealLine: number | null  // Line to scroll to in active editor
   previewModes: Record<string, 'source' | 'preview'>  // per-file preview mode (keyed by relative path)
   cursorPositions: Record<string, { line: number; column: number }>  // per-file cursor position
+  editorViewStates: Record<string, unknown>  // per-file Monaco view state (scroll, folds, etc.)
 
   openFile: (filePath: string, fileName: string, groupId?: string, projectPath?: string | null) => void
   openCanvas: (projectId: string, projectName: string, groupId?: string) => void
@@ -47,6 +48,7 @@ interface EditorPanelState {
   setRevealLine: (line: number | null) => void
   setPreviewMode: (tabId: string, mode: 'source' | 'preview') => void
   setCursorPosition: (filePath: string, line: number, column: number) => void
+  setEditorViewState: (filePath: string, state: unknown) => void
   closeTab: (groupId: string, tabId: string) => void
   setActiveTab: (groupId: string, tabId: string) => void
   reorderTab: (groupId: string, fromIndex: number, toIndex: number) => void
@@ -72,6 +74,10 @@ export const useEditorPanelStore = create<EditorPanelState>((set, get) => ({
   })(),
   cursorPositions: (() => {
     try { return JSON.parse(localStorage.getItem('mycel-cursor-positions') || '{}') }
+    catch { return {} }
+  })(),
+  editorViewStates: (() => {
+    try { return JSON.parse(localStorage.getItem('mycel-editor-viewstates') || '{}') }
     catch { return {} }
   })(),
 
@@ -335,6 +341,14 @@ export const useEditorPanelStore = create<EditorPanelState>((set, get) => ({
       const next = { ...state.cursorPositions, [filePath]: { line, column } }
       try { localStorage.setItem('mycel-cursor-positions', JSON.stringify(next)) } catch { /* ignore */ }
       return { cursorPositions: next }
+    })
+  },
+
+  setEditorViewState: (filePath, state) => {
+    set(s => {
+      const next = { ...s.editorViewStates, [filePath]: state }
+      try { localStorage.setItem('mycel-editor-viewstates', JSON.stringify(next)) } catch { /* ignore */ }
+      return { editorViewStates: next }
     })
   },
 }))
