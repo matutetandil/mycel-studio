@@ -660,11 +660,29 @@ export default function EditorGroupView({ groupId, isSecondary }: EditorGroupPro
               editorRef.current = monacoEditor
               // Apply keymap (IDEA/VS Code)
               applyKeymap(monacoInstance, monacoEditor, useSettingsStore.getState().keymap)
-              // Cursor-aware block selection (HCL files)
+              // Restore cursor position for this file (read fresh from store)
+              let restoringCursor = false
+              if (activeFile) {
+                const saved = useEditorPanelStore.getState().cursorPositions[activeFile.path]
+                if (saved) {
+                  restoringCursor = true
+                  monacoEditor.setPosition({ lineNumber: saved.line, column: saved.column })
+                  monacoEditor.revealPositionInCenter({ lineNumber: saved.line, column: saved.column })
+                  // Allow saves after a tick (skip the initial cursor event from setPosition)
+                  requestAnimationFrame(() => { restoringCursor = false })
+                }
+              }
+              // Focus the editor so it receives keyboard input
+              monacoEditor.focus()
+              // Save cursor position on change + cursor-aware block selection (HCL)
               monacoEditor.onDidChangeCursorPosition((e) => {
+                if (restoringCursor) return
+                if (activeFile) {
+                  useEditorPanelStore.getState().setCursorPosition(activeFile.path, e.position.lineNumber, e.position.column)
+                }
                 handleCursorChange(e.position.lineNumber)
               })
-              // Also trigger on initial mount
+              // Also trigger block selection on initial mount
               const pos = monacoEditor.getPosition()
               if (pos) handleCursorChange(pos.lineNumber)
               // Auto-save when editor loses focus (click canvas, properties, etc.)

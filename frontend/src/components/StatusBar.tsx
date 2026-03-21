@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { useProjectStore } from '../stores/useProjectStore'
-import { useEditorPanelStore } from '../stores/useEditorPanelStore'
+import { useEditorPanelStore, unscopePath } from '../stores/useEditorPanelStore'
 import { useNotificationStore } from '../stores/useNotificationStore'
 import { GitBranch, Bell, BellDot, CheckCircle, Download } from 'lucide-react'
 import { getFileTypeInfo, KNOWN_LANGUAGES, setLanguageOverride, removeLanguageOverride, getLanguageOverride } from '../utils/fileIcons'
@@ -24,10 +24,14 @@ export default function StatusBar({ downloadProgress, isDownloading, updateReady
   const pickerRef = useRef<HTMLDivElement>(null)
   const searchRef = useRef<HTMLInputElement>(null)
 
+  const cursorPositions = useEditorPanelStore(s => s.cursorPositions)
   const activeGroup = groups.find(g => g.id === activeGroupId)
   const activeTab = activeGroup?.tabs.find(t => t.id === activeGroup.activeTabId)
   const fileTypeInfo = activeTab ? getFileTypeInfo(activeTab.fileName) : null
   const hasOverride = activeTab ? !!getLanguageOverride(activeTab.fileName) : false
+  // Get cursor position for active file
+  const activeFilePath = activeTab ? unscopePath(activeTab.filePath).relativePath : null
+  const cursorPos = activeFilePath ? cursorPositions[activeFilePath] : null
   const notifCount = notifications.length
 
   useEffect(() => {
@@ -134,8 +138,13 @@ export default function StatusBar({ downloadProgress, isDownloading, updateReady
 
       <div className="flex-1" />
 
-      {/* Right side: language + project name */}
+      {/* Right side: cursor position + language + project name */}
       <div className="flex items-center gap-3">
+        {cursorPos && (
+          <span className="tabular-nums" title="Cursor position">
+            Ln {cursorPos.line}, Col {cursorPos.column}
+          </span>
+        )}
         {fileTypeInfo && (
           <button
             onClick={() => setShowLangPicker(!showLangPicker)}
