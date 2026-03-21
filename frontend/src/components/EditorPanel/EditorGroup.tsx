@@ -131,7 +131,7 @@ function selectNodeByBlock(blockType: string, blockName: string) {
   setTimeout(() => { cursorDrivenSelection = false }, 0)
 }
 
-// Parse HCL content to find which lines correspond to which flow stages
+// Parse HCL content to find which lines correspond to which flow/aspect stages
 function buildLineStageMap(content: string, filePath: string): Map<number, LineStageInfo> {
   const map = new Map<number, LineStageInfo>()
   if (!content || !filePath.endsWith('.hcl')) return map
@@ -143,6 +143,11 @@ function buildLineStageMap(content: string, filePath: string): Map<number, LineS
   let braceDepth = 0
   let flowBraceStart = 0
   let ruleIndex = 0
+  // For aspects: track aspect name and whether we're inside action { transform { } }
+  let currentAspect: string | null = null
+  let aspectBraceStart = 0
+  let inAspectAction = false
+  let aspectActionDepth = 0
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i].trim()
@@ -150,10 +155,23 @@ function buildLineStageMap(content: string, filePath: string): Map<number, LineS
 
     // Detect flow block start: flow "name" {
     const flowMatch = line.match(/^flow\s+"([^"]+)"\s*\{/)
-    if (flowMatch) {
+    if (flowMatch && braceDepth === 0) {
       currentFlow = flowMatch[1]
       flowBraceStart = braceDepth
       braceDepth++
+      currentBlock = null
+      currentStage = null
+      ruleIndex = 0
+      continue
+    }
+
+    // Detect aspect block start: aspect "name" {
+    const aspectMatch = line.match(/^aspect\s+"([^"]+)"\s*\{/)
+    if (aspectMatch && braceDepth === 0) {
+      currentAspect = aspectMatch[1]
+      aspectBraceStart = braceDepth
+      braceDepth++
+      inAspectAction = false
       currentBlock = null
       currentStage = null
       ruleIndex = 0
@@ -174,8 +192,9 @@ function buildLineStageMap(content: string, filePath: string): Map<number, LineS
           currentStage = BLOCK_TO_STAGE[currentBlock] || ''
           ruleIndex = 0
 
-          // Map the block declaration line itself as stage-level breakpoint
-          if (currentStage && VALID_STAGES.has(currentStage)) {
+          // Map the block declaration line as stage-level breakpoint
+          // (skip 'write' — its breakpoint goes on the query/target/operation line instead)
+          if (currentStage && VALID_STAGES.has(currentStage) && currentStage !== 'write') {
             map.set(lineNum, { flow: currentFlow, stage: currentStage, ruleIndex: -1 })
           }
         }
@@ -189,10 +208,19 @@ function buildLineStageMap(content: string, filePath: string): Map<number, LineS
           // Per-rule breakpoint (only for transform/response)
           map.set(lineNum, { flow: currentFlow, stage: currentStage, ruleIndex })
           ruleIndex++
-        } else if (isAssignment) {
-          // Config line in non-rule stage — map as stage-level
-          map.set(lineNum, { flow: currentFlow, stage: currentStage, ruleIndex: -1 })
+        } else if (isAssignment && currentStage === 'write') {
+          // For write stage: only the query/operation line is breakpointable
+          const attrName = line.match(/^(\w+)\s*=/)?.[1]
+          if (attrName === 'query' || attrName === 'operation') {
+            map.set(lineNum, { flow: currentFlow, stage: currentStage, ruleIndex: -1 })
+          }
         }
+      }
+
+      // Reset stage when exiting sub-block
+      if (braceDepth === flowBraceStart + 1 && closeBraces > 0 && !line.match(/\{/)) {
+        currentBlock = null
+        currentStage = null
       }
 
       // Closing brace at flow level
@@ -203,7 +231,49 @@ function buildLineStageMap(content: string, filePath: string): Map<number, LineS
       }
     }
 
+    if (currentAspect) {
+      // Detect action block inside aspect
+      if (braceDepth === aspectBraceStart + 1 && line.match(/^action\s*\{/)) {
+        inAspectAction = true
+        aspectActionDepth = braceDepth
+      }
+
+      // Detect transform inside action (breakpointable stage for aspects)
+      if (inAspectAction && line.match(/^transform\s*\{/)) {
+        currentStage = 'transform'
+        ruleIndex = 0
+        // Map the transform declaration line
+        // Aspects report their flow target in the `on` field — use aspect name as flow identifier
+        map.set(lineNum, { flow: currentAspect, stage: 'transform', ruleIndex: -1 })
+      }
+
+      // Map transform assignment lines inside aspect action
+      if (currentStage === 'transform' && inAspectAction && line && !line.startsWith('//') && !line.startsWith('#')) {
+        const isAssignment = line.match(/^\w[\w.]*\s*=/) && !line.startsWith('}')
+        if (isAssignment) {
+          map.set(lineNum, { flow: currentAspect, stage: 'transform', ruleIndex })
+          ruleIndex++
+        }
+      }
+
+      // Reset on closing braces
+      if (closeBraces > 0) {
+        if (braceDepth - closeBraces + openBraces <= aspectActionDepth && inAspectAction) {
+          inAspectAction = false
+          currentStage = null
+        }
+      }
+
+      // Closing brace at aspect level
+      if (closeBraces > openBraces && braceDepth - closeBraces + openBraces <= aspectBraceStart) {
+        currentAspect = null
+        inAspectAction = false
+        currentStage = null
+      }
+    }
+
     braceDepth += openBraces - closeBraces
+    if (braceDepth < 0) braceDepth = 0
   }
 
   return map
