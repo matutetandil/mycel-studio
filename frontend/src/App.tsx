@@ -234,6 +234,7 @@ function AppInner() {
       <AttachDialog
         isOpen={projectOpen.showAttachDialog}
         projectName={projectOpen.pendingProjectName}
+        onThisWindow={projectOpen.handleThisWindow}
         onAttach={projectOpen.handleAttach}
         onNewTab={projectOpen.handleNewTab}
         onCancel={projectOpen.handleCancel}

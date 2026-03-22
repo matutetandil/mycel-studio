@@ -101,6 +101,27 @@ export function useProjectOpen() {
     setShowAttachDialog(true)
   }, [])
 
+  // User chose "This Window" — close current project and open new one
+  const handleThisWindow = useCallback(async () => {
+    setShowAttachDialog(false)
+    if (!pendingProject) return
+
+    // Close current project and clear multi-project state
+    const multiStore = useMultiProjectStore.getState()
+    for (const id of [...multiStore.projectOrder]) {
+      multiStore.removeProject(id)
+    }
+    useMultiProjectStore.setState({ rootProjectId: null })
+
+    useProjectStore.getState().closeProject()
+    clearCurrentProjectUI()
+
+    const success = await useProjectStore.getState().openProjectAtPath(pendingProject.path)
+    if (success) registerCurrentAsProject()
+
+    setPendingProject(null)
+  }, [pendingProject])
+
   // User chose "Attach" — add to current workspace
   const handleAttach = useCallback(async () => {
     setShowAttachDialog(false)
@@ -162,6 +183,7 @@ export function useProjectOpen() {
     newProject,
     showAttachDialog,
     pendingProjectName: pendingProject?.name || '',
+    handleThisWindow,
     handleAttach,
     handleNewTab,
     handleCancel,

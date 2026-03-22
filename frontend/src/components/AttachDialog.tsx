@@ -1,18 +1,19 @@
-// Dialog shown when opening/creating a project while another is already open.
-// Options: Attach to workspace (shared IDE) or Open in new tab (independent instance).
+// Dialog shown when opening a project while another is already open.
+// Options: This Window, Attach to Workspace, New Tab, Cancel.
 
 import { createPortal } from 'react-dom'
-import { Layers, Plus } from 'lucide-react'
+import { FolderOpen, Layers, Plus } from 'lucide-react'
 
 interface AttachDialogProps {
   isOpen: boolean
   projectName: string
+  onThisWindow: () => void
   onAttach: () => void
   onNewTab: () => void
   onCancel: () => void
 }
 
-export default function AttachDialog({ isOpen, projectName, onAttach, onNewTab, onCancel }: AttachDialogProps) {
+export default function AttachDialog({ isOpen, projectName, onThisWindow, onAttach, onNewTab, onCancel }: AttachDialogProps) {
   if (!isOpen) return null
 
   return createPortal(
@@ -22,7 +23,7 @@ export default function AttachDialog({ isOpen, projectName, onAttach, onNewTab, 
       onKeyDown={(e) => { if (e.key === 'Escape') onCancel(); e.stopPropagation() }}
     >
       <div
-        className="bg-neutral-800 border border-neutral-700 rounded-lg shadow-xl w-96 p-5"
+        className="bg-neutral-800 border border-neutral-700 rounded-lg shadow-xl w-[420px] p-5"
         onClick={(e) => e.stopPropagation()}
         onKeyDown={(e) => e.stopPropagation()}
       >
@@ -32,7 +33,21 @@ export default function AttachDialog({ isOpen, projectName, onAttach, onNewTab, 
         </p>
 
         <div className="flex flex-col gap-2">
-          {/* Attach option */}
+          {/* This Window */}
+          <button
+            onClick={onThisWindow}
+            className="flex items-start gap-3 p-3 rounded-lg border border-neutral-700 hover:border-amber-500 hover:bg-neutral-750 transition-colors text-left group"
+          >
+            <FolderOpen className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+            <div>
+              <div className="text-sm font-medium text-white group-hover:text-amber-300">This Window</div>
+              <div className="text-xs text-neutral-500 mt-0.5">
+                Close the current project and open the new one in its place.
+              </div>
+            </div>
+          </button>
+
+          {/* Attach */}
           <button
             onClick={onAttach}
             className="flex items-start gap-3 p-3 rounded-lg border border-neutral-700 hover:border-indigo-500 hover:bg-neutral-750 transition-colors text-left group"
@@ -41,19 +56,19 @@ export default function AttachDialog({ isOpen, projectName, onAttach, onNewTab, 
             <div>
               <div className="text-sm font-medium text-white group-hover:text-indigo-300">Attach to Workspace</div>
               <div className="text-xs text-neutral-500 mt-0.5">
-                Add to the current workspace. Share the IDE, separate canvas.
+                Keep the current project open and add this one alongside it.
               </div>
             </div>
           </button>
 
-          {/* New Tab option */}
+          {/* New Tab */}
           <button
             onClick={onNewTab}
             className="flex items-start gap-3 p-3 rounded-lg border border-neutral-700 hover:border-green-500 hover:bg-neutral-750 transition-colors text-left group"
           >
             <Plus className="w-5 h-5 text-green-400 shrink-0 mt-0.5" />
             <div>
-              <div className="text-sm font-medium text-white group-hover:text-green-300">Open in New Tab</div>
+              <div className="text-sm font-medium text-white group-hover:text-green-300">New Tab</div>
               <div className="text-xs text-neutral-500 mt-0.5">
                 Open in a completely independent workspace tab.
               </div>
