@@ -235,6 +235,27 @@ export async function ideFlowStages(flowName: string): Promise<string[]> {
   return JSON.parse(await app.IDEFlowStages(flowName))
 }
 
+export interface IDEBreakpointLocation {
+  file: string
+  line: number
+  flow: string
+  stage: string
+  ruleIndex: number
+  label: string
+}
+
+export async function ideAllBreakpoints(): Promise<Record<string, IDEBreakpointLocation[]>> {
+  const app = getApp()
+  if (!app?.IDEAllBreakpoints) return {}
+  return JSON.parse(await app.IDEAllBreakpoints())
+}
+
+export async function ideFlowBreakpoints(flowName: string): Promise<IDEBreakpointLocation[]> {
+  const app = getApp()
+  if (!app?.IDEFlowBreakpoints) return []
+  return JSON.parse(await app.IDEFlowBreakpoints(flowName))
+}
+
 export async function ideGetIndex(): Promise<Record<string, unknown>> {
   const app = getApp()
   if (!app?.IDEGetIndex) return {}

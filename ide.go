@@ -140,6 +140,24 @@ func (a *App) IDEFlowStages(flowName string) string {
 	return toJSON(stages)
 }
 
+// IDEAllBreakpoints returns all valid breakpoint locations grouped by file.
+func (a *App) IDEAllBreakpoints() string {
+	if a.ideEngine == nil {
+		return "{}"
+	}
+	bps := a.ideEngine.AllBreakpoints()
+	return toJSON(bps)
+}
+
+// IDEFlowBreakpoints returns valid breakpoint locations for a specific flow.
+func (a *App) IDEFlowBreakpoints(flowName string) string {
+	if a.ideEngine == nil {
+		return "[]"
+	}
+	bps := a.ideEngine.FlowBreakpoints(flowName)
+	return toJSON(bps)
+}
+
 // IDEGetIndex returns the full project index.
 func (a *App) IDEGetIndex() string {
 	if a.ideEngine == nil {

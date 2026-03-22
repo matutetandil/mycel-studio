@@ -9,7 +9,7 @@ import { useMultiProjectStore } from '../../stores/useMultiProjectStore'
 import { useDebugStore, breakpointKey } from '../../stores/useDebugStore'
 import { generateProject, toIdentifier, type GeneratedFile } from '../../utils/hclGenerator'
 import { computeLineDiff, type LineDiffResult } from '../../utils/lineDiff'
-import { apiGetGitFileContent, isWailsRuntime, type IDELocation } from '../../lib/api'
+import { apiGetGitFileContent, isWailsRuntime, ideAllBreakpoints, type IDELocation, type IDEBreakpointLocation } from '../../lib/api'
 import { getFileTypeInfo, getLanguageForFile } from '../../utils/fileIcons'
 import { triggerAutoSave } from '../../hooks/useAutoSave'
 import { useSettingsStore } from '../../stores/useSettingsStore'
@@ -414,10 +414,39 @@ export default function EditorGroupView({ groupId, isSecondary }: EditorGroupPro
     }
   }, [blockRanges])
 
+  // Breakpoint locations from IDE engine (replaces buildLineStageMap)
+  const [ideBreakpoints, setIdeBreakpoints] = useState<IDEBreakpointLocation[]>([])
+  useEffect(() => {
+    if (!activeFile?.path || !activeFile.path.endsWith('.hcl')) {
+      setIdeBreakpoints([])
+      return
+    }
+    if (isWailsRuntime()) {
+      const pp = useProjectStore.getState().projectPath
+      if (pp) {
+        ideAllBreakpoints().then(allBps => {
+          // Find breakpoints for this file (try with and without project path prefix)
+          const absPath = pp + '/' + activeFile.path
+          const bps = allBps[absPath] || allBps[activeFile.path] || []
+          setIdeBreakpoints(bps)
+        })
+      }
+    }
+  }, [activeFile?.path, activeFile?.content])
+
+  // Build lineStageMap from IDE breakpoint locations
   const lineStageMap = useMemo(() => {
-    if (!activeFile?.content) return new Map<number, LineStageInfo>()
+    const map = new Map<number, LineStageInfo>()
+    if (ideBreakpoints.length > 0) {
+      for (const bp of ideBreakpoints) {
+        map.set(bp.line, { flow: bp.flow, stage: bp.stage, ruleIndex: bp.ruleIndex })
+      }
+      return map
+    }
+    // Fallback to static parser for non-Wails mode
+    if (!activeFile?.content) return map
     return buildLineStageMap(activeFile.content, activeFile.path)
-  }, [activeFile?.content, activeFile?.path, nodes])
+  }, [ideBreakpoints, activeFile?.content, activeFile?.path])
 
   // Set of lines that have breakpoints (for decoration logic)
   const breakpointLines = useMemo(() => {
