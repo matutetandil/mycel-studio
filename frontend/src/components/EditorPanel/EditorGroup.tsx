@@ -1,7 +1,7 @@
 import { useState, useMemo, useRef, useEffect, useCallback } from 'react'
 import MonacoEditor from '@monaco-editor/react'
 import type { editor } from 'monaco-editor'
-import { setupMonaco } from '../../monaco'
+import { setupMonaco, setActiveIDEFilePath, setDefinitionNavigator, createIDEValidator } from '../../monaco'
 import { useEditorPanelStore, unscopePath } from '../../stores/useEditorPanelStore'
 import { useStudioStore } from '../../stores/useStudioStore'
 import { useProjectStore } from '../../stores/useProjectStore'
@@ -9,7 +9,7 @@ import { useMultiProjectStore } from '../../stores/useMultiProjectStore'
 import { useDebugStore, breakpointKey } from '../../stores/useDebugStore'
 import { generateProject, toIdentifier, type GeneratedFile } from '../../utils/hclGenerator'
 import { computeLineDiff, type LineDiffResult } from '../../utils/lineDiff'
-import { apiGetGitFileContent } from '../../lib/api'
+import { apiGetGitFileContent, isWailsRuntime, type IDELocation } from '../../lib/api'
 import { getFileTypeInfo, getLanguageForFile } from '../../utils/fileIcons'
 import { triggerAutoSave } from '../../hooks/useAutoSave'
 import { useSettingsStore } from '../../stores/useSettingsStore'
@@ -660,6 +660,31 @@ export default function EditorGroupView({ groupId, isSecondary }: EditorGroupPro
               editorRef.current = monacoEditor
               // Apply keymap (IDEA/VS Code)
               applyKeymap(monacoInstance, monacoEditor, useSettingsStore.getState().keymap)
+              // Set active file path for IDE engine (completions, hover, diagnostics)
+              if (activeFile && isWailsRuntime()) {
+                const pp = useProjectStore.getState().projectPath
+                if (pp) {
+                  setActiveIDEFilePath(pp + '/' + activeFile.path)
+                  // Set up go-to-definition navigation
+                  setDefinitionNavigator((loc: IDELocation) => {
+                    const relPath = loc.file.startsWith(pp + '/') ? loc.file.slice(pp.length + 1) : loc.file
+                    const fileName = relPath.split('/').pop() || relPath
+                    useEditorPanelStore.getState().openFile(relPath, fileName, undefined, pp)
+                    setTimeout(() => useEditorPanelStore.getState().setRevealLine(loc.range.start.line), 50)
+                  })
+                  // Set up IDE-backed validation (replaces static hclValidator)
+                  const ideValidate = createIDEValidator(monacoInstance, () => {
+                    const p = useProjectStore.getState().projectPath
+                    const af = activeFile
+                    return p && af ? p + '/' + af.path : null
+                  })
+                  monacoEditor.onDidChangeModelContent(() => {
+                    ideValidate(monacoEditor.getModel()!)
+                  })
+                  // Run initial validation
+                  if (monacoEditor.getModel()) ideValidate(monacoEditor.getModel()!)
+                }
+              }
               // Restore full view state (cursor, scroll, selections, folds)
               let restoringState = false
               if (activeFile) {

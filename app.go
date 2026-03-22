@@ -10,17 +10,19 @@ import (
 	"mycel-studio/models"
 	studioparser "mycel-studio/parser"
 
+	"github.com/matutetandil/mycel/pkg/ide"
 	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 // App struct holds application state and provides Wails bindings.
 type App struct {
-	ctx            context.Context
-	parser         *studioparser.Parser
-	ptyManager     *PTYManager
-	debugClient    *DebugClient
-	updater        *Updater
-	confirmOnClose bool
+	ctx              context.Context
+	parser           *studioparser.Parser
+	ideEngine        *ide.Engine
+	ptyManager       *PTYManager
+	debugClient      *DebugClient
+	updater          *Updater
+	confirmOnClose   bool
 	skipCloseConfirm bool
 }
 

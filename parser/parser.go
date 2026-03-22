@@ -613,6 +613,7 @@ func (p *Parser) ValidateContent(content string, filename string) []ValidationEr
 					},
 					Blocks: []hcl.BlockHeaderSchema{
 						{Type: "from"},
+						{Type: "accept"},
 						{Type: "to"},
 						{Type: "transform"},
 						{Type: "response"},

@@ -3,7 +3,7 @@ import { getFileSystemProvider, getCapabilities, type FSCapabilities } from '../
 import { loadWorkspace, applyWorkspace, type WorkspaceState } from './useWorkspaceStore'
 import { useEditorPanelStore } from './useEditorPanelStore'
 import { generateProject } from '../utils/hclGenerator'
-import { apiParse, apiConfirm } from '../lib/api'
+import { apiParse, apiConfirm, ideParseProject, isWailsRuntime } from '../lib/api'
 import { useSettingsStore } from './useSettingsStore'
 
 export interface ProjectFile {
@@ -95,6 +95,15 @@ const defaultMetadata: ProjectMetadata = {
   },
 }
 
+// Debug logger — writes to /tmp/mycel-studio-debug.log via Go binding
+function debugLog(msg: string) {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const app = (window as any).go?.main?.App
+    if (app?.DebugLog) app.DebugLog(msg)
+  } catch { /* ignore */ }
+}
+
 // Shared logic for loading a project into the store (used by openProject and openProjectAtPath)
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function loadProjectIntoStore(set: any, get: any, provider: any, project: any): Promise<boolean> {
@@ -135,18 +144,28 @@ async function loadProjectIntoStore(set: any, get: any, provider: any, project: 
 
   // Parse HCL files into canvas nodes
   const hclFiles = files.filter((f: ProjectFile) => f.name.endsWith('.hcl'))
+  debugLog(`loadProjectIntoStore: ${files.length} files, ${hclFiles.length} HCL files`)
   if (hclFiles.length > 0) {
-    const fileEntries = hclFiles.map((f: ProjectFile) => ({
-      path: f.relativePath,
-      content: f.content,
-    }))
     try {
-      const result = await apiParse({ files: fileEntries })
+      let result
+      if (isWailsRuntime() && projectPath) {
+        // Use Mycel IDE engine (pkg/ide) — handles all block types including accept
+        debugLog(`Parsing via IDE engine: ${projectPath}`)
+        result = await ideParseProject(projectPath)
+        debugLog(`IDE parse result: success=${result.success}, hasProject=${!!result.project}`)
+      } else {
+        // Docker/browser fallback: use old parser
+        const fileEntries = hclFiles.map((f: ProjectFile) => ({ path: f.relativePath, content: f.content }))
+        result = await apiParse({ files: fileEntries })
+      }
       if (result.success && result.project) {
         const { parseProjectToCanvas } = await import('../hooks/useSync')
         parseProjectToCanvas(result.project as never)
+        const studioState = (await import('./useStudioStore')).useStudioStore.getState()
+        debugLog(`After parseProjectToCanvas: ${studioState.nodes.length} nodes, ${studioState.edges.length} edges`)
       }
     } catch (err) {
+      debugLog(`Parse ERROR: ${err}`)
       console.error('Failed to parse HCL files:', err)
     }
   }
@@ -187,6 +206,9 @@ async function loadProjectIntoStore(set: any, get: any, provider: any, project: 
   let loadedWorkspace: WorkspaceState | null = null
   if (workspaceFile) {
     loadedWorkspace = loadWorkspace(workspaceFile.content)
+    debugLog(`Workspace loaded: version=${loadedWorkspace?.version}, role=${loadedWorkspace?.workspace?.role ?? 'standalone'}, nodeCount=${Object.keys(loadedWorkspace?.nodes ?? {}).length}`)
+  } else {
+    debugLog('No .mycel-studio.json found')
   }
 
   // If this project is a CHILD, redirect to load the PARENT as the primary project.

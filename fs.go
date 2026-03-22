@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
@@ -211,6 +212,16 @@ func (a *App) ReadFileAtPath(absolutePath string) (string, error) {
 		return "", err
 	}
 	return string(data), nil
+}
+
+// DebugLog writes a message to /tmp/mycel-studio-debug.log for troubleshooting.
+func (a *App) DebugLog(message string) {
+	f, err := os.OpenFile("/tmp/mycel-studio-debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		return
+	}
+	defer f.Close()
+	fmt.Fprintf(f, "[%s] %s\n", time.Now().Format("15:04:05.000"), message)
 }
 
 // SaveFile opens a native save dialog and returns the selected path.

@@ -128,3 +128,121 @@ export async function apiGetGitFileContent(projectPath: string, filePath: string
 }
 
 export { isWailsRuntime }
+
+// --- IDE Engine API (powered by pkg/ide from Mycel runtime) ---
+
+export interface IDEPosition { line: number; col: number; offset: number }
+export interface IDERange { start: IDEPosition; end: IDEPosition }
+export interface IDEDiagnostic { severity: number; message: string; file: string; range: IDERange }
+export interface IDECompletionItem { label: string; kind: number; detail?: string; doc?: string; insertText?: string }
+export interface IDEHoverResult { content: string; range: IDERange }
+export interface IDELocation { file: string; range: IDERange }
+export interface IDERenameEdit { file: string; range: IDERange; newText: string }
+export interface IDECodeAction { title: string; kind: string; edits: IDERenameEdit[] }
+export interface IDESymbol { name: string; kind: string; detail: string; file: string; range: IDERange }
+export interface IDETransformRule { index: number; field: string; expr: string; stage: string; range: IDERange }
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function getApp(): any {
+  if (!isWailsRuntime()) return null
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (window as any).go?.main?.App ?? null
+}
+
+export async function ideInit(projectPath: string): Promise<IDEDiagnostic[]> {
+  const app = getApp()
+  if (!app?.IDEInit) return []
+  return JSON.parse(await app.IDEInit(projectPath))
+}
+
+export async function ideUpdateFile(path: string, content: string): Promise<IDEDiagnostic[]> {
+  const app = getApp()
+  if (!app?.IDEUpdateFile) return []
+  return JSON.parse(await app.IDEUpdateFile(path, content))
+}
+
+export async function ideRemoveFile(path: string): Promise<IDEDiagnostic[]> {
+  const app = getApp()
+  if (!app?.IDERemoveFile) return []
+  return JSON.parse(await app.IDERemoveFile(path))
+}
+
+export async function ideComplete(path: string, line: number, col: number): Promise<IDECompletionItem[]> {
+  const app = getApp()
+  if (!app?.IDEComplete) return []
+  return JSON.parse(await app.IDEComplete(path, line, col))
+}
+
+export async function ideHover(path: string, line: number, col: number): Promise<IDEHoverResult | null> {
+  const app = getApp()
+  if (!app?.IDEHover) return null
+  const result = await app.IDEHover(path, line, col)
+  return result === 'null' ? null : JSON.parse(result)
+}
+
+export async function ideDefinition(path: string, line: number, col: number): Promise<IDELocation | null> {
+  const app = getApp()
+  if (!app?.IDEDefinition) return null
+  const result = await app.IDEDefinition(path, line, col)
+  return result === 'null' ? null : JSON.parse(result)
+}
+
+export async function ideDiagnose(path: string): Promise<IDEDiagnostic[]> {
+  const app = getApp()
+  if (!app?.IDEDiagnose) return []
+  return JSON.parse(await app.IDEDiagnose(path))
+}
+
+export async function ideDiagnoseAll(): Promise<IDEDiagnostic[]> {
+  const app = getApp()
+  if (!app?.IDEDiagnoseAll) return []
+  return JSON.parse(await app.IDEDiagnoseAll())
+}
+
+export async function ideRename(path: string, line: number, col: number, newName: string): Promise<IDERenameEdit[]> {
+  const app = getApp()
+  if (!app?.IDERename) return []
+  return JSON.parse(await app.IDERename(path, line, col, newName))
+}
+
+export async function ideCodeActions(path: string, line: number, col: number): Promise<IDECodeAction[]> {
+  const app = getApp()
+  if (!app?.IDECodeActions) return []
+  return JSON.parse(await app.IDECodeActions(path, line, col))
+}
+
+export async function ideSymbols(): Promise<IDESymbol[]> {
+  const app = getApp()
+  if (!app?.IDESymbols) return []
+  return JSON.parse(await app.IDESymbols())
+}
+
+export async function ideSymbolsForFile(path: string): Promise<IDESymbol[]> {
+  const app = getApp()
+  if (!app?.IDESymbolsForFile) return []
+  return JSON.parse(await app.IDESymbolsForFile(path))
+}
+
+export async function ideTransformRules(flowName: string): Promise<IDETransformRule[]> {
+  const app = getApp()
+  if (!app?.IDETransformRules) return []
+  return JSON.parse(await app.IDETransformRules(flowName))
+}
+
+export async function ideFlowStages(flowName: string): Promise<string[]> {
+  const app = getApp()
+  if (!app?.IDEFlowStages) return []
+  return JSON.parse(await app.IDEFlowStages(flowName))
+}
+
+export async function ideGetIndex(): Promise<Record<string, unknown>> {
+  const app = getApp()
+  if (!app?.IDEGetIndex) return {}
+  return JSON.parse(await app.IDEGetIndex())
+}
+
+export async function ideParseProject(projectPath: string): Promise<ParseResponse> {
+  const app = getApp()
+  if (!app?.IDEParseProject) return { success: false }
+  return JSON.parse(await app.IDEParseProject(projectPath))
+}
