@@ -2,6 +2,9 @@ package main
 
 import (
 	"encoding/json"
+	"os"
+	"regexp"
+	"strings"
 
 	"github.com/matutetandil/mycel/pkg/ide"
 )
@@ -313,7 +316,13 @@ func buildProjectFromIndex(index *ide.ProjectIndex) map[string]any {
 		block := findBlock(index, entity.File, "aspect", entity.Name)
 		if block != nil {
 			for _, a := range block.Attrs {
-				asp[a.Name] = a.ValueRaw
+				if a.Name == "on" {
+					// "on" is a list of strings — ValueRaw doesn't handle lists,
+					// so extract from source file
+					asp["on"] = extractListFromFile(entity.File, a.Name, block)
+				} else {
+					asp[a.Name] = a.ValueRaw
+				}
 			}
 			for _, child := range block.Children {
 				if child.Type == "action" {
@@ -353,6 +362,41 @@ func buildProjectFromIndex(index *ide.ProjectIndex) map[string]any {
 	}
 
 	return project
+}
+
+// extractListFromFile reads a list attribute value from the HCL source file.
+// HCL lists like `on = ["a", "b"]` are not extracted by ValueRaw (which returns "").
+// This reads the source and parses the list with regex.
+func extractListFromFile(file, attrName string, block *ide.Block) []string {
+	data, err := os.ReadFile(file)
+	if err != nil {
+		return nil
+	}
+	content := string(data)
+
+	// Find the attribute line within the block's range
+	lines := strings.Split(content, "\n")
+	startLine := block.Range.Start.Line - 1 // 0-based
+	endLine := block.Range.End.Line
+	if endLine > len(lines) {
+		endLine = len(lines)
+	}
+
+	re := regexp.MustCompile(attrName + `\s*=\s*\[([^\]]*)\]`)
+	for i := startLine; i < endLine; i++ {
+		match := re.FindStringSubmatch(lines[i])
+		if match != nil {
+			// Parse individual quoted strings from the list
+			strRe := regexp.MustCompile(`"([^"]*)"`)
+			matches := strRe.FindAllStringSubmatch(match[1], -1)
+			result := make([]string, 0, len(matches))
+			for _, m := range matches {
+				result = append(result, m[1])
+			}
+			return result
+		}
+	}
+	return nil
 }
 
 func findBlock(index *ide.ProjectIndex, file, blockType, name string) *ide.Block {
