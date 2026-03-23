@@ -1,6 +1,7 @@
 // Stores per-file diagnostic severity for UI indicators (tabs, file tree, directories)
 import { create } from 'zustand'
 import { ideDiagnoseAll, isWailsRuntime, type IDEDiagnostic } from '../lib/api'
+import { useProjectStore } from './useProjectStore'
 
 export type DiagnosticSeverity = 'error' | 'warning' | 'info' | 'none'
 
@@ -37,9 +38,11 @@ export const useDiagnosticsStore = create<DiagnosticsState>((set, get) => ({
     try {
       const diags = await ideDiagnoseAll()
       const files: Record<string, FileDiagnostic> = {}
+      const projectPath = useProjectStore.getState().projectPath
+      const prefix = projectPath ? projectPath + '/' : ''
       for (const d of diags) {
-        // Use the file path as-is from the engine
-        const key = d.file
+        // Normalize to relative path (strip project path prefix)
+        const key = prefix && d.file.startsWith(prefix) ? d.file.slice(prefix.length) : d.file
         if (!files[key]) files[key] = { errors: 0, warnings: 0, severity: 'none' }
         if (d.severity === 1) files[key].errors++
         else if (d.severity === 2) files[key].warnings++
@@ -47,6 +50,17 @@ export const useDiagnosticsStore = create<DiagnosticsState>((set, get) => ({
       for (const key of Object.keys(files)) {
         files[key].severity = computeSeverity(files[key].errors, files[key].warnings)
       }
+      // Debug: log to temp file
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const app = (window as any).go?.main?.App
+        if (app?.DebugLog) {
+          app.DebugLog(`DiagnosticsStore.refreshAll: ${diags.length} diags, ${Object.keys(files).length} files with issues`)
+          for (const [key, val] of Object.entries(files)) {
+            app.DebugLog(`  ${key}: ${val.severity} (${val.errors}E/${val.warnings}W)`)
+          }
+        }
+      } catch { /* ignore */ }
       set({ files })
     } catch {
       // Best effort
@@ -55,13 +69,14 @@ export const useDiagnosticsStore = create<DiagnosticsState>((set, get) => ({
 
   updateFromDiagnostics: (diags, projectPath) => {
     const files = { ...get().files }
-    // Clear files that belong to this project and rebuild from new diags
     const prefix = projectPath + '/'
+    // Clear all relative paths (rebuild from scratch)
     for (const key of Object.keys(files)) {
-      if (key.startsWith(prefix)) delete files[key]
+      delete files[key]
     }
     for (const d of diags) {
-      const key = d.file
+      // Normalize to relative path
+      const key = d.file.startsWith(prefix) ? d.file.slice(prefix.length) : d.file
       if (!files[key]) files[key] = { errors: 0, warnings: 0, severity: 'none' }
       if (d.severity === 1) files[key].errors++
       else if (d.severity === 2) files[key].warnings++
@@ -74,9 +89,8 @@ export const useDiagnosticsStore = create<DiagnosticsState>((set, get) => ({
 
   getFileSeverity: (relativePath) => {
     const { files } = get()
-    // Try exact match and with project path prefix
     for (const [key, diag] of Object.entries(files)) {
-      if (key === relativePath || key.endsWith('/' + relativePath)) {
+      if (key === relativePath || key.endsWith('/' + relativePath) || relativePath.endsWith('/' + key) || relativePath === key) {
         return diag.severity
       }
     }

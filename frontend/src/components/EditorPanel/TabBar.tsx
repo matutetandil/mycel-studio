@@ -60,7 +60,14 @@ interface TabBarProps {
 export default function TabBar({ groupId, tabs, activeTabId, isSecondary, onCopy, onDownloadZip, copied }: TabBarProps) {
   const { setActiveTab, closeTab, reorderTab, moveTabToGroup, splitEditor, closeSplit } = useEditorPanelStore()
   const projectFiles = useProjectStore(s => s.files)
-  const getFileSeverity = useDiagnosticsStore(s => s.getFileSeverity)
+  // Subscribe to the files data (not the function) so React re-renders when diagnostics change
+  const diagFiles = useDiagnosticsStore(s => s.files)
+  const getFileSeverity = (path: string) => {
+    for (const [key, diag] of Object.entries(diagFiles)) {
+      if (key === path || key.endsWith('/' + path) || path.endsWith('/' + key)) return diag.severity
+    }
+    return 'none' as const
+  }
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null)
   const dragSourceRef = useRef<{ groupId: string; index: number } | null>(null)
 
@@ -186,7 +193,7 @@ export default function TabBar({ groupId, tabs, activeTabId, isSecondary, onCopy
                 ? <LayoutGrid className={`w-3 h-3 shrink-0 ${activeTabId === tab.id ? 'text-indigo-400' : 'text-neutral-500'}`} />
                 : (() => { const ft = getFileTypeInfo(tab.fileName); const Icon = ft.icon; return <Icon className={`w-3 h-3 shrink-0 ${activeTabId === tab.id ? ft.color : 'text-neutral-500'}`} /> })()}
               <span className={`max-w-32 truncate ${nameColor} ${
-                tab.type === 'file' ? (getFileSeverity(tabRelPath) === 'error' ? 'diag-error' : getFileSeverity(tabRelPath) === 'warning' ? 'diag-warning' : '') : ''
+                tab.type === 'file' ? (getFileSeverity(tabRelPath) === 'error' ? 'diag-error diag-tab' : getFileSeverity(tabRelPath) === 'warning' ? 'diag-warning diag-tab' : '') : ''
               }`}>{tab.fileName}</span>
               {badgeLetter && (
                 <span className={`text-[9px] font-bold leading-none ${badgeColor}`}>{badgeLetter}</span>

@@ -313,8 +313,25 @@ function SingleProjectFileTree({ hideHeader }: { hideHeader?: boolean } = {}) {
   const { projectPath, projectName, files, activeFile, setActiveFile, openProject, createFile, createDirectory, deleteFile, renameFile, capabilities, mycelRoot } = useProjectStore()
   const { nodes, edges, selectedNodeId, serviceConfig, authConfig, envConfig, securityConfig, pluginConfig } = useStudioStore()
   const editorActiveTabId = useEditorPanelStore(s => s.groups.find(g => g.id === s.activeGroupId)?.activeTabId || null)
-  const getFileSeverity = useDiagnosticsStore(s => s.getFileSeverity)
-  const getDirSeverity = useDiagnosticsStore(s => s.getDirSeverity)
+  // Subscribe to files data so React re-renders when diagnostics change
+  const diagFiles = useDiagnosticsStore(s => s.files)
+  const getFileSeverity = (path: string): DiagnosticSeverity => {
+    for (const [key, diag] of Object.entries(diagFiles)) {
+      if (key === path || key.endsWith('/' + path) || path.endsWith('/' + key)) return diag.severity
+    }
+    return 'none'
+  }
+  const getDirSeverity = (dirPath: string): DiagnosticSeverity => {
+    let hasError = false
+    let hasWarning = false
+    for (const [key, diag] of Object.entries(diagFiles)) {
+      if (key.startsWith(dirPath + '/') || key.includes('/' + dirPath + '/')) {
+        if (diag.severity === 'error') hasError = true
+        if (diag.severity === 'warning') hasWarning = true
+      }
+    }
+    return hasError ? 'error' : hasWarning ? 'warning' : 'none'
+  }
   const [isExpanded, setIsExpanded] = useState(true)
   const [fileContextMenu, setFileContextMenu] = useState<{ x: number; y: number; path: string; name: string } | null>(null)
   const [dirContextMenu, setDirContextMenu] = useState<{ x: number; y: number; dirPath: string } | null>(null)

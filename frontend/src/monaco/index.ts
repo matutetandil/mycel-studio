@@ -3,6 +3,7 @@ import { mycelDarkTheme, mycelLightTheme } from './hclTheme'
 import { createIDECompletionProvider } from './ideCompletionProvider'
 import { createIDEHoverProvider } from './ideHoverProvider'
 import { createIDEDefinitionProvider, setDefinitionNavigator } from './ideDefinitionProvider'
+import { createIDECodeActionProvider } from './ideCodeActionProvider'
 import { isWailsRuntime } from '../lib/api'
 
 // Shared file path getter — returns the absolute path of the active HCL file
@@ -29,6 +30,7 @@ export function setupMonaco(monaco: typeof import('monaco-editor')): void {
     monaco.languages.registerCompletionItemProvider('hcl', createIDECompletionProvider(monaco, getFilePath))
     monaco.languages.registerHoverProvider('hcl', createIDEHoverProvider(getFilePath))
     monaco.languages.registerDefinitionProvider('hcl', createIDEDefinitionProvider(getFilePath))
+    monaco.languages.registerCodeActionProvider('hcl', createIDECodeActionProvider(monaco, getFilePath))
   } else {
     // Docker/browser fallback: use static providers (legacy)
     import('./hclCompletionProvider').then(m => {

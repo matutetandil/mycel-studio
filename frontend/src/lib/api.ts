@@ -138,7 +138,8 @@ export interface IDECompletionItem { label: string; kind: number; detail?: strin
 export interface IDEHoverResult { content: string; range: IDERange }
 export interface IDELocation { file: string; range: IDERange }
 export interface IDERenameEdit { file: string; range: IDERange; newText: string }
-export interface IDECodeAction { title: string; kind: string; edits: IDERenameEdit[] }
+export interface IDETextEdit { file: string; range: IDERange; newText: string }
+export interface IDECodeAction { title: string; kind: number | string; edits: IDETextEdit[] }
 export interface IDESymbol { name: string; kind: string; detail: string; file: string; range: IDERange }
 export interface IDETransformRule { index: number; field: string; expr: string; stage: string; range: IDERange }
 
