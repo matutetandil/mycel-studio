@@ -448,6 +448,10 @@ export default function EditorGroupView({ groupId, isSecondary }: EditorGroupPro
     return buildLineStageMap(activeFile.content, activeFile.path)
   }, [ideBreakpoints, activeFile?.content, activeFile?.path])
 
+  // Keep a ref so Monaco event handlers always access latest lineStageMap
+  const lineStageMapRef = useRef(lineStageMap)
+  lineStageMapRef.current = lineStageMap
+
   // Set of lines that have breakpoints (for decoration logic)
   const breakpointLines = useMemo(() => {
     const lines = new Set<number>()
@@ -751,12 +755,12 @@ export default function EditorGroupView({ groupId, isSecondary }: EditorGroupPro
               monacoEditor.onDidBlurEditorText(() => {
                 triggerAutoSave()
               })
-              // Breakpoint click handler on line numbers
+              // Breakpoint click handler on line numbers (uses ref for latest data)
               monacoEditor.onMouseDown((e) => {
                 if (e.target.type === 3 /* GUTTER_LINE_NUMBERS */) {
                   const lineNumber = e.target.position?.lineNumber
                   if (lineNumber) {
-                    const info = lineStageMap.get(lineNumber)
+                    const info = lineStageMapRef.current.get(lineNumber)
                     if (info) {
                       useDebugStore.getState().toggleBreakpoint(info.flow, info.stage, info.ruleIndex)
                     }

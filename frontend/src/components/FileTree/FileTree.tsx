@@ -396,8 +396,34 @@ function SingleProjectFileTree({ hideHeader }: { hideHeader?: boolean } = {}) {
               setTimeout(() => useEditorPanelStore.getState().setRevealLine(revealLine!), 50)
             }
           } else {
-            // Open file (or activate existing tab) and scroll to block
-            openFileInEditor(filePath, revealLine, projectPath)
+            // Check if this file already has a tab open (avoid duplicates from tab click → selectNode → here)
+            const editorState = useEditorPanelStore.getState()
+            const scoped = scopedPath(projectPath, filePath)
+            const existingTab = editorState.groups.some(g =>
+              g.tabs.some(t => {
+                const tabRel = unscopePath(t.filePath).relativePath
+                return t.id === scoped || t.id === filePath || tabRel === filePath
+              })
+            )
+            if (existingTab) {
+              // Tab exists — just activate it and scroll to block if needed
+              for (const g of editorState.groups) {
+                const tab = g.tabs.find(t => {
+                  const tabRel = unscopePath(t.filePath).relativePath
+                  return t.id === scoped || t.id === filePath || tabRel === filePath
+                })
+                if (tab) {
+                  editorState.setActiveTab(g.id, tab.id)
+                  if (revealLine) {
+                    setTimeout(() => useEditorPanelStore.getState().setRevealLine(revealLine!), 50)
+                  }
+                  break
+                }
+              }
+            } else {
+              // Open file (or activate existing tab) and scroll to block
+              openFileInEditor(filePath, revealLine, projectPath)
+            }
           }
 
           prevNodeFileRef.current[selectedNodeId] = filePath

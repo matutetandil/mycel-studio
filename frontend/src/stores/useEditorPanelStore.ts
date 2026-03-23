@@ -86,9 +86,15 @@ export const useEditorPanelStore = create<EditorPanelState>((set, get) => ({
     const targetGroupId = groupId || state.activeGroupId
     const id = projectPath ? scopedPath(projectPath, filePath) : filePath
 
-    // Check if tab already exists in any group
+    // Check if tab already exists in any group (match by exact ID, scoped path, or relative path)
+    const relPath = unscopePath(id).relativePath
     for (const group of state.groups) {
-      const existing = group.tabs.find(t => t.id === id)
+      const existing = group.tabs.find(t => {
+        if (t.id === id) return true
+        // Also match if the relative paths are the same (handles scoped vs unscoped mismatch)
+        const tabRel = unscopePath(t.id).relativePath
+        return tabRel === relPath || tabRel === filePath || t.id === filePath
+      })
       if (existing) {
         set({
           groups: state.groups.map(g =>
