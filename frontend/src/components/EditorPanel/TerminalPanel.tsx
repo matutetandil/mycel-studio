@@ -1,14 +1,27 @@
 import { useState, useCallback } from 'react'
+import { useEffect, useRef } from 'react'
 import { Terminal as TerminalIcon, Plus, X, Pencil, Copy } from 'lucide-react'
 import { useTerminalStore } from '../../stores/useTerminalStore'
 import TerminalView from './TerminalView'
 import ContextMenu, { type ContextMenuItem } from '../ContextMenu'
 
-export default function TerminalPanel() {
+export default function TerminalPanel({ isVisible }: { isVisible?: boolean } = {}) {
   const { terminals, activeTerminalId, createTerminal, closeTerminal, setActiveTerminal, renameTerminal } = useTerminalStore()
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; termId: string } | null>(null)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editName, setEditName] = useState('')
+  const termContainerRef = useRef<HTMLDivElement>(null)
+
+  // Focus the active terminal's xterm textarea when switching tabs or panel becomes visible
+  useEffect(() => {
+    if (!activeTerminalId || !termContainerRef.current || !isVisible) return
+    setTimeout(() => {
+      const textarea = termContainerRef.current?.querySelector<HTMLTextAreaElement>(
+        `[style*="display: block"] .xterm-helper-textarea, [style*="display:block"] .xterm-helper-textarea`
+      )
+      textarea?.focus()
+    }, 50)
+  }, [activeTerminalId, isVisible])
 
   const handleContextMenu = useCallback((e: React.MouseEvent, termId: string) => {
     e.preventDefault()
@@ -133,8 +146,8 @@ export default function TerminalPanel() {
         </div>
       </div>
 
-      {/* Active terminal */}
-      <div className="flex-1 min-h-0">
+      {/* Active terminal — focus xterm when switching tabs */}
+      <div className="flex-1 min-h-0" ref={termContainerRef}>
         {terminals.map(term => (
           <div
             key={term.id}

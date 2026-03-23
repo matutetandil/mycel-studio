@@ -262,7 +262,7 @@ export default function EditorPanel() {
             className="absolute inset-0"
             style={{ display: activePanel === 'terminal' ? undefined : 'none' }}
           >
-            <TerminalPanel />
+            <TerminalPanel isVisible={activePanel === 'terminal'} />
           </div>
 
           {/* Debug view */}
