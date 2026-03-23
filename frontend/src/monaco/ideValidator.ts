@@ -16,7 +16,7 @@ export function createIDEValidator(
     if (timer) clearTimeout(timer)
     timer = setTimeout(async () => {
       const filePath = getFilePath()
-      if (!filePath || !filePath.endsWith('.hcl')) return
+      if (!filePath || !filePath.endsWith('.mycel')) return
 
       const content = model.getValue()
       const diags = await ideUpdateFile(filePath, content)
@@ -34,8 +34,11 @@ export function createIDEValidator(
 
       monaco.editor.setModelMarkers(model, 'mycel-ide', markers)
 
-      // Refresh diagnostics store so tabs/file tree update their squiggly indicators
-      useDiagnosticsStore.getState().refreshAll()
+      // Update this file's diagnostics in the store (immediate, no re-fetch)
+      const store = useDiagnosticsStore.getState()
+      const errors = (diags || []).filter(d => d.severity === 1).length
+      const warnings = (diags || []).filter(d => d.severity === 2).length
+      store.updateFile(filePath, errors, warnings)
     }, debounceMs)
   }
 }

@@ -154,7 +154,7 @@ func generateSingleFile(project *models.StudioProject) ([]GeneratedFile, error) 
 	}
 
 	return []GeneratedFile{
-		{Name: "config.hcl", Content: strings.TrimSpace(buf.String())},
+		{Name: "config.mycel", Content: strings.TrimSpace(buf.String())},
 	}, nil
 }
 
@@ -167,7 +167,7 @@ func generateMultipleFiles(project *models.StudioProject) ([]GeneratedFile, erro
 		var buf bytes.Buffer
 		writeServiceBlock(&buf, project.Service)
 		files = append(files, GeneratedFile{
-			Name:    "config.hcl",
+			Name:    "config.mycel",
 			Content: strings.TrimSpace(buf.String()),
 		})
 	}
@@ -182,7 +182,7 @@ func generateMultipleFiles(project *models.StudioProject) ([]GeneratedFile, erro
 			writeConnectorBlock(&buf, &conn)
 		}
 		files = append(files, GeneratedFile{
-			Name:    "connectors.hcl",
+			Name:    "connectors.mycel",
 			Content: strings.TrimSpace(buf.String()),
 		})
 	}
@@ -197,7 +197,7 @@ func generateMultipleFiles(project *models.StudioProject) ([]GeneratedFile, erro
 			writeFlowBlock(&buf, &flow)
 		}
 		files = append(files, GeneratedFile{
-			Name:    "flows.hcl",
+			Name:    "flows.mycel",
 			Content: strings.TrimSpace(buf.String()),
 		})
 	}
@@ -212,7 +212,7 @@ func generateMultipleFiles(project *models.StudioProject) ([]GeneratedFile, erro
 			writeTypeBlock(&buf, &typ)
 		}
 		files = append(files, GeneratedFile{
-			Name:    "types.hcl",
+			Name:    "types.mycel",
 			Content: strings.TrimSpace(buf.String()),
 		})
 	}
@@ -227,7 +227,7 @@ func generateMultipleFiles(project *models.StudioProject) ([]GeneratedFile, erro
 			writeTransformBlock(&buf, &tr)
 		}
 		files = append(files, GeneratedFile{
-			Name:    "transforms.hcl",
+			Name:    "transforms.mycel",
 			Content: strings.TrimSpace(buf.String()),
 		})
 	}
@@ -242,7 +242,7 @@ func generateMultipleFiles(project *models.StudioProject) ([]GeneratedFile, erro
 			writeValidatorBlock(&buf, &val)
 		}
 		files = append(files, GeneratedFile{
-			Name:    "validators.hcl",
+			Name:    "validators.mycel",
 			Content: strings.TrimSpace(buf.String()),
 		})
 	}
@@ -257,7 +257,7 @@ func generateMultipleFiles(project *models.StudioProject) ([]GeneratedFile, erro
 			writeAspectBlock(&buf, &asp)
 		}
 		files = append(files, GeneratedFile{
-			Name:    "aspects.hcl",
+			Name:    "aspects.mycel",
 			Content: strings.TrimSpace(buf.String()),
 		})
 	}
@@ -272,7 +272,7 @@ func generateMultipleFiles(project *models.StudioProject) ([]GeneratedFile, erro
 			writeNamedCacheBlock(&buf, &cache)
 		}
 		files = append(files, GeneratedFile{
-			Name:    "caches.hcl",
+			Name:    "caches.mycel",
 			Content: strings.TrimSpace(buf.String()),
 		})
 	}

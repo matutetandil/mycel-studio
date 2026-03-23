@@ -711,7 +711,7 @@ function FlowProperties({
   // Collect existing flow file paths for the selector
   const existingFlowFiles = useMemo(() => {
     const paths = new Set<string>()
-    paths.add('flows/flows.hcl')
+    paths.add('flows/flows.mycel')
     for (const n of nodes) {
       if (n.type === 'flow') {
         const fd = n.data as FlowNodeData
@@ -743,12 +743,12 @@ function FlowProperties({
       <div>
         <label className="block text-xs font-medium text-neutral-400 mb-1">File</label>
         <select
-          value={data.hclFile || 'flows/flows.hcl'}
+          value={data.hclFile || 'flows/flows.mycel'}
           onChange={(e) => {
             if (e.target.value === '__custom__') {
               setShowCustomFile(true)
             } else {
-              onChange({ hclFile: e.target.value === 'flows/flows.hcl' ? undefined : e.target.value })
+              onChange({ hclFile: e.target.value === 'flows/flows.mycel' ? undefined : e.target.value })
               setShowCustomFile(false)
             }
           }}
@@ -763,13 +763,13 @@ function FlowProperties({
           <input
             type="text"
             autoFocus
-            placeholder="flows/users.hcl"
+            placeholder="flows/users.mycel"
             className="w-full mt-1 px-3 py-2 text-sm bg-neutral-800 border border-neutral-700 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-white placeholder-neutral-500"
             onKeyDown={(e) => {
               if (e.key === 'Enter') {
                 const val = (e.target as HTMLInputElement).value.trim()
                 if (val) {
-                  const path = val.endsWith('.hcl') ? val : `${val}.hcl`
+                  const path = val.endsWith('.mycel') || val.endsWith('.hcl') ? val : `${val}.mycel`
                   const normalized = path.startsWith('flows/') ? path : `flows/${path}`
                   onChange({ hclFile: normalized })
                 }
@@ -781,7 +781,7 @@ function FlowProperties({
             onBlur={(e) => {
               const val = e.target.value.trim()
               if (val) {
-                const path = val.endsWith('.hcl') ? val : `${val}.hcl`
+                const path = val.endsWith('.mycel') || val.endsWith('.hcl') ? val : `${val}.mycel`
                 const normalized = path.startsWith('flows/') ? path : `flows/${path}`
                 onChange({ hclFile: normalized })
               }

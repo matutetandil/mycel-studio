@@ -155,7 +155,7 @@ func (a *App) GenerateHCL(reqJSON string) (string, error) {
 // ValidateHCL validates HCL content and returns validation results as JSON.
 func (a *App) ValidateHCL(hcl string, filename string) string {
 	if filename == "" {
-		filename = "config.hcl"
+		filename = "config.mycel"
 	}
 
 	errors := a.parser.ValidateContent(hcl, filename)

@@ -48,7 +48,8 @@ export const KNOWN_LANGUAGES: { id: string; label: string }[] = [
 
 // Extension → FileTypeInfo
 const EXT_MAP: Record<string, FileTypeInfo> = {
-  // HCL / Terraform
+  // Mycel / HCL / Terraform
+  '.mycel':      { icon: Braces,      color: 'text-purple-400',  language: 'mycel',      label: 'Mycel' },
   '.hcl':        { icon: Braces,      color: 'text-purple-400',  language: 'hcl',        label: 'HCL' },
   '.tf':         { icon: Braces,      color: 'text-purple-400',  language: 'hcl',        label: 'Terraform' },
   '.tfvars':     { icon: Braces,      color: 'text-purple-400',  language: 'hcl',        label: 'Terraform Vars' },
@@ -273,12 +274,12 @@ export function getLanguageForFile(fileName: string): string {
 // extension: null means no extension (e.g., Dockerfile, Makefile)
 export interface NewFileType {
   label: string
-  extension: string | null  // e.g. '.hcl', '.json', null for Dockerfile
+  extension: string | null  // e.g. '.mycel', '.json', null for Dockerfile
   fileName?: string         // exact filename for types like Dockerfile
 }
 
 export const NEW_FILE_TYPES: NewFileType[] = [
-  { label: 'HCL File', extension: '.hcl' },
+  { label: 'Mycel File', extension: '.mycel' },
   { label: 'JSON File', extension: '.json' },
   { label: 'YAML File', extension: '.yaml' },
   { label: 'TypeScript File', extension: '.ts' },
@@ -311,7 +312,7 @@ export function resolveFileName(input: string, fileType: NewFileType): string {
   // No extension needed
   if (!fileType.extension) return name
 
-  const ext = fileType.extension // e.g. '.hcl'
+  const ext = fileType.extension // e.g. '.mycel'
 
   // If user already typed the correct extension, keep it
   if (name.toLowerCase().endsWith(ext.toLowerCase())) return name

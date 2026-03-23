@@ -18,8 +18,12 @@ export function setupMonaco(monaco: typeof import('monaco-editor')): void {
   if (registered) return
   registered = true
 
-  // Register HCL language + themes (always needed for syntax coloring)
-  monaco.languages.register({ id: 'hcl' })
+  // Register Mycel language (also as 'hcl' for backward compat with .hcl files)
+  monaco.languages.register({ id: 'mycel', extensions: ['.mycel'], aliases: ['Mycel', 'mycel'] })
+  monaco.languages.setMonarchTokensProvider('mycel', hclMonarchTokens)
+  monaco.languages.setLanguageConfiguration('mycel', hclLanguageConfig)
+  // Also register 'hcl' as alias for existing .hcl files
+  monaco.languages.register({ id: 'hcl', extensions: ['.hcl'], aliases: ['HCL'] })
   monaco.languages.setMonarchTokensProvider('hcl', hclMonarchTokens)
   monaco.languages.setLanguageConfiguration('hcl', hclLanguageConfig)
   monaco.editor.defineTheme('mycel-dark', mycelDarkTheme)
@@ -27,16 +31,21 @@ export function setupMonaco(monaco: typeof import('monaco-editor')): void {
 
   // Use IDE engine providers (powered by Mycel pkg/ide)
   if (isWailsRuntime()) {
-    monaco.languages.registerCompletionItemProvider('hcl', createIDECompletionProvider(monaco, getFilePath))
-    monaco.languages.registerHoverProvider('hcl', createIDEHoverProvider(getFilePath))
-    monaco.languages.registerDefinitionProvider('hcl', createIDEDefinitionProvider(getFilePath))
-    monaco.languages.registerCodeActionProvider('hcl', createIDECodeActionProvider(monaco, getFilePath))
+    // Register IDE providers for both mycel and hcl languages
+    for (const langId of ['mycel', 'hcl']) {
+      monaco.languages.registerCompletionItemProvider(langId, createIDECompletionProvider(monaco, getFilePath))
+      monaco.languages.registerHoverProvider(langId, createIDEHoverProvider(getFilePath))
+      monaco.languages.registerDefinitionProvider(langId, createIDEDefinitionProvider(getFilePath))
+      monaco.languages.registerCodeActionProvider(langId, createIDECodeActionProvider(monaco, getFilePath))
+    }
   } else {
     // Docker/browser fallback: use static providers (legacy)
     import('./hclCompletionProvider').then(m => {
+      monaco.languages.registerCompletionItemProvider('mycel', m.createCompletionProvider(monaco))
       monaco.languages.registerCompletionItemProvider('hcl', m.createCompletionProvider(monaco))
     })
     import('./hclHoverProvider').then(m => {
+      monaco.languages.registerHoverProvider('mycel', m.createHoverProvider())
       monaco.languages.registerHoverProvider('hcl', m.createHoverProvider())
     })
   }

@@ -18,6 +18,8 @@ interface DiagnosticsState {
   refreshAll: () => Promise<void>
   // Update diagnostics for a single file from IDE response
   updateFromDiagnostics: (diags: IDEDiagnostic[], projectPath: string) => void
+  // Update diagnostics for a single file (used by validator after each edit)
+  updateFile: (filePath: string, errors: number, warnings: number) => void
   // Get severity for a file
   getFileSeverity: (relativePath: string) => DiagnosticSeverity
   // Get worst severity in a directory (propagated)
@@ -85,6 +87,22 @@ export const useDiagnosticsStore = create<DiagnosticsState>((set, get) => ({
       files[key].severity = computeSeverity(files[key].errors, files[key].warnings)
     }
     set({ files })
+  },
+
+  updateFile: (filePath, errors, warnings) => {
+    const projectPath = useProjectStore.getState().projectPath
+    const prefix = projectPath ? projectPath + '/' : ''
+    const key = prefix && filePath.startsWith(prefix) ? filePath.slice(prefix.length) : filePath
+
+    set(state => {
+      const files = { ...state.files }
+      if (errors === 0 && warnings === 0) {
+        delete files[key]
+      } else {
+        files[key] = { errors, warnings, severity: computeSeverity(errors, warnings) }
+      }
+      return { files }
+    })
   },
 
   getFileSeverity: (relativePath) => {

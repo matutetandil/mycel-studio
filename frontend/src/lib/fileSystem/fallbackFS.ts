@@ -84,7 +84,7 @@ export class FallbackFileSystem implements FileSystemProvider {
       if (fileName.startsWith('.') && fileName !== '.mycel-studio.json') continue
 
       // Only include HCL files and studio metadata
-      if (!fileName.endsWith('.hcl') && fileName !== '.mycel-studio.json') continue
+      if (!fileName.endsWith('.mycel') && fileName !== '.mycel-studio.json') continue
 
       try {
         const content = await zipEntry.async('string')

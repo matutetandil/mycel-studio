@@ -67,7 +67,7 @@ export default function Editor() {
   }, [])
 
   const openFiles = useMemo(
-    () => files.filter((f) => f.name.endsWith('.hcl')),
+    () => files.filter((f) => f.name.endsWith('.mycel')),
     [files]
   )
 

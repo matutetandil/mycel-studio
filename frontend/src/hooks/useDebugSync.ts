@@ -35,7 +35,7 @@ export function useDebugSync() {
       // But we also want to ensure the editor shows the file
       if (flowNode) {
         const data = flowNode.data as FlowNodeData
-        const filePath = data.hclFile || 'flows/flows.hcl'
+        const filePath = data.hclFile || 'flows/flows.mycel'
         const fileName = filePath.split('/').pop() || filePath
         const editorStore = useEditorPanelStore.getState()
         editorStore.openFile(filePath, fileName, undefined, useProjectStore.getState().projectPath)

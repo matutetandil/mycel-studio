@@ -36,7 +36,7 @@ export const hclLanguageConfig: languages.LanguageConfiguration = {
 
 export const hclMonarchTokens: languages.IMonarchLanguage = {
   defaultToken: '',
-  tokenPostfix: '.hcl',
+  tokenPostfix: '.mycel',
 
   // Top-level block keywords
   topLevelBlocks: [

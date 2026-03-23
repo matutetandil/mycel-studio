@@ -176,7 +176,7 @@ export default function TabBar({ groupId, tabs, activeTabId, isSecondary, onCopy
                   }
                   // For HCL files, cursor-driven selection in Monaco handles node selection on mount.
                   // For non-HCL files, select the node by file path.
-                  if (!tabRelPath.endsWith('.hcl')) {
+                  if (!tabRelPath.endsWith('.mycel')) {
                     selectNodeForFile(tab.filePath)
                   }
                 }

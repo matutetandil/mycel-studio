@@ -105,7 +105,7 @@ func handleValidate(w http.ResponseWriter, r *http.Request) {
 
 	filename := req.Filename
 	if filename == "" {
-		filename = "config.hcl"
+		filename = "config.mycel"
 	}
 
 	errors := p.ValidateContent(req.HCL, filename)

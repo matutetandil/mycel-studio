@@ -183,7 +183,7 @@ export function useSync() {
       }
 
       // Update the target file or the first HCL file
-      const fileToUpdate = targetFile || files.find(f => f.name.endsWith('.hcl'))?.relativePath
+      const fileToUpdate = targetFile || files.find(f => f.name.endsWith('.mycel'))?.relativePath
       if (fileToUpdate) {
         updateFile(fileToUpdate, result.files[0].content)
       }

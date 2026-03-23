@@ -6,13 +6,15 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/matutetandil/mycel/pkg/connectors"
 	"github.com/matutetandil/mycel/pkg/ide"
 )
 
 // IDEInit creates an IDE engine for the given project directory.
-// Called when a project is opened. Returns initial diagnostics as JSON.
+// Uses full connector registry for type-aware completions and diagnostics.
 func (a *App) IDEInit(projectPath string) string {
-	a.ideEngine = ide.NewEngine(projectPath)
+	reg := connectors.FullRegistry()
+	a.ideEngine = ide.NewEngine(projectPath, ide.WithRegistry(reg))
 	diags := a.ideEngine.FullReindex()
 	return toJSON(diags)
 }
@@ -173,7 +175,8 @@ func (a *App) IDEGetIndex() string {
 func (a *App) IDEParseProject(projectPath string) string {
 	// Initialize or reuse engine
 	if a.ideEngine == nil {
-		a.ideEngine = ide.NewEngine(projectPath)
+		reg := connectors.FullRegistry()
+		a.ideEngine = ide.NewEngine(projectPath, ide.WithRegistry(reg))
 		a.ideEngine.FullReindex()
 	}
 

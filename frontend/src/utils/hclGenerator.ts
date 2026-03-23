@@ -1379,7 +1379,7 @@ export function validateProject(nodes: StudioNode[]): string[] {
 }
 
 // Generate project with multiple files
-// mycelRoot: prefix for generated paths (e.g. 'src/' when config.hcl is at src/config.hcl)
+// mycelRoot: prefix for generated paths (e.g. 'src/' when config.mycel is at src/config.mycel)
 // existingPaths: set of real file paths from disk — generated files with matching paths are skipped
 export function generateProject(nodes: StudioNode[], edges: Edge[], serviceConfig?: ServiceConfig, authConfig?: AuthConfig, envConfig?: EnvironmentConfig, securityConfig?: SecurityConfig, pluginConfig?: PluginConfig, mycelRoot: string = '', existingPaths?: Set<string>): GeneratedProject {
   const nodesMap = new Map(nodes.map((n) => [n.id, n]))
@@ -1407,7 +1407,7 @@ export function generateProject(nodes: StudioNode[], edges: Edge[], serviceConfi
   const name = serviceConfig?.name || 'my-service'
   const version = serviceConfig?.version || '1.0.0'
 
-  // Generate config.hcl
+  // Generate config.mycel
   const configLines = ['# Service configuration', 'service {', `  name    = "${name}"`, `  version = "${version}"`]
   if (serviceConfig?.workflow?.enabled) {
     const wf = serviceConfig.workflow
@@ -1419,21 +1419,21 @@ export function generateProject(nodes: StudioNode[], edges: Edge[], serviceConfi
     configLines.push('  }')
   }
   configLines.push('}', '')
-  pushFile('config.hcl', 'config.hcl', configLines.join('\n'))
+  pushFile('config.mycel', 'config.mycel', configLines.join('\n'))
 
   // Generate auth file
   if (authConfig?.enabled) {
-    pushFile('auth/auth.hcl', 'auth.hcl', generateAuthHCL(authConfig) + '\n')
+    pushFile('auth/auth.mycel', 'auth.mycel', generateAuthHCL(authConfig) + '\n')
   }
 
   // Generate security file
   if (securityConfig?.enabled) {
-    pushFile('security/security.hcl', 'security.hcl', generateSecurityHCL(securityConfig) + '\n')
+    pushFile('security/security.mycel', 'security.mycel', generateSecurityHCL(securityConfig) + '\n')
   }
 
   // Generate plugins file
   if (pluginConfig && pluginConfig.plugins.some(p => p.name && p.source)) {
-    pushFile('plugins/plugins.hcl', 'plugins.hcl', generatePluginHCL(pluginConfig))
+    pushFile('plugins/plugins.mycel', 'plugins.mycel', generatePluginHCL(pluginConfig))
   }
 
   // Generate .env file
@@ -1463,7 +1463,7 @@ export function generateProject(nodes: StudioNode[], edges: Edge[], serviceConfi
   const newConnectors = connectorNodes.filter(n => !(n.data as ConnectorNodeData).hclFile)
   for (const node of newConnectors) {
     const data = node.data as ConnectorNodeData
-    const fileName = `${toIdentifier(data.label)}.hcl`
+    const fileName = `${toIdentifier(data.label)}.mycel`
     pushFile(`connectors/${fileName}`, fileName, generateConnectorHCL(node) + '\n')
   }
 
@@ -1475,7 +1475,7 @@ export function generateProject(nodes: StudioNode[], edges: Edge[], serviceConfi
       typesContent.push(generateTypeHCL(node))
       typesContent.push('')
     }
-    pushFile('types/types.hcl', 'types.hcl', typesContent.join('\n'))
+    pushFile('types/types.mycel', 'types.mycel', typesContent.join('\n'))
   }
 
   // Generate validators file — only for NEW validators
@@ -1486,7 +1486,7 @@ export function generateProject(nodes: StudioNode[], edges: Edge[], serviceConfi
       validatorsContent.push(generateValidatorHCL(node))
       validatorsContent.push('')
     }
-    pushFile('validators/validators.hcl', 'validators.hcl', validatorsContent.join('\n'))
+    pushFile('validators/validators.mycel', 'validators.mycel', validatorsContent.join('\n'))
   }
 
   // Generate transforms file — only for NEW transforms
@@ -1497,7 +1497,7 @@ export function generateProject(nodes: StudioNode[], edges: Edge[], serviceConfi
       transformsContent.push(generateNamedTransformHCL(node))
       transformsContent.push('')
     }
-    pushFile('transforms/transforms.hcl', 'transforms.hcl', transformsContent.join('\n'))
+    pushFile('transforms/transforms.mycel', 'transforms.mycel', transformsContent.join('\n'))
   }
 
   // Generate aspects file — only for NEW aspects
@@ -1508,7 +1508,7 @@ export function generateProject(nodes: StudioNode[], edges: Edge[], serviceConfi
       aspectsContent.push(generateAspectHCL(node))
       aspectsContent.push('')
     }
-    pushFile('aspects/aspects.hcl', 'aspects.hcl', aspectsContent.join('\n'))
+    pushFile('aspects/aspects.mycel', 'aspects.mycel', aspectsContent.join('\n'))
   }
 
   // Generate sagas file — only for NEW sagas
@@ -1519,7 +1519,7 @@ export function generateProject(nodes: StudioNode[], edges: Edge[], serviceConfi
       sagasContent.push(generateSagaHCL(node))
       sagasContent.push('')
     }
-    pushFile('sagas/sagas.hcl', 'sagas.hcl', sagasContent.join('\n'))
+    pushFile('sagas/sagas.mycel', 'sagas.mycel', sagasContent.join('\n'))
   }
 
   // Generate state machines file — only for NEW state machines
@@ -1530,7 +1530,7 @@ export function generateProject(nodes: StudioNode[], edges: Edge[], serviceConfi
       smContent.push(generateStateMachineHCL(node))
       smContent.push('')
     }
-    pushFile('machines/machines.hcl', 'machines.hcl', smContent.join('\n'))
+    pushFile('machines/machines.mycel', 'machines.mycel', smContent.join('\n'))
   }
 
   // Generate flow files — only for NEW flows (no hclFile = not from disk)
@@ -1541,7 +1541,7 @@ export function generateProject(nodes: StudioNode[], edges: Edge[], serviceConfi
       content.push(generateFlowHCL(node, edges, nodesMap))
       content.push('')
     }
-    pushFile('flows/flows.hcl', 'flows.hcl', content.join('\n'))
+    pushFile('flows/flows.mycel', 'flows.mycel', content.join('\n'))
   }
 
   return { files, errors }

@@ -134,7 +134,7 @@ function selectNodeByBlock(blockType: string, blockName: string) {
 // Parse HCL content to find which lines correspond to which flow/aspect stages
 function buildLineStageMap(content: string, filePath: string): Map<number, LineStageInfo> {
   const map = new Map<number, LineStageInfo>()
-  if (!content || !filePath.endsWith('.hcl')) return map
+  if (!content || !filePath.endsWith('.mycel')) return map
 
   const lines = content.split('\n')
   let currentFlow: string | null = null
@@ -394,7 +394,7 @@ export default function EditorGroupView({ groupId, isSecondary }: EditorGroupPro
   // Map HCL lines to breakpointable stages
   // Build block ranges for cursor-aware node selection
   const blockRanges = useMemo(() => {
-    if (!activeFile?.content || !activeFile.name.endsWith('.hcl')) return []
+    if (!activeFile?.content || !activeFile.name.endsWith('.mycel')) return []
     return buildBlockRanges(activeFile.content)
   }, [activeFile?.content, activeFile?.name])
 
@@ -417,7 +417,7 @@ export default function EditorGroupView({ groupId, isSecondary }: EditorGroupPro
   // Breakpoint locations from IDE engine (replaces buildLineStageMap)
   const [ideBreakpoints, setIdeBreakpoints] = useState<IDEBreakpointLocation[]>([])
   useEffect(() => {
-    if (!activeFile?.path || !activeFile.path.endsWith('.hcl')) {
+    if (!activeFile?.path || !activeFile.path.endsWith('.mycel')) {
       setIdeBreakpoints([])
       return
     }

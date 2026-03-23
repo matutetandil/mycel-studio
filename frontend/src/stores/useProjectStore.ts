@@ -43,7 +43,7 @@ export interface StudioSettings {
 interface ProjectState {
   projectPath: string | null
   projectName: string | null
-  mycelRoot: string  // Directory containing config.hcl (e.g. 'src/' or ''), all generated paths are relative to this
+  mycelRoot: string  // Directory containing config.mycel (e.g. 'src/' or ''), all generated paths are relative to this
   files: ProjectFile[]
   activeFile: string | null
   metadata: ProjectMetadata | null
@@ -115,10 +115,10 @@ async function loadProjectIntoStore(set: any, get: any, provider: any, project: 
     isDirty: false,
   }))
 
-  // Detect Mycel root: directory containing config.hcl
-  const configFile = files.find(f => f.name === 'config.hcl')
+  // Detect Mycel root: directory containing config.mycel
+  const configFile = files.find(f => f.name === 'config.mycel')
   const mycelRoot = configFile
-    ? configFile.relativePath.replace(/\/?config\.hcl$/, '')
+    ? configFile.relativePath.replace(/\/?config\.mycel$/, '')
     : ''
   const normalizedRoot = mycelRoot ? (mycelRoot.endsWith('/') ? mycelRoot : mycelRoot + '/') : ''
 
@@ -129,7 +129,7 @@ async function loadProjectIntoStore(set: any, get: any, provider: any, project: 
     mycelRoot: normalizedRoot,
     files,
     metadata: defaultMetadata,
-    activeFile: files.find((f: ProjectFile) => f.name.endsWith('.hcl'))?.relativePath ?? null,
+    activeFile: files.find((f: ProjectFile) => f.name.endsWith('.mycel'))?.relativePath ?? null,
     isLoading: false,
     capabilities: provider.getCapabilities(),
   })
@@ -143,7 +143,7 @@ async function loadProjectIntoStore(set: any, get: any, provider: any, project: 
   get().refreshGitStatus()
 
   // Parse HCL files into canvas nodes
-  const hclFiles = files.filter((f: ProjectFile) => f.name.endsWith('.hcl'))
+  const hclFiles = files.filter((f: ProjectFile) => f.name.endsWith('.mycel'))
   debugLog(`loadProjectIntoStore: ${files.length} files, ${hclFiles.length} HCL files`)
   if (hclFiles.length > 0) {
     try {
@@ -264,8 +264,8 @@ async function loadParentFirst(parentPath: string, childPath: string) {
           name: f.name, path: f.relativePath, relativePath: f.relativePath, content: f.content, isDirty: false,
         }))
 
-        const configFile = parentFiles.find(f => f.name === 'config.hcl')
-        const mycelRoot = configFile ? configFile.relativePath.replace(/\/?config\.hcl$/, '') : ''
+        const configFile = parentFiles.find(f => f.name === 'config.mycel')
+        const mycelRoot = configFile ? configFile.relativePath.replace(/\/?config\.mycel$/, '') : ''
         const normalizedRoot = mycelRoot ? (mycelRoot.endsWith('/') ? mycelRoot : mycelRoot + '/') : ''
 
         useProjectStore.setState({
@@ -273,13 +273,13 @@ async function loadParentFirst(parentPath: string, childPath: string) {
           projectName: project.name,
           mycelRoot: normalizedRoot,
           files: parentFiles,
-          activeFile: parentFiles.find((f: ProjectFile) => f.name.endsWith('.hcl'))?.relativePath ?? null,
+          activeFile: parentFiles.find((f: ProjectFile) => f.name.endsWith('.mycel'))?.relativePath ?? null,
           isLoading: false,
           capabilities: provider.getCapabilities(),
         })
 
         // Parse parent's HCL files
-        const hclFiles = parentFiles.filter(f => f.name.endsWith('.hcl'))
+        const hclFiles = parentFiles.filter(f => f.name.endsWith('.mycel'))
         if (hclFiles.length > 0) {
           const { apiParse } = await import('../lib/api')
           const fileEntries = hclFiles.map(f => ({ path: f.relativePath, content: f.content }))
@@ -369,16 +369,16 @@ async function openAttachedProject(
     const projectName = path.split('/').pop() || path
 
     // Detect Mycel root
-    const configFile = files.find(f => f.name === 'config.hcl')
+    const configFile = files.find(f => f.name === 'config.mycel')
     const mycelRoot = configFile
-      ? configFile.relativePath.replace(/\/?config\.hcl$/, '')
+      ? configFile.relativePath.replace(/\/?config\.mycel$/, '')
       : ''
     const normalizedRoot = mycelRoot ? (mycelRoot.endsWith('/') ? mycelRoot : mycelRoot + '/') : ''
 
     // Parse HCL files
     let parsedNodes: unknown[] = []
     let parsedEdges: import('@xyflow/react').Edge[] = []
-    const hclFiles = files.filter(f => f.name.endsWith('.hcl'))
+    const hclFiles = files.filter(f => f.name.endsWith('.mycel'))
     if (hclFiles.length > 0) {
       const fileEntries = hclFiles.map(f => ({ path: f.relativePath, content: f.content }))
       try {
@@ -528,7 +528,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       }))
 
       const hasStudioFile = files.some(f => f.name === '.mycel-studio.json')
-      const hclFiles = files.filter(f => f.name.endsWith('.hcl'))
+      const hclFiles = files.filter(f => f.name.endsWith('.mycel'))
       const hasFiles = files.length > 0
 
       if (hasStudioFile) {
@@ -576,14 +576,14 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       }, null, 2)
       await provider.writeFile('.mycel-studio.json', studioMeta)
 
-      // Create config.hcl if it doesn't exist
-      if (!hclFiles.some(f => f.name === 'config.hcl')) {
+      // Create config.mycel if it doesn't exist
+      if (!hclFiles.some(f => f.name === 'config.mycel')) {
         const configHcl = `service {\n  name    = "${project.name}"\n  version = "1.0.0"\n}\n`
-        await provider.writeFile('config.hcl', configHcl)
+        await provider.writeFile('config.mycel', configHcl)
         files.push({
-          name: 'config.hcl',
-          path: 'config.hcl',
-          relativePath: 'config.hcl',
+          name: 'config.mycel',
+          path: 'config.mycel',
+          relativePath: 'config.mycel',
           content: configHcl,
           isDirty: false,
         })
@@ -598,9 +598,9 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       })
 
       // Detect Mycel root
-      const configFile = files.find(f => f.name === 'config.hcl')
+      const configFile = files.find(f => f.name === 'config.mycel')
       const mycelRoot = configFile
-        ? configFile.relativePath.replace(/\/?config\.hcl$/, '')
+        ? configFile.relativePath.replace(/\/?config\.mycel$/, '')
         : ''
       const normalizedRoot = mycelRoot ? (mycelRoot.endsWith('/') ? mycelRoot : mycelRoot + '/') : ''
 
@@ -610,7 +610,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
         mycelRoot: normalizedRoot,
         files,
         metadata: defaultMetadata,
-        activeFile: files.find((f) => f.name.endsWith('.hcl'))?.relativePath ?? null,
+        activeFile: files.find((f) => f.name.endsWith('.mycel'))?.relativePath ?? null,
         isLoading: false,
         capabilities: provider.getCapabilities(),
       })
@@ -618,7 +618,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       get().refreshGitStatus()
 
       // Parse existing HCL files into canvas
-      const existingHcl = files.filter(f => f.name.endsWith('.hcl'))
+      const existingHcl = files.filter(f => f.name.endsWith('.mycel'))
       if (existingHcl.length > 0) {
         const fileEntries = existingHcl.map(f => ({ path: f.relativePath, content: f.content }))
         try {

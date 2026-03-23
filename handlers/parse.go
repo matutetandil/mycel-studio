@@ -61,7 +61,7 @@ func HandleParse(w http.ResponseWriter, r *http.Request) {
 		config, err = hclParser.ParseMultipleFiles(ctx, fileMap)
 	} else {
 		// Parse inline content
-		config, err = hclParser.ParseContent(ctx, req.Content, "inline.hcl")
+		config, err = hclParser.ParseContent(ctx, req.Content, "inline.mycel")
 	}
 
 	if err != nil {
@@ -111,7 +111,7 @@ func DoParse(req *models.ParseRequest) (*models.ParseResponse, error) {
 		}
 		config, err = hclParser.ParseMultipleFiles(ctx, fileMap)
 	} else if req.Content != "" {
-		config, err = hclParser.ParseContent(ctx, req.Content, "inline.hcl")
+		config, err = hclParser.ParseContent(ctx, req.Content, "inline.mycel")
 	} else {
 		return &models.ParseResponse{
 			Success: false,
@@ -433,7 +433,7 @@ func extractParseError(err error) models.ParseError {
 	// Try to parse HCL error format
 	if colonIdx := strings.Index(errStr, ":"); colonIdx > 0 {
 		filePart := errStr[:colonIdx]
-		if strings.HasSuffix(filePart, ".hcl") {
+		if strings.HasSuffix(filePart, ".mycel") {
 			parseErr.File = filePart
 		}
 	}

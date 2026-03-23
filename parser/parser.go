@@ -274,7 +274,7 @@ func (p *Parser) Parse(ctx context.Context, configDir string) (*Configuration, e
 			return err
 		}
 
-		if info.IsDir() || !strings.HasSuffix(info.Name(), ".hcl") {
+		if info.IsDir() || !strings.HasSuffix(info.Name(), ".mycel") {
 			return nil
 		}
 

@@ -150,8 +150,8 @@ export function selectNodeForFile(filePath: string) {
     ? unscopedPath.slice(mycelRoot.length)
     : unscopedPath
 
-  // connectors/{name}.hcl → find connector with that identifier
-  const connectorMatch = relPath.match(/^connectors\/(.+)\.hcl$/)
+  // connectors/{name}.mycel → find connector with that identifier
+  const connectorMatch = relPath.match(/^connectors\/(.+)\.(?:mycel|hcl)$/)
   if (connectorMatch) {
     const identifier = connectorMatch[1]
     const node = nodes.find(n => {
@@ -173,13 +173,13 @@ export function selectNodeForFile(filePath: string) {
 
   // Shared files → select first node of that type
   const typeMap: Record<string, string> = {
-    'flows/flows.hcl': 'flow',
-    'types/types.hcl': 'type',
-    'validators/validators.hcl': 'validator',
-    'transforms/transforms.hcl': 'transform',
-    'aspects/aspects.hcl': 'aspect',
-    'sagas/sagas.hcl': 'saga',
-    'machines/machines.hcl': 'state_machine',
+    'flows/flows.mycel': 'flow',
+    'types/types.mycel': 'type',
+    'validators/validators.mycel': 'validator',
+    'transforms/transforms.mycel': 'transform',
+    'aspects/aspects.mycel': 'aspect',
+    'sagas/sagas.mycel': 'saga',
+    'machines/machines.mycel': 'state_machine',
   }
   const nodeType = typeMap[relPath]
   if (nodeType) {
@@ -200,7 +200,7 @@ function openFileInEditor(filePath: string, revealLine?: number, projectPath?: s
   const { isCollapsed, toggleCollapse } = useEditorPanelStore.getState()
   if (isCollapsed) toggleCollapse()
   // For non-HCL files, select node by file path (HCL files use cursor-aware selection in EditorGroup)
-  if (!filePath.endsWith('.hcl')) {
+  if (!filePath.endsWith('.mycel')) {
     selectNodeForFile(filePath)
   }
   // Scroll to specific line if provided
@@ -379,13 +379,13 @@ function SingleProjectFileTree({ hideHeader }: { hideHeader?: boolean } = {}) {
 
         const filePathMap: Record<string, string> = {
           connector: (data as ConnectorNodeData).hclFile || `connectors/${name}.hcl`,
-          flow: (data as FlowNodeData).hclFile || 'flows/flows.hcl',
-          type: (data as Record<string, unknown>).hclFile as string || 'types/types.hcl',
-          validator: (data as Record<string, unknown>).hclFile as string || 'validators/validators.hcl',
-          transform: (data as Record<string, unknown>).hclFile as string || 'transforms/transforms.hcl',
-          aspect: (data as Record<string, unknown>).hclFile as string || 'aspects/aspects.hcl',
-          saga: (data as Record<string, unknown>).hclFile as string || 'sagas/sagas.hcl',
-          state_machine: (data as Record<string, unknown>).hclFile as string || 'machines/machines.hcl',
+          flow: (data as FlowNodeData).hclFile || 'flows/flows.mycel',
+          type: (data as Record<string, unknown>).hclFile as string || 'types/types.mycel',
+          validator: (data as Record<string, unknown>).hclFile as string || 'validators/validators.mycel',
+          transform: (data as Record<string, unknown>).hclFile as string || 'transforms/transforms.mycel',
+          aspect: (data as Record<string, unknown>).hclFile as string || 'aspects/aspects.mycel',
+          saga: (data as Record<string, unknown>).hclFile as string || 'sagas/sagas.mycel',
+          state_machine: (data as Record<string, unknown>).hclFile as string || 'machines/machines.mycel',
         }
         const filePath = filePathMap[selectedNode.type || '']
         if (filePath) {
