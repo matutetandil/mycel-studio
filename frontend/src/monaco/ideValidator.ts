@@ -3,6 +3,7 @@
 
 import type { editor } from 'monaco-editor'
 import { ideUpdateFile } from '../lib/api'
+import { useDiagnosticsStore } from '../stores/useDiagnosticsStore'
 
 export function createIDEValidator(
   monaco: typeof import('monaco-editor'),
@@ -32,6 +33,9 @@ export function createIDEValidator(
       }))
 
       monaco.editor.setModelMarkers(model, 'mycel-ide', markers)
+
+      // Refresh diagnostics store so tabs/file tree update their squiggly indicators
+      useDiagnosticsStore.getState().refreshAll()
     }, debounceMs)
   }
 }

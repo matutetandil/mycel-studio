@@ -4,6 +4,7 @@ import { useEditorPanelStore, unscopePath, type EditorTab } from '../../stores/u
 import { useProjectStore } from '../../stores/useProjectStore'
 import { useMultiProjectStore } from '../../stores/useMultiProjectStore'
 import { selectNodeForFile } from '../FileTree/FileTree'
+import { useDiagnosticsStore } from '../../stores/useDiagnosticsStore'
 import { getFileTypeInfo } from '../../utils/fileIcons'
 
 // Git status colors (same as FileTree)
@@ -59,6 +60,7 @@ interface TabBarProps {
 export default function TabBar({ groupId, tabs, activeTabId, isSecondary, onCopy, onDownloadZip, copied }: TabBarProps) {
   const { setActiveTab, closeTab, reorderTab, moveTabToGroup, splitEditor, closeSplit } = useEditorPanelStore()
   const projectFiles = useProjectStore(s => s.files)
+  const getFileSeverity = useDiagnosticsStore(s => s.getFileSeverity)
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null)
   const dragSourceRef = useRef<{ groupId: string; index: number } | null>(null)
 
@@ -183,7 +185,9 @@ export default function TabBar({ groupId, tabs, activeTabId, isSecondary, onCopy
               {tab.type === 'canvas'
                 ? <LayoutGrid className={`w-3 h-3 shrink-0 ${activeTabId === tab.id ? 'text-indigo-400' : 'text-neutral-500'}`} />
                 : (() => { const ft = getFileTypeInfo(tab.fileName); const Icon = ft.icon; return <Icon className={`w-3 h-3 shrink-0 ${activeTabId === tab.id ? ft.color : 'text-neutral-500'}`} /> })()}
-              <span className={`max-w-32 truncate ${nameColor}`}>{tab.fileName}</span>
+              <span className={`max-w-32 truncate ${nameColor} ${
+                tab.type === 'file' ? (getFileSeverity(tabRelPath) === 'error' ? 'diag-error' : getFileSeverity(tabRelPath) === 'warning' ? 'diag-warning' : '') : ''
+              }`}>{tab.fileName}</span>
               {badgeLetter && (
                 <span className={`text-[9px] font-bold leading-none ${badgeColor}`}>{badgeLetter}</span>
               )}

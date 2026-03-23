@@ -163,6 +163,9 @@ async function loadProjectIntoStore(set: any, get: any, provider: any, project: 
         parseProjectToCanvas(result.project as never)
         const studioState = (await import('./useStudioStore')).useStudioStore.getState()
         debugLog(`After parseProjectToCanvas: ${studioState.nodes.length} nodes, ${studioState.edges.length} edges`)
+        // Fetch diagnostics for all files (shows errors/warnings in tabs & file tree)
+        const { useDiagnosticsStore } = await import('./useDiagnosticsStore')
+        useDiagnosticsStore.getState().refreshAll()
       }
     } catch (err) {
       debugLog(`Parse ERROR: ${err}`)

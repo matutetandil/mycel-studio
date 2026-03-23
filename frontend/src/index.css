@@ -260,3 +260,7 @@ body {
 .markdown-preview td { padding: 6px 12px; border: 1px solid #333; }
 .markdown-preview tr:nth-child(even) td { background: #1a1a1a; }
 .markdown-preview input[type="checkbox"] { margin-right: 6px; accent-color: #818cf8; }
+
+/* Diagnostic squiggly underlines (IntelliJ-style) */
+.diag-error { text-decoration: underline wavy #ef4444; text-underline-offset: 3px; text-decoration-thickness: 1px; }
+.diag-warning { text-decoration: underline wavy #eab308; text-underline-offset: 3px; text-decoration-thickness: 1px; }

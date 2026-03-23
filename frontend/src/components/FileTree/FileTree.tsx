@@ -21,6 +21,7 @@ import { useStudioStore } from '../../stores/useStudioStore'
 import { useEditorPanelStore, scopedPath, unscopePath } from '../../stores/useEditorPanelStore'
 import { useMultiProjectStore } from '../../stores/useMultiProjectStore'
 import { generateProject, toIdentifier, type GeneratedFile } from '../../utils/hclGenerator'
+import { useDiagnosticsStore, type DiagnosticSeverity } from '../../stores/useDiagnosticsStore'
 import { cursorDrivenSelection } from '../EditorPanel/EditorGroup'
 import type { ConnectorNodeData, FlowNodeData } from '../../types'
 import ContextMenu, { type ContextMenuItem } from '../ContextMenu'
@@ -78,6 +79,7 @@ interface FileItemProps {
   isActive: boolean
   onClick: () => void
   isGenerated?: boolean
+  diagSeverity?: DiagnosticSeverity
   onContextMenu?: (e: React.MouseEvent) => void
   isEditing?: boolean
   editName?: string
@@ -86,7 +88,7 @@ interface FileItemProps {
   onEditCancel?: () => void
 }
 
-function FileItem({ file, isActive, onClick, isGenerated, onContextMenu, isEditing, editName, onEditChange, onEditCommit, onEditCancel }: FileItemProps) {
+function FileItem({ file, isActive, onClick, isGenerated, diagSeverity, onContextMenu, isEditing, editName, onEditChange, onEditCommit, onEditCancel }: FileItemProps) {
   const projectFile = file as ProjectFile
   const gitStatus = projectFile.gitStatus || 'clean'
   const statusColor = gitStatusColors[gitStatus]
@@ -120,7 +122,7 @@ function FileItem({ file, isActive, onClick, isGenerated, onContextMenu, isEditi
           className="flex-1 bg-neutral-700 text-white text-sm px-1 py-0 rounded border border-neutral-600 outline-none min-w-0"
         />
       ) : (
-        <span className={`flex-1 text-left truncate ${!isActive && nameColor ? nameColor : ''}`}>{file.name}</span>
+        <span className={`flex-1 text-left truncate ${!isActive && nameColor ? nameColor : ''} ${diagSeverity === 'error' ? 'diag-error' : diagSeverity === 'warning' ? 'diag-warning' : ''}`}>{file.name}</span>
       )}
       {!isEditing && projectFile.isDirty && (
         <Circle className="w-2 h-2 fill-current text-amber-500" />
@@ -311,6 +313,8 @@ function SingleProjectFileTree({ hideHeader }: { hideHeader?: boolean } = {}) {
   const { projectPath, projectName, files, activeFile, setActiveFile, openProject, createFile, createDirectory, deleteFile, renameFile, capabilities, mycelRoot } = useProjectStore()
   const { nodes, edges, selectedNodeId, serviceConfig, authConfig, envConfig, securityConfig, pluginConfig } = useStudioStore()
   const editorActiveTabId = useEditorPanelStore(s => s.groups.find(g => g.id === s.activeGroupId)?.activeTabId || null)
+  const getFileSeverity = useDiagnosticsStore(s => s.getFileSeverity)
+  const getDirSeverity = useDiagnosticsStore(s => s.getDirSeverity)
   const [isExpanded, setIsExpanded] = useState(true)
   const [fileContextMenu, setFileContextMenu] = useState<{ x: number; y: number; path: string; name: string } | null>(null)
   const [dirContextMenu, setDirContextMenu] = useState<{ x: number; y: number; dirPath: string } | null>(null)
@@ -663,6 +667,8 @@ function SingleProjectFileTree({ hideHeader }: { hideHeader?: boolean } = {}) {
       onEditChange={(name) => setEditingFile(prev => prev ? { ...prev, newName: name } : null)}
       onEditCommit={handleCommitRename}
       onEditCancel={() => setEditingFile(null)}
+      getFileSeverity={getFileSeverity}
+      getDirSeverity={getDirSeverity}
       isRoot
       parentPath=""
     />
@@ -723,7 +729,13 @@ function SingleProjectFileTree({ hideHeader }: { hideHeader?: boolean } = {}) {
       >
         {isExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
         {isExpanded ? <FolderOpen className="w-4 h-4 text-amber-500" /> : <Folder className="w-4 h-4 text-amber-500" />}
-        <span className="truncate">{projectName}</span>
+        <span className={`truncate ${(() => {
+          // Project root shows worst severity across all files
+          const diagFiles = useDiagnosticsStore.getState().files
+          const hasErrors = Object.values(diagFiles).some(d => d.severity === 'error')
+          const hasWarnings = Object.values(diagFiles).some(d => d.severity === 'warning')
+          return hasErrors ? 'diag-error' : hasWarnings ? 'diag-warning' : ''
+        })()}`}>{projectName}</span>
       </button>
 
       {isExpanded && (
@@ -944,6 +956,8 @@ function FileTreeNode({
   onEditChange,
   onEditCommit,
   onEditCancel,
+  getFileSeverity,
+  getDirSeverity,
   isRoot,
   parentPath,
 }: {
@@ -956,6 +970,8 @@ function FileTreeNode({
   onEditChange?: (name: string) => void
   onEditCommit?: () => void
   onEditCancel?: () => void
+  getFileSeverity?: (path: string) => DiagnosticSeverity
+  getDirSeverity?: (path: string) => DiagnosticSeverity
   isRoot?: boolean
   parentPath: string
 }) {
@@ -973,6 +989,7 @@ function FileTreeNode({
       file={file}
       isActive={activeFile === file.relativePath}
       onClick={() => onFileClick(file.relativePath)}
+      diagSeverity={getFileSeverity?.(file.relativePath)}
       onContextMenu={onContextMenu ? (e) => onContextMenu(e, file.relativePath, file.name) : undefined}
       isEditing={editingFile?.path === file.relativePath}
       editName={editingFile?.path === file.relativePath ? editingFile.newName : undefined}
@@ -982,7 +999,7 @@ function FileTreeNode({
     />
   )
 
-  const childProps = { activeFile, onFileClick, onContextMenu, onDirContextMenu, editingFile, onEditChange, onEditCommit, onEditCancel }
+  const childProps = { activeFile, onFileClick, onContextMenu, onDirContextMenu, editingFile, onEditChange, onEditCommit, onEditCancel, getFileSeverity, getDirSeverity }
 
   if (isRoot) {
     return (
@@ -1007,7 +1024,10 @@ function FileTreeNode({
       >
         {isExpanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
         {isExpanded ? <FolderOpen className="w-3.5 h-3.5 text-amber-600" /> : <Folder className="w-3.5 h-3.5 text-amber-600" />}
-        <span className={`truncate ${dirNameColor}`}>{node.name}</span>
+        <span className={`truncate ${dirNameColor} ${(() => {
+          const ds = getDirSeverity?.(dirPath)
+          return ds === 'error' ? 'diag-error' : ds === 'warning' ? 'diag-warning' : ''
+        })()}`}>{node.name}</span>
       </button>
       {isExpanded && (
         <div className="pl-4">
