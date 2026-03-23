@@ -16,7 +16,7 @@ export function createIDEValidator(
     if (timer) clearTimeout(timer)
     timer = setTimeout(async () => {
       const filePath = getFilePath()
-      if (!filePath) return
+      if (!filePath || !filePath.endsWith('.hcl')) return
 
       const content = model.getValue()
       const diags = await ideUpdateFile(filePath, content)

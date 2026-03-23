@@ -963,6 +963,8 @@ Hover provider with block docs, connector type descriptions, CEL function signat
 | **8** | ~~UX Polish~~ | ~~Undo/redo, copy/paste, shortcuts, templates~~, auto-save, runtime validation | ~~Any~~ ✅ v0.10.0 (core items) |
 | **9** | ~~Monaco IDE~~ | ~~HCL syntax highlighting, autocompletion, real-time validation, hover~~ + LSP (pending) | ~~Any~~ ✅ v0.11.0 (core items) |
 
+| **10** | LSP Language Servers | Downloadable LSP servers for non-HCL file types (Markdown, YAML, JSON, Dockerfile, ENV, etc.). IntelliJ-style: detect file type → prompt "Install X language support?" → download and run LSP server as subprocess → communicate via JSON-RPC. Registry of available servers with version management. | Phase 10 |
+
 Phases 6, 8, and 9 can be done in parallel with any other phase.
 
 **Phase 3 is COMPLETE** — All foundation features implemented (v0.4.0). ⚠️ **Response block needs rewrite** for v1.12.0 semantics.
