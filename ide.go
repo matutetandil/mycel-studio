@@ -183,13 +183,22 @@ func (a *App) IDEParseProject(projectPath string) string {
 	index := a.ideEngine.GetIndex()
 	result := map[string]any{
 		"success": true,
-		"project": buildProjectFromIndex(index),
+		"project": buildProjectFromIndex(index, projectPath),
 	}
 	return toJSON(result)
 }
 
-func buildProjectFromIndex(index *ide.ProjectIndex) map[string]any {
+func buildProjectFromIndex(index *ide.ProjectIndex, projectPath string) map[string]any {
 	project := map[string]any{}
+	prefix := projectPath + "/"
+
+	// Convert absolute file path to relative
+	relFile := func(absPath string) string {
+		if strings.HasPrefix(absPath, prefix) {
+			return absPath[len(prefix):]
+		}
+		return absPath
+	}
 
 	// Connectors
 	connectors := []map[string]any{}
@@ -197,7 +206,7 @@ func buildProjectFromIndex(index *ide.ProjectIndex) map[string]any {
 		conn := map[string]any{
 			"name":       entity.Name,
 			"type":       entity.ConnType,
-			"sourceFile": entity.File,
+			"sourceFile": relFile(entity.File),
 		}
 		if entity.Driver != "" {
 			conn["driver"] = entity.Driver
@@ -224,7 +233,7 @@ func buildProjectFromIndex(index *ide.ProjectIndex) map[string]any {
 	for _, entity := range index.Flows {
 		flow := map[string]any{
 			"name":       entity.Name,
-			"sourceFile": entity.File,
+			"sourceFile": relFile(entity.File),
 		}
 		block := findBlock(index, entity.File, "flow", entity.Name)
 		if block != nil {
@@ -271,7 +280,7 @@ func buildProjectFromIndex(index *ide.ProjectIndex) map[string]any {
 	for _, entity := range index.Types {
 		typ := map[string]any{
 			"name":       entity.Name,
-			"sourceFile": entity.File,
+			"sourceFile": relFile(entity.File),
 		}
 		block := findBlock(index, entity.File, "type", entity.Name)
 		if block != nil {
@@ -296,7 +305,7 @@ func buildProjectFromIndex(index *ide.ProjectIndex) map[string]any {
 	for _, entity := range index.Transforms {
 		tr := map[string]any{
 			"name":       entity.Name,
-			"sourceFile": entity.File,
+			"sourceFile": relFile(entity.File),
 		}
 		block := findBlock(index, entity.File, "transform", entity.Name)
 		if block != nil {
@@ -315,7 +324,7 @@ func buildProjectFromIndex(index *ide.ProjectIndex) map[string]any {
 	for _, entity := range index.Validators {
 		val := map[string]any{
 			"name":       entity.Name,
-			"sourceFile": entity.File,
+			"sourceFile": relFile(entity.File),
 		}
 		block := findBlock(index, entity.File, "validator", entity.Name)
 		if block != nil {
@@ -332,7 +341,7 @@ func buildProjectFromIndex(index *ide.ProjectIndex) map[string]any {
 	for _, entity := range index.Aspects {
 		asp := map[string]any{
 			"name":       entity.Name,
-			"sourceFile": entity.File,
+			"sourceFile": relFile(entity.File),
 		}
 		block := findBlock(index, entity.File, "aspect", entity.Name)
 		if block != nil {

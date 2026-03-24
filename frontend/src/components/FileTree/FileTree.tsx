@@ -377,15 +377,17 @@ function SingleProjectFileTree({ hideHeader }: { hideHeader?: boolean } = {}) {
         const data = selectedNode.data as ConnectorNodeData | FlowNodeData
         const name = toIdentifier(data.label)
 
+        // mycelRoot prefix (e.g. 'src/') for generated file paths
+        const root = mycelRoot || ''
         const filePathMap: Record<string, string> = {
-          connector: (data as ConnectorNodeData).hclFile || `connectors/${name}.hcl`,
-          flow: (data as FlowNodeData).hclFile || 'flows/flows.mycel',
-          type: (data as Record<string, unknown>).hclFile as string || 'types/types.mycel',
-          validator: (data as Record<string, unknown>).hclFile as string || 'validators/validators.mycel',
-          transform: (data as Record<string, unknown>).hclFile as string || 'transforms/transforms.mycel',
-          aspect: (data as Record<string, unknown>).hclFile as string || 'aspects/aspects.mycel',
-          saga: (data as Record<string, unknown>).hclFile as string || 'sagas/sagas.mycel',
-          state_machine: (data as Record<string, unknown>).hclFile as string || 'machines/machines.mycel',
+          connector: (data as ConnectorNodeData).hclFile || `${root}connectors/${name}.mycel`,
+          flow: (data as FlowNodeData).hclFile || `${root}flows/flows.mycel`,
+          type: (data as Record<string, unknown>).hclFile as string || `${root}types/types.mycel`,
+          validator: (data as Record<string, unknown>).hclFile as string || `${root}validators/validators.mycel`,
+          transform: (data as Record<string, unknown>).hclFile as string || `${root}transforms/transforms.mycel`,
+          aspect: (data as Record<string, unknown>).hclFile as string || `${root}aspects/aspects.mycel`,
+          saga: (data as Record<string, unknown>).hclFile as string || `${root}sagas/sagas.mycel`,
+          state_machine: (data as Record<string, unknown>).hclFile as string || `${root}machines/machines.mycel`,
         }
         const filePath = filePathMap[selectedNode.type || '']
         if (filePath) {
