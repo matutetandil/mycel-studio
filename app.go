@@ -210,6 +210,7 @@ func (a *App) ShowConfirmDialog(title, message string) (string, error) {
 		Type:          wailsRuntime.QuestionDialog,
 		Title:         title,
 		Message:       message,
+		Buttons:       []string{"Yes", "No"},
 		DefaultButton: "Yes",
 		CancelButton:  "No",
 	})

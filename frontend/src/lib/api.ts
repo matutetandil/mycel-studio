@@ -104,7 +104,8 @@ export async function apiConfirm(title: string, message: string): Promise<boolea
     const showConfirm = w.go?.main?.App?.ShowConfirmDialog
     if (showConfirm) {
       const result = await showConfirm(title, message)
-      return result === 'Yes'
+      // macOS may return "Yes", "OK", or other affirmative strings
+      return result === 'Yes' || result === 'OK' || result === 'ok'
     }
   }
   return window.confirm(message)
@@ -140,7 +141,7 @@ export interface IDELocation { file: string; range: IDERange }
 export interface IDERenameEdit { file: string; range: IDERange; newText: string }
 export interface IDETextEdit { file: string; range: IDERange; newText: string }
 export interface IDECodeAction { title: string; kind: number | string; edits: IDETextEdit[] }
-export interface IDESymbol { name: string; kind: string; detail: string; file: string; range: IDERange }
+export interface IDESymbol { name: string; kind: number; kindName: string; detail: string; file: string; range: IDERange }
 export interface IDETransformRule { index: number; field: string; expr: string; stage: string; range: IDERange }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -255,6 +256,13 @@ export async function ideFlowBreakpoints(flowName: string): Promise<IDEBreakpoin
   const app = getApp()
   if (!app?.IDEFlowBreakpoints) return []
   return JSON.parse(await app.IDEFlowBreakpoints(flowName))
+}
+
+export async function ideRemoveBlock(path: string, blockType: string, name: string): Promise<IDETextEdit | null> {
+  const app = getApp()
+  if (!app?.IDERemoveBlock) return null
+  const result = await app.IDERemoveBlock(path, blockType, name)
+  return result === 'null' ? null : JSON.parse(result)
 }
 
 export async function ideGetIndex(): Promise<Record<string, unknown>> {

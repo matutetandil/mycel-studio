@@ -310,7 +310,7 @@ function NewFileDialog({
 }
 
 function SingleProjectFileTree({ hideHeader }: { hideHeader?: boolean } = {}) {
-  const { projectPath, projectName, files, activeFile, setActiveFile, openProject, createFile, createDirectory, deleteFile, renameFile, capabilities, mycelRoot } = useProjectStore()
+  const { projectPath, projectName, files, activeFile, setActiveFile, openProject, createFile, createDirectory, renameFile, capabilities, mycelRoot } = useProjectStore()
   const { nodes, edges, selectedNodeId, serviceConfig, authConfig, envConfig, securityConfig, pluginConfig } = useStudioStore()
   const editorActiveTabId = useEditorPanelStore(s => s.groups.find(g => g.id === s.activeGroupId)?.activeTabId || null)
   // Subscribe to files data so React re-renders when diagnostics change
@@ -509,20 +509,9 @@ function SingleProjectFileTree({ hideHeader }: { hideHeader?: boolean } = {}) {
   }, [renameFile])
 
   const handleDeleteFile = useCallback(async (path: string) => {
-    const confirmed = confirm(`Delete "${path}"?`)
-    if (confirmed) {
-      await deleteFile(path)
-      // Close editor tab if open (check both scoped and unscoped)
-      const editorStore = useEditorPanelStore.getState()
-      const scoped = scopedPath(projectPath, path)
-      for (const group of editorStore.groups) {
-        const tab = group.tabs.find(t => t.id === scoped || t.id === path)
-        if (tab) {
-          editorStore.closeTab(group.id, tab.id)
-        }
-      }
-    }
-  }, [deleteFile, projectPath])
+    const { deleteFileFromExplorer } = await import('../../utils/deleteUtils')
+    await deleteFileFromExplorer(path)
+  }, [])
 
   const handleCreateFile = useCallback(async (path: string) => {
     await createFile(path)

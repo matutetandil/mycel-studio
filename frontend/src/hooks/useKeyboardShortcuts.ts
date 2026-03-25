@@ -114,9 +114,15 @@ export function useKeyboardShortcuts() {
         return
       }
 
-      // Delete selected node
+      // Delete selected node (with confirmation dialog)
       if ((e.key === 'Delete' || e.key === 'Backspace') && selectedNodeId) {
-        // React Flow handles its own delete, don't double-fire
+        e.preventDefault()
+        const node = useStudioStore.getState().nodes.find(n => n.id === selectedNodeId)
+        if (node) {
+          import('../utils/deleteUtils').then(({ deleteCanvasNode }) => {
+            deleteCanvasNode(node as never)
+          })
+        }
         return
       }
 

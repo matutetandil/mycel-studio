@@ -160,6 +160,19 @@ func (a *App) IDEFlowBreakpoints(flowName string) string {
 	return toJSON(bps)
 }
 
+// IDERemoveBlock returns a TextEdit that removes a named block from a file.
+// Used when deleting a component that shares a file with other blocks.
+func (a *App) IDERemoveBlock(path, blockType, name string) string {
+	if a.ideEngine == nil {
+		return "null"
+	}
+	edit := a.ideEngine.RemoveBlock(path, blockType, name)
+	if edit == nil {
+		return "null"
+	}
+	return toJSON(edit)
+}
+
 // IDEGetIndex returns the full project index.
 func (a *App) IDEGetIndex() string {
 	if a.ideEngine == nil {

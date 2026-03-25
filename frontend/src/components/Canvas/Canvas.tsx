@@ -306,7 +306,7 @@ export default function Canvas() {
   }, [])
 
   const onDrop = useCallback(
-    (event: React.DragEvent) => {
+    async (event: React.DragEvent) => {
       event.preventDefault()
       const type = event.dataTransfer.getData('application/mycel-node-type')
       const dataStr = event.dataTransfer.getData('application/mycel-node-data')
@@ -325,6 +325,10 @@ export default function Canvas() {
         data,
       }
       addNode(newNode)
+
+      // Create the file on disk immediately
+      const { createFileForNode } = await import('../../utils/fileCreator')
+      createFileForNode(newNode)
     },
     [addNode, screenToFlowPosition]
   )
@@ -406,7 +410,7 @@ export default function Canvas() {
         edgeTypes={edgeTypes}
         fitView
         fitViewOptions={{ maxZoom: 1, padding: 0.3 }}
-        deleteKeyCode={['Backspace', 'Delete']}
+        deleteKeyCode={null}
         edgesReconnectable
         elementsSelectable
         selectNodesOnDrag={false}
