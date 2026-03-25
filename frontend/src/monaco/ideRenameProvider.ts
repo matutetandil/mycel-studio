@@ -34,11 +34,12 @@ export function createIDERenameProvider(
         return { text: '', range: { startLineNumber: 0, startColumn: 0, endLineNumber: 0, endColumn: 0 }, rejectReason: 'Nothing to rename here' }
       }
 
-      // Parse hover to get entity info
-      const match = hover.content.match(/^(\w+):\s*(\S+)/)
+      // Parse hover to get entity info: "Connector: magento_db\nType: database\n..."
+      const firstLine = hover.content.split('\n')[0]
+      const match = firstLine.match(/^(\w+):\s*(.+?)(?:\s*\(|$)/)
       if (match) {
-        const kind = match[1]
-        const name = match[2]
+        const kind = match[1].toLowerCase()
+        const name = match[2].trim()
         // Open our refactor dialog instead of Monaco's inline rename
         useRefactorStore.getState().open(kind, name)
         // Return rejection so Monaco doesn't show its own rename box

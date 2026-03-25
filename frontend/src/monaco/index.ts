@@ -2,9 +2,10 @@ import { hclLanguageConfig, hclMonarchTokens } from './hclLanguage'
 import { mycelDarkTheme, mycelLightTheme } from './hclTheme'
 import { createIDECompletionProvider } from './ideCompletionProvider'
 import { createIDEHoverProvider } from './ideHoverProvider'
-import { createIDEDefinitionProvider, setDefinitionNavigator } from './ideDefinitionProvider'
+import { createIDEDefinitionProvider } from './ideDefinitionProvider'
 import { createIDECodeActionProvider, registerHintCommand } from './ideCodeActionProvider'
 import { createIDERenameProvider } from './ideRenameProvider'
+import { createIDEReferenceProvider } from './ideReferenceProvider'
 import { isWailsRuntime } from '../lib/api'
 
 // Shared file path getter — returns the absolute path of the active HCL file
@@ -42,6 +43,7 @@ export function setupMonaco(monaco: typeof import('monaco-editor')): void {
       monaco.languages.registerDefinitionProvider(langId, createIDEDefinitionProvider(getFilePath))
       monaco.languages.registerCodeActionProvider(langId, createIDECodeActionProvider(monaco, getFilePath))
       monaco.languages.registerRenameProvider(langId, createIDERenameProvider(getFilePath))
+      monaco.languages.registerReferenceProvider(langId, createIDEReferenceProvider(getFilePath))
     }
   } else {
     // Docker/browser fallback: use static providers (legacy)
@@ -57,6 +59,6 @@ export function setupMonaco(monaco: typeof import('monaco-editor')): void {
 }
 
 export { createIDEValidator } from './ideValidator'
-export { setDefinitionNavigator }
+// navigateToDefinition is exported from ideDefinitionProvider directly
 // Legacy export for Editor.tsx (Docker/browser mode)
 export { createValidationRunner } from './hclValidator'

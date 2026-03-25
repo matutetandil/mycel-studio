@@ -1,7 +1,8 @@
 import { useState, useMemo, useRef, useEffect, useCallback } from 'react'
 import MonacoEditor from '@monaco-editor/react'
 import type { editor } from 'monaco-editor'
-import { setupMonaco, setActiveIDEFilePath, setDefinitionNavigator, createIDEValidator } from '../../monaco'
+import { setupMonaco, setActiveIDEFilePath, createIDEValidator } from '../../monaco'
+import { getLastDefinitionLocation, navigateToDefinition } from '../../monaco/ideDefinitionProvider'
 import { setHintExecutor } from '../../monaco/ideCodeActionProvider'
 import { useEditorPanelStore, unscopePath } from '../../stores/useEditorPanelStore'
 import { useStudioStore } from '../../stores/useStudioStore'
@@ -10,7 +11,7 @@ import { useMultiProjectStore } from '../../stores/useMultiProjectStore'
 import { useDebugStore, breakpointKey } from '../../stores/useDebugStore'
 import { generateProject, toIdentifier, type GeneratedFile } from '../../utils/hclGenerator'
 import { computeLineDiff, type LineDiffResult } from '../../utils/lineDiff'
-import { apiGetGitFileContent, isWailsRuntime, ideAllBreakpoints, type IDELocation, type IDEBreakpointLocation } from '../../lib/api'
+import { apiGetGitFileContent, isWailsRuntime, ideAllBreakpoints, type IDEBreakpointLocation } from '../../lib/api'
 import { getFileTypeInfo, getLanguageForFile } from '../../utils/fileIcons'
 import { triggerAutoSave } from '../../hooks/useAutoSave'
 import { useSettingsStore } from '../../stores/useSettingsStore'
@@ -699,17 +700,46 @@ export default function EditorGroupView({ groupId, isSecondary }: EditorGroupPro
                 const pp = useProjectStore.getState().projectPath
                 if (pp) {
                   setActiveIDEFilePath(pp + '/' + activeFile.path)
-                  // Set up go-to-definition navigation
-                  setDefinitionNavigator((loc: IDELocation) => {
-                    const relPath = loc.file.startsWith(pp + '/') ? loc.file.slice(pp.length + 1) : loc.file
-                    const fileName = relPath.split('/').pop() || relPath
-                    useEditorPanelStore.getState().openFile(relPath, fileName, undefined, pp)
-                    setTimeout(() => useEditorPanelStore.getState().setRevealLine(loc.range.start.line), 50)
+                  // Cmd+Click → navigate to definition (uses the last resolved location from the provider)
+                  monacoEditor.onMouseDown((e) => {
+                    if ((e.event.metaKey || e.event.ctrlKey) && e.target.type === 6 /* CONTENT_TEXT */) {
+                      const loc = getLastDefinitionLocation()
+                      if (loc) {
+                        e.event.preventDefault()
+                        navigateToDefinition(loc)
+                      }
+                    }
                   })
                   // Set up hint executor for SOLID refactoring actions
                   setHintExecutor(async (hint) => {
                     const { executeHint } = await import('../../utils/refactorUtils')
                     await executeHint(hint)
+                  })
+                  // Find Usages — context menu + multiple keybindings
+                  monacoEditor.addAction({
+                    id: 'mycel.findUsages',
+                    label: 'Find Usages',
+                    keybindings: [
+                      monacoInstance.KeyMod.Alt | monacoInstance.KeyCode.F7,
+                      monacoInstance.KeyMod.CtrlCmd | monacoInstance.KeyMod.Shift | monacoInstance.KeyCode.KeyU,
+                    ],
+                    contextMenuGroupId: 'navigation',
+                    contextMenuOrder: 1.5,
+                    run: async () => {
+                      const { findAllReferences } = await import('../../utils/navigationUtils')
+                      await findAllReferences()
+                    },
+                  })
+                  // Go to Definition — also in context menu
+                  monacoEditor.addAction({
+                    id: 'mycel.goToDefinition',
+                    label: 'Go to Definition',
+                    contextMenuGroupId: 'navigation',
+                    contextMenuOrder: 1,
+                    run: async () => {
+                      const { goToDefinition } = await import('../../utils/navigationUtils')
+                      await goToDefinition()
+                    },
                   })
                   // Set up IDE-backed validation (replaces static hclValidator)
                   const ideValidate = createIDEValidator(monacoInstance, () => {

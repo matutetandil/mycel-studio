@@ -29,7 +29,10 @@ import NotificationPopup from './components/NotificationPopup'
 import WhatsNewDialog from './components/WhatsNewDialog'
 import AttachDialog from './components/AttachDialog'
 import RefactorDialog from './components/RefactorDialog'
+import ReferencesPopup from './components/ReferencesPopup'
 import { useRefactorStore } from './stores/useRefactorStore'
+import { setReferencesHandler } from './utils/navigationUtils'
+import type { IDEReference } from './lib/api'
 import InstanceTabBar from './components/InstanceTabs/InstanceTabBar'
 import { useProjectStore } from './stores/useProjectStore'
 import { useStudioStore } from './stores/useStudioStore'
@@ -234,6 +237,7 @@ function AppInner() {
         } : undefined}
       />
       <RefactorDialogWrapper />
+      <ReferencesPopupWrapper />
       <AttachDialog
         isOpen={projectOpen.showAttachDialog}
         projectName={projectOpen.pendingProjectName}
@@ -257,6 +261,27 @@ function App() {
 function RefactorDialogWrapper() {
   const { isOpen, kind, currentName, flowName, cursorFile, cursorLine, cursorCol, close } = useRefactorStore()
   return <RefactorDialog isOpen={isOpen} kind={kind} currentName={currentName} flowName={flowName} cursorFile={cursorFile} cursorLine={cursorLine} cursorCol={cursorCol} onClose={close} />
+}
+
+function ReferencesPopupWrapper() {
+  const [refs, setRefs] = useState<{ references: IDEReference[]; name: string; kind: string } | null>(null)
+
+  useEffect(() => {
+    setReferencesHandler((references, entityName, entityKind) => {
+      setRefs({ references, name: entityName, kind: entityKind })
+    })
+    return () => setReferencesHandler(null)
+  }, [])
+
+  return (
+    <ReferencesPopup
+      isOpen={!!refs}
+      references={refs?.references || []}
+      entityName={refs?.name || ''}
+      entityKind={refs?.kind || ''}
+      onClose={() => setRefs(null)}
+    />
+  )
 }
 
 export default App

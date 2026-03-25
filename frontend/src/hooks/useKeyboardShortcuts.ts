@@ -60,6 +60,15 @@ export function useKeyboardShortcuts() {
         return
       }
 
+      // Go to Definition: Cmd+B (IntelliJ) — also Cmd+Click via Monaco built-in
+      if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && (e.key === 'b' || e.key === 'B')) {
+        e.preventDefault()
+        import('../utils/navigationUtils').then(({ goToDefinition }) => goToDefinition())
+        return
+      }
+
+      // Find Usages: Alt+F7 (IntelliJ) — handled by Monaco addAction for better F-key support on macOS
+
       const target = e.target as HTMLElement
       // Skip if typing in an input/textarea/contentEditable
       if (
