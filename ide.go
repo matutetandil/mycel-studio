@@ -173,6 +173,45 @@ func (a *App) IDERemoveBlock(path, blockType, name string) string {
 	return toJSON(edit)
 }
 
+// IDEHints returns all organization hints for the project.
+func (a *App) IDEHints() string {
+	if a.ideEngine == nil {
+		return "[]"
+	}
+	hints := a.ideEngine.Hints()
+	return toJSON(hints)
+}
+
+// IDEHintsForFile returns organization hints for a specific file.
+func (a *App) IDEHintsForFile(path string) string {
+	if a.ideEngine == nil {
+		return "[]"
+	}
+	hints := a.ideEngine.HintsForFile(path)
+	return toJSON(hints)
+}
+
+// IDERenameFile updates the index when a file is renamed/moved.
+func (a *App) IDERenameFile(oldPath, newPath string) string {
+	if a.ideEngine == nil {
+		return "[]"
+	}
+	diags := a.ideEngine.RenameFile(oldPath, newPath)
+	return toJSON(diags)
+}
+
+// IDEExtractTransform extracts an inline transform from a flow into a named reusable transform.
+func (a *App) IDEExtractTransform(flowName, transformName string) string {
+	if a.ideEngine == nil {
+		return "null"
+	}
+	result := a.ideEngine.ExtractTransform(flowName, transformName)
+	if result == nil {
+		return "null"
+	}
+	return toJSON(result)
+}
+
 // IDEGetIndex returns the full project index.
 func (a *App) IDEGetIndex() string {
 	if a.ideEngine == nil {

@@ -3,7 +3,7 @@ import { mycelDarkTheme, mycelLightTheme } from './hclTheme'
 import { createIDECompletionProvider } from './ideCompletionProvider'
 import { createIDEHoverProvider } from './ideHoverProvider'
 import { createIDEDefinitionProvider, setDefinitionNavigator } from './ideDefinitionProvider'
-import { createIDECodeActionProvider } from './ideCodeActionProvider'
+import { createIDECodeActionProvider, registerHintCommand } from './ideCodeActionProvider'
 import { isWailsRuntime } from '../lib/api'
 
 // Shared file path getter — returns the absolute path of the active HCL file
@@ -28,6 +28,9 @@ export function setupMonaco(monaco: typeof import('monaco-editor')): void {
   monaco.languages.setLanguageConfiguration('hcl', hclLanguageConfig)
   monaco.editor.defineTheme('mycel-dark', mycelDarkTheme)
   monaco.editor.defineTheme('mycel-light', mycelLightTheme)
+
+  // Register refactoring command handler
+  registerHintCommand(monaco)
 
   // Use IDE engine providers (powered by Mycel pkg/ide)
   if (isWailsRuntime()) {

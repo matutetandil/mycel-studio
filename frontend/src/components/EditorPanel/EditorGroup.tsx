@@ -2,6 +2,7 @@ import { useState, useMemo, useRef, useEffect, useCallback } from 'react'
 import MonacoEditor from '@monaco-editor/react'
 import type { editor } from 'monaco-editor'
 import { setupMonaco, setActiveIDEFilePath, setDefinitionNavigator, createIDEValidator } from '../../monaco'
+import { setHintExecutor } from '../../monaco/ideCodeActionProvider'
 import { useEditorPanelStore, unscopePath } from '../../stores/useEditorPanelStore'
 import { useStudioStore } from '../../stores/useStudioStore'
 import { useProjectStore } from '../../stores/useProjectStore'
@@ -704,6 +705,11 @@ export default function EditorGroupView({ groupId, isSecondary }: EditorGroupPro
                     const fileName = relPath.split('/').pop() || relPath
                     useEditorPanelStore.getState().openFile(relPath, fileName, undefined, pp)
                     setTimeout(() => useEditorPanelStore.getState().setRevealLine(loc.range.start.line), 50)
+                  })
+                  // Set up hint executor for SOLID refactoring actions
+                  setHintExecutor(async (hint) => {
+                    const { executeHint } = await import('../../utils/refactorUtils')
+                    await executeHint(hint)
                   })
                   // Set up IDE-backed validation (replaces static hclValidator)
                   const ideValidate = createIDEValidator(monacoInstance, () => {

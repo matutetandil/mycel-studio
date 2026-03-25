@@ -265,6 +265,48 @@ export async function ideRemoveBlock(path: string, blockType: string, name: stri
   return result === 'null' ? null : JSON.parse(result)
 }
 
+export interface IDEHint {
+  kind: number
+  message: string
+  file: string
+  range: IDERange
+  suggestedFile: string
+  blockType: string
+  blockName: string
+}
+
+export interface IDEExtractTransformResult {
+  name: string
+  flowEdit: IDETextEdit
+  newTransform: string
+  suggestedFile: string
+}
+
+export async function ideHints(): Promise<IDEHint[]> {
+  const app = getApp()
+  if (!app?.IDEHints) return []
+  return JSON.parse(await app.IDEHints())
+}
+
+export async function ideHintsForFile(path: string): Promise<IDEHint[]> {
+  const app = getApp()
+  if (!app?.IDEHintsForFile) return []
+  return JSON.parse(await app.IDEHintsForFile(path))
+}
+
+export async function ideRenameFile(oldPath: string, newPath: string): Promise<IDEDiagnostic[]> {
+  const app = getApp()
+  if (!app?.IDERenameFile) return []
+  return JSON.parse(await app.IDERenameFile(oldPath, newPath))
+}
+
+export async function ideExtractTransform(flowName: string, transformName: string): Promise<IDEExtractTransformResult | null> {
+  const app = getApp()
+  if (!app?.IDEExtractTransform) return null
+  const result = await app.IDEExtractTransform(flowName, transformName)
+  return result === 'null' ? null : JSON.parse(result)
+}
+
 export async function ideGetIndex(): Promise<Record<string, unknown>> {
   const app = getApp()
   if (!app?.IDEGetIndex) return {}
