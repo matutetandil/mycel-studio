@@ -307,6 +307,49 @@ export async function ideExtractTransform(flowName: string, transformName: strin
   return result === 'null' ? null : JSON.parse(result)
 }
 
+export interface IDEReference {
+  file: string
+  line: number
+  col: number
+  attrName: string
+  blockType: string
+  blockName: string
+}
+
+export interface IDERenameFieldResult {
+  flowName: string
+  oldName: string
+  newName: string
+  edits: IDETextEdit[]
+  affectedLocations: string[]
+}
+
+export async function ideFindReferences(kind: string, name: string): Promise<IDEReference[]> {
+  const app = getApp()
+  if (!app?.IDEFindReferences) return []
+  return JSON.parse(await app.IDEFindReferences(kind, name))
+}
+
+export async function ideRenameCursor(path: string, line: number, col: number, newName: string): Promise<IDETextEdit[]> {
+  const app = getApp()
+  if (!app?.IDERename) return []
+  const result = await app.IDERename(path, line, col, newName)
+  return JSON.parse(result) || []
+}
+
+export async function ideRenameEntity(kind: string, oldName: string, newName: string): Promise<IDETextEdit[]> {
+  const app = getApp()
+  if (!app?.IDERenameEntity) return []
+  return JSON.parse(await app.IDERenameEntity(kind, oldName, newName))
+}
+
+export async function ideRenameField(flowName: string, oldFieldName: string, newFieldName: string): Promise<IDERenameFieldResult | null> {
+  const app = getApp()
+  if (!app?.IDERenameField) return null
+  const result = await app.IDERenameField(flowName, oldFieldName, newFieldName)
+  return result === 'null' ? null : JSON.parse(result)
+}
+
 export async function ideGetIndex(): Promise<Record<string, unknown>> {
   const app = getApp()
   if (!app?.IDEGetIndex) return {}

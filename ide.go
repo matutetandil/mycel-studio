@@ -212,6 +212,36 @@ func (a *App) IDEExtractTransform(flowName, transformName string) string {
 	return toJSON(result)
 }
 
+// IDEFindReferences returns all locations where an entity is defined or referenced.
+func (a *App) IDEFindReferences(kind, name string) string {
+	if a.ideEngine == nil {
+		return "[]"
+	}
+	refs := a.ideEngine.FindReferences(kind, name)
+	return toJSON(refs)
+}
+
+// IDERenameEntity renames an entity by kind and name, updating all references.
+func (a *App) IDERenameEntity(kind, oldName, newName string) string {
+	if a.ideEngine == nil {
+		return "[]"
+	}
+	edits := a.ideEngine.RenameEntity(kind, oldName, newName)
+	return toJSON(edits)
+}
+
+// IDERenameField renames a transform field within a flow, updating SQL and response references.
+func (a *App) IDERenameField(flowName, oldFieldName, newFieldName string) string {
+	if a.ideEngine == nil {
+		return "null"
+	}
+	result := a.ideEngine.RenameField(flowName, oldFieldName, newFieldName)
+	if result == nil {
+		return "null"
+	}
+	return toJSON(result)
+}
+
 // IDEGetIndex returns the full project index.
 func (a *App) IDEGetIndex() string {
 	if a.ideEngine == nil {

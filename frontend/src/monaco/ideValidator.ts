@@ -4,6 +4,7 @@
 import type { editor } from 'monaco-editor'
 import { ideUpdateFile } from '../lib/api'
 import { useDiagnosticsStore } from '../stores/useDiagnosticsStore'
+import { useHintsStore } from '../stores/useHintsStore'
 
 export function createIDEValidator(
   monaco: typeof import('monaco-editor'),
@@ -39,6 +40,9 @@ export function createIDEValidator(
       const errors = (diags || []).filter(d => d.severity === 1).length
       const warnings = (diags || []).filter(d => d.severity === 2).length
       store.updateFile(filePath, errors, warnings)
+
+      // Refresh SOLID hints (file structure may have changed)
+      useHintsStore.getState().refreshHints()
     }, debounceMs)
   }
 }

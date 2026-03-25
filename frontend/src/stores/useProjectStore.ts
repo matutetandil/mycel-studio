@@ -166,6 +166,9 @@ async function loadProjectIntoStore(set: any, get: any, provider: any, project: 
         // Fetch diagnostics for all files (shows errors/warnings in tabs & file tree)
         const { useDiagnosticsStore } = await import('./useDiagnosticsStore')
         useDiagnosticsStore.getState().refreshAll()
+        // Load SOLID organization hints
+        const { useHintsStore } = await import('./useHintsStore')
+        useHintsStore.getState().refreshHints()
       }
     } catch (err) {
       debugLog(`Parse ERROR: ${err}`)

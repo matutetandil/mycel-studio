@@ -21,6 +21,7 @@ import { useStudioStore } from '../../stores/useStudioStore'
 import { useEditorPanelStore, scopedPath, unscopePath } from '../../stores/useEditorPanelStore'
 import { useMultiProjectStore } from '../../stores/useMultiProjectStore'
 import { generateProject, toIdentifier, type GeneratedFile } from '../../utils/hclGenerator'
+import HintsBanner from './HintsBanner'
 import { useDiagnosticsStore, type DiagnosticSeverity } from '../../stores/useDiagnosticsStore'
 import { cursorDrivenSelection } from '../EditorPanel/EditorGroup'
 import type { ConnectorNodeData, FlowNodeData } from '../../types'
@@ -1225,7 +1226,12 @@ export default function FileTree() {
 
   // If there are 0-1 projects in multi-project store, use single project tree directly
   if (projectOrder.length <= 1) {
-    return <SingleProjectFileTree />
+    return (
+      <>
+        <HintsBanner />
+        <SingleProjectFileTree />
+      </>
+    )
   }
 
   // Multiple projects — all expanded independently, no "active" styling difference

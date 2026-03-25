@@ -28,6 +28,8 @@ import NotificationToast from './components/NotificationToast'
 import NotificationPopup from './components/NotificationPopup'
 import WhatsNewDialog from './components/WhatsNewDialog'
 import AttachDialog from './components/AttachDialog'
+import RefactorDialog from './components/RefactorDialog'
+import { useRefactorStore } from './stores/useRefactorStore'
 import InstanceTabBar from './components/InstanceTabs/InstanceTabBar'
 import { useProjectStore } from './stores/useProjectStore'
 import { useStudioStore } from './stores/useStudioStore'
@@ -231,6 +233,7 @@ function AppInner() {
           await updater?.RestartApp()
         } : undefined}
       />
+      <RefactorDialogWrapper />
       <AttachDialog
         isOpen={projectOpen.showAttachDialog}
         projectName={projectOpen.pendingProjectName}
@@ -249,6 +252,11 @@ function App() {
       <AppInner />
     </ReactFlowProvider>
   )
+}
+
+function RefactorDialogWrapper() {
+  const { isOpen, kind, currentName, flowName, cursorFile, cursorLine, cursorCol, close } = useRefactorStore()
+  return <RefactorDialog isOpen={isOpen} kind={kind} currentName={currentName} flowName={flowName} cursorFile={cursorFile} cursorLine={cursorLine} cursorCol={cursorCol} onClose={close} />
 }
 
 export default App

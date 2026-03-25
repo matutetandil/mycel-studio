@@ -4,6 +4,7 @@ import { createIDECompletionProvider } from './ideCompletionProvider'
 import { createIDEHoverProvider } from './ideHoverProvider'
 import { createIDEDefinitionProvider, setDefinitionNavigator } from './ideDefinitionProvider'
 import { createIDECodeActionProvider, registerHintCommand } from './ideCodeActionProvider'
+import { createIDERenameProvider } from './ideRenameProvider'
 import { isWailsRuntime } from '../lib/api'
 
 // Shared file path getter — returns the absolute path of the active HCL file
@@ -40,6 +41,7 @@ export function setupMonaco(monaco: typeof import('monaco-editor')): void {
       monaco.languages.registerHoverProvider(langId, createIDEHoverProvider(getFilePath))
       monaco.languages.registerDefinitionProvider(langId, createIDEDefinitionProvider(getFilePath))
       monaco.languages.registerCodeActionProvider(langId, createIDECodeActionProvider(monaco, getFilePath))
+      monaco.languages.registerRenameProvider(langId, createIDERenameProvider(getFilePath))
     }
   } else {
     // Docker/browser fallback: use static providers (legacy)

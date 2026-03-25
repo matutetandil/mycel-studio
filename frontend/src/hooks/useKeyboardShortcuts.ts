@@ -53,6 +53,13 @@ export function useKeyboardShortcuts() {
         return
       }
 
+      // Rename / Refactor: Shift+F6 — works from anywhere (canvas, Monaco, explorer)
+      if (e.key === 'F6' && e.shiftKey) {
+        e.preventDefault()
+        import('../utils/refactorTrigger').then(({ triggerRefactor }) => triggerRefactor())
+        return
+      }
+
       const target = e.target as HTMLElement
       // Skip if typing in an input/textarea/contentEditable
       if (
@@ -125,6 +132,8 @@ export function useKeyboardShortcuts() {
         }
         return
       }
+
+
 
       // Show shortcuts: Ctrl/Cmd+/
       if (mod && e.key === '/') {

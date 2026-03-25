@@ -61,6 +61,11 @@ async function refreshFiles() {
     // Also refresh git status for the new files
     useProjectStore.getState().refreshGitStatus()
 
+    // Refresh hints (external changes like git pull may affect project structure)
+    import('../stores/useHintsStore').then(({ useHintsStore }) => {
+      useHintsStore.getState().refreshHints()
+    })
+
     // Refresh git status for all attached projects (inactive ones)
     useMultiProjectStore.getState().refreshAllProjectsGitStatus()
   } catch {

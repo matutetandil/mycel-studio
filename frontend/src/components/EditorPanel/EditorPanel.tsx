@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from 'react'
-import { ChevronDown, ChevronUp, AlertTriangle, FileCode, Terminal, Bug, Eye, ScrollText } from 'lucide-react'
+import { ChevronDown, ChevronUp, AlertTriangle, FileCode, Terminal, Bug, Eye, ScrollText, Lightbulb } from 'lucide-react'
 import { useEditorPanelStore } from '../../stores/useEditorPanelStore'
 import { useStudioStore } from '../../stores/useStudioStore'
 import { useProjectStore } from '../../stores/useProjectStore'
@@ -12,9 +12,11 @@ import EditorGroupView from './EditorGroup'
 import TerminalPanel from './TerminalPanel'
 import DebugPanel from '../DebugPanel/DebugPanel'
 import OutputPanel from './OutputPanel'
+import HintsPanel from './HintsPanel'
+import { useHintsStore } from '../../stores/useHintsStore'
 import CanvasPanel from '../Canvas/CanvasPanel'
 
-type PanelTab = 'editor' | 'terminal' | 'debug' | 'output'
+type PanelTab = 'editor' | 'terminal' | 'debug' | 'output' | 'hints'
 
 export default function EditorPanel() {
   const { panelHeight, isCollapsed, groups, splitDirection, splitRatio, setPanelHeight, toggleCollapse } = useEditorPanelStore()
@@ -25,6 +27,7 @@ export default function EditorPanel() {
   const debugStatus = useDebugStore(s => s.status)
   const debugStopped = useDebugStore(s => s.stoppedAt)
   const outputCount = useOutputStore(s => s.entries.length)
+  const hintsCount = useHintsStore(s => s.hints.filter(h => h.status === 'active').length)
   const viewMode = useLayoutStore(s => s.viewMode)
   const [isResizing, setIsResizing] = useState(false)
   const [isSplitResizing, setIsSplitResizing] = useState(false)
@@ -194,6 +197,22 @@ export default function EditorPanel() {
             </span>
           )}
         </button>
+        <button
+          onClick={() => handlePanelTabClick('hints')}
+          title="Organization Hints"
+          className={`relative w-8 h-8 flex items-center justify-center rounded transition-colors ${
+            activePanel === 'hints' && !isCollapsed
+              ? 'bg-neutral-800 text-white border-l-2 border-amber-500'
+              : 'text-neutral-500 hover:text-neutral-300 hover:bg-neutral-800'
+          }`}
+        >
+          <Lightbulb className="w-4 h-4" />
+          {hintsCount > 0 && (
+            <span className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 bg-amber-600 text-white text-[8px] font-bold rounded-full flex items-center justify-center">
+              {hintsCount > 9 ? '9+' : hintsCount}
+            </span>
+          )}
+        </button>
       </div>
 
       {/* Main content area */}
@@ -279,6 +298,14 @@ export default function EditorPanel() {
             style={{ display: activePanel === 'output' ? undefined : 'none' }}
           >
             <OutputPanel />
+          </div>
+
+          {/* Hints view */}
+          <div
+            className="absolute inset-0"
+            style={{ display: activePanel === 'hints' ? undefined : 'none' }}
+          >
+            <HintsPanel />
           </div>
         </div>
       </div>

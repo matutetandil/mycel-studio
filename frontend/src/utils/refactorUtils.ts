@@ -2,7 +2,7 @@
 
 import { useProjectStore } from '../stores/useProjectStore'
 import { useStudioStore } from '../stores/useStudioStore'
-import { useEditorPanelStore } from '../stores/useEditorPanelStore'
+import { useEditorPanelStore, scopedPath, unscopePath } from '../stores/useEditorPanelStore'
 import {
   ideRemoveBlock, ideUpdateFile, ideExtractTransform,
   isWailsRuntime, apiConfirm,
@@ -10,6 +10,20 @@ import {
 } from '../lib/api'
 import { useDiagnosticsStore } from '../stores/useDiagnosticsStore'
 import { toIdentifier } from './hclGenerator'
+
+function closeTabForFile(filePath: string, projectPath: string | null) {
+  const editorStore = useEditorPanelStore.getState()
+  const scoped = projectPath ? scopedPath(projectPath, filePath) : filePath
+  for (const group of editorStore.groups) {
+    const tab = group.tabs.find(t => {
+      const tabRel = unscopePath(t.id).relativePath
+      return t.id === scoped || t.id === filePath || tabRel === filePath
+    })
+    if (tab) {
+      editorStore.closeTab(group.id, tab.id)
+    }
+  }
+}
 
 // Execute a SOLID hint — move a block to the suggested file
 export async function executeHint(hint: IDEHint): Promise<boolean> {
@@ -26,65 +40,93 @@ export async function executeHint(hint: IDEHint): Promise<boolean> {
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const app = (window as any).go?.main?.App
-  if (!app?.WriteFile || !app?.ReadFile) return false
+  if (!app) return false
 
   const absSource = projectPath + '/' + hint.file
   const absDest = projectPath + '/' + hint.suggestedFile
+  const projectStore = useProjectStore.getState()
+  const destRelPath = hint.suggestedFile
 
   try {
-    // 1. Extract the block from the source file
-    const edit = await ideRemoveBlock(absSource, hint.blockType, hint.blockName)
-    if (!edit) return false
+    // Check how many blocks the source file has
+    const { ideSymbolsForFile } = await import('../lib/api')
+    const symbols = await ideSymbolsForFile(absSource)
 
-    // 2. Read the source file and extract the block content
-    const sourceContent = await app.ReadFile(absSource)
-    const lines = sourceContent.split('\n')
-    const blockLines = lines.slice(edit.range.start.line - 1, edit.range.end.line)
-    const blockContent = blockLines.join('\n').trim()
+    if (symbols.length <= 1) {
+      // === SINGLE BLOCK: just rename the file ===
+      await app.RenameFile(absSource, absDest)
 
-    // 3. Remove the block from the source file
-    const newSourceLines = [...lines]
-    newSourceLines.splice(edit.range.start.line - 1, edit.range.end.line - edit.range.start.line + 1)
-    const newSourceContent = newSourceLines.join('\n').replace(/\n{3,}/g, '\n\n').trim() + '\n'
+      // Update IDE engine
+      const { ideRenameFile } = await import('../lib/api')
+      await ideRenameFile(absSource, absDest)
 
-    // 4. Write the block to the destination file (append if exists, create if not)
-    let destContent = ''
-    try {
-      destContent = await app.ReadFile(absDest)
-    } catch {
-      // File doesn't exist — will create
-    }
-    const newDestContent = destContent
-      ? destContent.trim() + '\n\n' + blockContent + '\n'
-      : blockContent + '\n'
-
-    // 5. Write both files
-    await app.WriteFile(absSource, newSourceContent)
-    await app.WriteFile(absDest, newDestContent)
-
-    // 6. Update IDE engine
-    await ideUpdateFile(absSource, newSourceContent)
-    await ideUpdateFile(absDest, newDestContent)
-
-    // 7. Update project store files
-    const projectStore = useProjectStore.getState()
-    projectStore.updateFile(hint.file, newSourceContent)
-
-    // Add destination file if new
-    const destRelPath = hint.suggestedFile
-    if (!projectStore.files.some(f => f.relativePath === destRelPath)) {
+      // Update project store: remove old, add new
+      const oldFile = projectStore.files.find(f => f.relativePath === hint.file)
+      const content = oldFile?.content || ''
+      await projectStore.deleteFile(hint.file)
       projectStore.addFile({
         name: destRelPath.split('/').pop() || destRelPath,
         path: destRelPath,
         relativePath: destRelPath,
-        content: newDestContent,
+        content,
         isDirty: false,
       })
+
+      // Update tab: close old, open new
+      closeTabForFile(hint.file, projectPath)
+      const fileName = destRelPath.split('/').pop() || destRelPath
+      useEditorPanelStore.getState().openFile(destRelPath, fileName, undefined, projectPath)
+
     } else {
-      projectStore.updateFile(destRelPath, newDestContent)
+      // === MULTIPLE BLOCKS: extract this block to new file ===
+      const edit = await ideRemoveBlock(absSource, hint.blockType, hint.blockName)
+      if (!edit) return false
+
+      // Read source and extract the block content
+      const sourceContent = await app.ReadFile(absSource)
+      const lines = sourceContent.split('\n')
+      const blockLines = lines.slice(edit.range.start.line - 1, edit.range.end.line)
+      const blockContent = blockLines.join('\n').trim()
+
+      // Remove the block from source
+      const newSourceLines = [...lines]
+      newSourceLines.splice(edit.range.start.line - 1, edit.range.end.line - edit.range.start.line + 1)
+      const newSourceContent = newSourceLines.join('\n').replace(/\n{3,}/g, '\n\n').trim() + '\n'
+
+      // Write updated source
+      await app.WriteFile(absSource, newSourceContent)
+      await ideUpdateFile(absSource, newSourceContent)
+      projectStore.updateFile(hint.file, newSourceContent)
+
+      // Write block to destination (append if exists)
+      let destContent = ''
+      try { destContent = await app.ReadFile(absDest) } catch { /* doesn't exist */ }
+      const newDestContent = destContent
+        ? destContent.trim() + '\n\n' + blockContent + '\n'
+        : blockContent + '\n'
+
+      await app.WriteFile(absDest, newDestContent)
+      await ideUpdateFile(absDest, newDestContent)
+
+      // Add/update destination in store
+      if (!projectStore.files.some(f => f.relativePath === destRelPath)) {
+        projectStore.addFile({
+          name: destRelPath.split('/').pop() || destRelPath,
+          path: destRelPath,
+          relativePath: destRelPath,
+          content: newDestContent,
+          isDirty: false,
+        })
+      } else {
+        projectStore.updateFile(destRelPath, newDestContent)
+      }
+
+      // Open destination file
+      const fileName = destRelPath.split('/').pop() || destRelPath
+      useEditorPanelStore.getState().openFile(destRelPath, fileName, undefined, projectPath)
     }
 
-    // 8. Update canvas node's hclFile
+    // Update canvas node's hclFile
     const studioStore = useStudioStore.getState()
     const node = studioStore.nodes.find(n => {
       const data = n.data as { label?: string }
@@ -94,11 +136,7 @@ export async function executeHint(hint: IDEHint): Promise<boolean> {
       studioStore.updateNode(node.id, { hclFile: destRelPath })
     }
 
-    // 9. Open the destination file in the editor
-    const fileName = destRelPath.split('/').pop() || destRelPath
-    useEditorPanelStore.getState().openFile(destRelPath, fileName, undefined, projectPath)
-
-    // 10. Refresh diagnostics
+    // Refresh diagnostics
     useDiagnosticsStore.getState().refreshAll()
 
     return true
