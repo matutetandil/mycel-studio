@@ -350,6 +350,70 @@ export async function ideRenameField(flowName: string, oldFieldName: string, new
   return result === 'null' ? null : JSON.parse(result)
 }
 
+// --- Git API ---
+
+export interface GitCommit { hash: string; abbrev: string; author: string; date: string; message: string; parents: string[]; refs: string[] }
+export interface GitBranch { name: string; current: boolean; remote: string }
+export interface GitCommitFile { status: string; path: string; oldPath?: string; newPath?: string }
+
+export async function apiGetGitLog(limit = 100): Promise<GitCommit[]> {
+  const app = getApp()
+  if (!app?.GetGitLog) { app?.DebugLog?.('apiGetGitLog: GetGitLog not found'); return [] }
+  const pp = (await import('../stores/useProjectStore')).useProjectStore.getState().projectPath
+  if (!pp) { app?.DebugLog?.('apiGetGitLog: no projectPath'); return [] }
+  try {
+    app?.DebugLog?.(`apiGetGitLog: calling GetGitLog(${pp}, ${limit})`)
+    const result = await app.GetGitLog(pp, limit)
+    app?.DebugLog?.(`apiGetGitLog: result length=${result?.length}, type=${typeof result}`)
+    const parsed = JSON.parse(result)
+    app?.DebugLog?.(`apiGetGitLog: parsed ${parsed?.length} commits`)
+    return parsed || []
+  } catch (err) {
+    app?.DebugLog?.(`apiGetGitLog error: ${err}`)
+    return []
+  }
+}
+
+export async function apiGetGitBranches(): Promise<GitBranch[]> {
+  const app = getApp()
+  if (!app?.GetGitBranches) return []
+  const pp = (await import('../stores/useProjectStore')).useProjectStore.getState().projectPath
+  if (!pp) return []
+  return JSON.parse(await app.GetGitBranches(pp))
+}
+
+export async function apiGetGitCommitFiles(hash: string): Promise<GitCommitFile[]> {
+  const app = getApp()
+  if (!app?.GetGitCommitFiles) return []
+  const pp = (await import('../stores/useProjectStore')).useProjectStore.getState().projectPath
+  if (!pp) return []
+  return JSON.parse(await app.GetGitCommitFiles(pp, hash))
+}
+
+export async function apiGetGitFileAtCommit(hash: string, filePath: string): Promise<string> {
+  const app = getApp()
+  if (!app?.GetGitFileAtCommit) return ''
+  const pp = (await import('../stores/useProjectStore')).useProjectStore.getState().projectPath
+  if (!pp) return ''
+  return app.GetGitFileAtCommit(pp, hash, filePath)
+}
+
+export async function apiGetGitMergeConflicts(): Promise<string[]> {
+  const app = getApp()
+  if (!app?.GetGitMergeConflicts) return []
+  const pp = (await import('../stores/useProjectStore')).useProjectStore.getState().projectPath
+  if (!pp) return []
+  return JSON.parse(await app.GetGitMergeConflicts(pp))
+}
+
+export async function apiGitStageFile(filePath: string): Promise<void> {
+  const app = getApp()
+  if (!app?.GitStageFile) return
+  const pp = (await import('../stores/useProjectStore')).useProjectStore.getState().projectPath
+  if (!pp) return
+  await app.GitStageFile(pp, filePath)
+}
+
 export async function ideGetIndex(): Promise<Record<string, unknown>> {
   const app = getApp()
   if (!app?.IDEGetIndex) return {}

@@ -1,6 +1,8 @@
 package main
 
 import (
+	"encoding/json"
+	"fmt"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -124,4 +126,158 @@ func (a *App) GetGitStatus(path string) (*FSGitStatus, error) {
 		Branch: branch,
 		Files:  files,
 	}, nil
+}
+
+// GitLogEntry represents a single commit.
+type GitLogEntry struct {
+	Hash      string   `json:"hash"`
+	Abbrev    string   `json:"abbrev"`
+	Author    string   `json:"author"`
+	Date      string   `json:"date"`
+	Message   string   `json:"message"`
+	Parents   []string `json:"parents"`
+	Refs      []string `json:"refs"`
+}
+
+// GetGitLog returns the git log as JSON array.
+func (a *App) GetGitLog(path string, limit int) (string, error) {
+	if limit <= 0 { limit = 100 }
+	// Use record separator (RS, \x1e) between fields and group separator (GS, \x1d) between commits
+	format := `%H%x1e%h%x1e%an%x1e%aI%x1e%s%x1e%P%x1e%D%x1d`
+	cmd := exec.Command("git", "log", "--all", "--format="+format, "-n", fmt.Sprintf("%d", limit))
+	cmd.Dir = path
+	out, err := cmd.Output()
+	if err != nil { return "[]", err }
+
+	var entries []GitLogEntry
+	records := strings.Split(string(out), "\x1d")
+	for _, record := range records {
+		record = strings.TrimSpace(record)
+		if record == "" { continue }
+		fields := strings.Split(record, "\x1e")
+		if len(fields) < 7 { continue }
+
+		parents := []string{}
+		if fields[5] != "" {
+			parents = strings.Fields(fields[5])
+		}
+		refs := []string{}
+		if fields[6] != "" {
+			for _, r := range strings.Split(fields[6], ", ") {
+				r = strings.TrimSpace(r)
+				if r != "" { refs = append(refs, r) }
+			}
+		}
+		entries = append(entries, GitLogEntry{
+			Hash:    fields[0],
+			Abbrev:  fields[1],
+			Author:  fields[2],
+			Date:    fields[3],
+			Message: fields[4],
+			Parents: parents,
+			Refs:    refs,
+		})
+	}
+
+	data, _ := json.Marshal(entries)
+	return string(data), nil
+}
+
+// GitBranchInfo represents a git branch.
+type GitBranchInfo struct {
+	Name    string `json:"name"`
+	Current bool   `json:"current"`
+	Remote  string `json:"remote"`
+}
+
+// GetGitBranches returns all branches.
+func (a *App) GetGitBranches(path string) (string, error) {
+	cmd := exec.Command("git", "branch", "-a", "--format=%(refname:short)\t%(HEAD)\t%(upstream:short)")
+	cmd.Dir = path
+	out, err := cmd.Output()
+	if err != nil { return "[]", err }
+
+	var branches []GitBranchInfo
+	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+		if line == "" { continue }
+		parts := strings.SplitN(line, "\t", 3)
+		name := parts[0]
+		current := len(parts) > 1 && parts[1] == "*"
+		remote := ""
+		if len(parts) > 2 { remote = parts[2] }
+		branches = append(branches, GitBranchInfo{Name: name, Current: current, Remote: remote})
+	}
+
+	data, _ := json.Marshal(branches)
+	return string(data), nil
+}
+
+// GitCommitFile represents a file changed in a commit.
+type GitCommitFile struct {
+	Status  string `json:"status"`
+	Path    string `json:"path"`
+	OldPath string `json:"oldPath,omitempty"` // For renames
+	NewPath string `json:"newPath,omitempty"` // For renames
+}
+
+// GetGitCommitFiles returns files changed in a commit (with rename detection).
+func (a *App) GetGitCommitFiles(path string, hash string) (string, error) {
+	cmd := exec.Command("git", "diff-tree", "--no-commit-id", "-r", "-M", "--name-status", hash)
+	cmd.Dir = path
+	out, err := cmd.Output()
+	if err != nil { return "[]", err }
+
+	var files []GitCommitFile
+	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+		if line == "" { continue }
+		parts := strings.Split(line, "\t")
+		if len(parts) >= 2 {
+			status := parts[0]
+			filePath := parts[1]
+			f := GitCommitFile{Status: status, Path: filePath}
+			// Rename: status is R100 (or R with percentage), has old and new path
+			if strings.HasPrefix(status, "R") && len(parts) >= 3 {
+				f.Status = "R"
+				f.Path = parts[1] + " → " + parts[2]
+				f.OldPath = parts[1]
+				f.NewPath = parts[2]
+			}
+			files = append(files, f)
+		}
+	}
+
+	data, _ := json.Marshal(files)
+	return string(data), nil
+}
+
+// GetGitFileAtCommit returns file content at a specific commit.
+func (a *App) GetGitFileAtCommit(path string, hash string, filePath string) (string, error) {
+	cmd := exec.Command("git", "show", hash+":"+filePath)
+	cmd.Dir = path
+	out, err := cmd.Output()
+	if err != nil { return "", err }
+	return string(out), nil
+}
+
+// GetGitMergeConflicts returns files with unresolved merge conflicts.
+func (a *App) GetGitMergeConflicts(path string) (string, error) {
+	cmd := exec.Command("git", "diff", "--name-only", "--diff-filter=U")
+	cmd.Dir = path
+	out, err := cmd.Output()
+	if err != nil { return "[]", err }
+
+	var files []string
+	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+		if line != "" { files = append(files, line) }
+	}
+
+	data, _ := json.Marshal(files)
+	return string(data), nil
+}
+
+// GitStageFile stages a file (git add).
+func (a *App) GitStageFile(path string, filePath string) error {
+	cmd := exec.Command("git", "add", filePath)
+	cmd.Dir = path
+	return cmd.Run()
 }

@@ -142,11 +142,18 @@ export default function GutterPanel({ editorRef, gutterItems, blameData, onItemC
 
   const showBlame = !!blameData && blameData.length > 0
 
+  // Calculate gutter width based on max icons per line (16px per icon + 4px gap + 8px padding)
+  let maxIcons = 0
+  for (const items of byLine.values()) {
+    if (items.length > maxIcons) maxIcons = items.length
+  }
+  const gutterWidth = Math.max(24, maxIcons * 18 + 8)
+
   return (
     <div
       ref={containerRef}
       className="h-full overflow-hidden select-none flex-shrink-0 relative bg-neutral-900"
-      style={{ paddingLeft: 4, width: showBlame ? 200 : 24 }}
+      style={{ paddingLeft: 4, width: showBlame ? 200 : gutterWidth }}
     >
       {visibleLines.map(({ line, top, height }) => {
         const items = byLine.get(line)

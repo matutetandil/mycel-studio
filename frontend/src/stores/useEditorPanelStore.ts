@@ -1,11 +1,19 @@
 import { create } from 'zustand'
 
 export interface EditorTab {
-  id: string        // Scoped path: `{projectPath}::{relativePath}` or `canvas:{projectId}`
-  type: 'file' | 'canvas'
-  filePath: string  // Scoped path for files, `canvas:{projectId}` for canvas
-  fileName: string  // For files: filename. For canvas: project name
+  id: string        // Scoped path: `{projectPath}::{relativePath}` or `canvas:{projectId}` or `diff:{id}`
+  type: 'file' | 'canvas' | 'diff'
+  filePath: string  // Scoped path for files, `canvas:{projectId}` for canvas, diff id for diff
+  fileName: string  // Display name
   projectId?: string // Which project this tab belongs to
+  // Diff tab fields
+  diffOriginal?: string
+  diffModified?: string
+  diffOriginalLabel?: string
+  diffModifiedLabel?: string
+  diffLanguage?: string
+  diffReadOnly?: boolean  // false for conflict resolution
+  diffFilePath?: string   // Real file path for saving resolved conflicts
 }
 
 // Scope a relative file path with its project path for unique identification
@@ -44,6 +52,7 @@ interface EditorPanelState {
 
   openFile: (filePath: string, fileName: string, groupId?: string, projectPath?: string | null) => void
   openCanvas: (projectId: string, projectName: string, groupId?: string) => void
+  openDiff: (id: string, fileName: string, original: string, modified: string, originalLabel: string, modifiedLabel: string, language?: string, readOnly?: boolean, filePath?: string) => void
   renameTab: (oldFilePath: string, newFilePath: string, newFileName: string) => void
   setRevealLine: (line: number | null) => void
   setPreviewMode: (tabId: string, mode: 'source' | 'preview') => void
@@ -144,6 +153,41 @@ export const useEditorPanelStore = create<EditorPanelState>((set, get) => ({
       filePath: canvasPath,
       fileName: projectName,
       projectId,
+    }
+    set({
+      groups: state.groups.map(g =>
+        g.id === targetGroupId
+          ? { ...g, tabs: [...g.tabs, newTab], activeTabId: newTab.id }
+          : g
+      ),
+      activeGroupId: targetGroupId,
+    })
+  },
+
+  openDiff: (id, fileName, original, modified, originalLabel, modifiedLabel, language, readOnly = true, filePath) => {
+    const state = get()
+    const targetGroupId = state.activeGroupId
+    const tabId = `diff:${id}`
+
+    // Check if already open
+    for (const group of state.groups) {
+      const existing = group.tabs.find(t => t.id === tabId)
+      if (existing) {
+        set({
+          groups: state.groups.map(g =>
+            g.id === group.id ? { ...g, activeTabId: existing.id } : g
+          ),
+          activeGroupId: group.id,
+        })
+        return
+      }
+    }
+
+    const newTab: EditorTab = {
+      id: tabId, type: 'diff', filePath: tabId, fileName,
+      diffOriginal: original, diffModified: modified,
+      diffOriginalLabel: originalLabel, diffModifiedLabel: modifiedLabel,
+      diffLanguage: language, diffReadOnly: readOnly, diffFilePath: filePath,
     }
     set({
       groups: state.groups.map(g =>

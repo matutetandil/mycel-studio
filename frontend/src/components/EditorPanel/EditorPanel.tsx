@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from 'react'
-import { ChevronDown, ChevronUp, AlertTriangle, FileCode, Terminal, Bug, Eye, ScrollText, Lightbulb } from 'lucide-react'
+import { ChevronDown, ChevronUp, AlertTriangle, FileCode, Terminal, Bug, Eye, ScrollText, Lightbulb, GitBranch } from 'lucide-react'
 import { useEditorPanelStore } from '../../stores/useEditorPanelStore'
 import { useStudioStore } from '../../stores/useStudioStore'
 import { useProjectStore } from '../../stores/useProjectStore'
@@ -13,10 +13,11 @@ import TerminalPanel from './TerminalPanel'
 import DebugPanel from '../DebugPanel/DebugPanel'
 import OutputPanel from './OutputPanel'
 import HintsPanel from './HintsPanel'
+import GitPanel from '../GitPanel/GitPanel'
 import { useHintsStore } from '../../stores/useHintsStore'
 import CanvasPanel from '../Canvas/CanvasPanel'
 
-type PanelTab = 'editor' | 'terminal' | 'debug' | 'output' | 'hints'
+type PanelTab = 'editor' | 'terminal' | 'debug' | 'output' | 'hints' | 'git'
 
 export default function EditorPanel() {
   const { panelHeight, isCollapsed, groups, splitDirection, splitRatio, setPanelHeight, toggleCollapse } = useEditorPanelStore()
@@ -213,6 +214,17 @@ export default function EditorPanel() {
             </span>
           )}
         </button>
+        <button
+          onClick={() => handlePanelTabClick('git')}
+          title="Git"
+          className={`relative w-8 h-8 flex items-center justify-center rounded transition-colors ${
+            activePanel === 'git' && !isCollapsed
+              ? 'bg-neutral-800 text-white border-l-2 border-orange-500'
+              : 'text-neutral-500 hover:text-neutral-300 hover:bg-neutral-800'
+          }`}
+        >
+          <GitBranch className="w-4 h-4" />
+        </button>
       </div>
 
       {/* Main content area */}
@@ -306,6 +318,14 @@ export default function EditorPanel() {
             style={{ display: activePanel === 'hints' ? undefined : 'none' }}
           >
             <HintsPanel />
+          </div>
+
+          {/* Git panel */}
+          <div
+            className="absolute inset-0"
+            style={{ display: activePanel === 'git' ? undefined : 'none' }}
+          >
+            <GitPanel isVisible={activePanel === 'git'} />
           </div>
         </div>
       </div>

@@ -1,5 +1,5 @@
 import { useState, useMemo, useRef, useEffect, useCallback } from 'react'
-import MonacoEditor from '@monaco-editor/react'
+import MonacoEditor, { DiffEditor } from '@monaco-editor/react'
 import type { editor } from 'monaco-editor'
 import { setupMonaco, setActiveIDEFilePath, createIDEValidator } from '../../monaco'
 import { getLastDefinitionLocation, navigateToDefinition } from '../../monaco/ideDefinitionProvider'
@@ -693,7 +693,22 @@ export default function EditorGroupView({ groupId, isSecondary }: EditorGroupPro
       />
 
       <div className="flex-1 min-h-0">
-        {activeTab?.type === 'canvas' && activeTab.projectId ? (
+        {activeTab?.type === 'diff' ? (
+          <DiffEditor
+            height="100%"
+            original={activeTab.diffOriginal || ''}
+            modified={activeTab.diffModified || ''}
+            language={activeTab.diffLanguage || 'mycel'}
+            theme="mycel-dark"
+            options={{
+              readOnly: activeTab.diffReadOnly !== false,
+              renderSideBySide: true,
+              minimap: { enabled: false },
+              fontSize: 12,
+              scrollBeyondLastLine: false,
+            }}
+          />
+        ) : activeTab?.type === 'canvas' && activeTab.projectId ? (
           <CanvasTab projectId={activeTab.projectId} />
         ) : activeFile ? (() => {
           const previewer = getPreviewerForFile(activeFile.name)

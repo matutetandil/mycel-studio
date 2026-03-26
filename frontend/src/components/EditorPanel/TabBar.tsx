@@ -1,5 +1,5 @@
 import { useState, useRef, useMemo } from 'react'
-import { X, Columns2, Rows2, Copy, Check, Download, XCircle, LayoutGrid } from 'lucide-react'
+import { X, Columns2, Rows2, Copy, Check, Download, XCircle, LayoutGrid, GitCompare } from 'lucide-react'
 import { useEditorPanelStore, unscopePath, type EditorTab } from '../../stores/useEditorPanelStore'
 import { useProjectStore } from '../../stores/useProjectStore'
 import { useMultiProjectStore } from '../../stores/useMultiProjectStore'
@@ -191,6 +191,8 @@ export default function TabBar({ groupId, tabs, activeTabId, isSecondary, onCopy
             >
               {tab.type === 'canvas'
                 ? <LayoutGrid className={`w-3 h-3 shrink-0 ${activeTabId === tab.id ? 'text-indigo-400' : 'text-neutral-500'}`} />
+                : tab.type === 'diff'
+                ? <GitCompare className={`w-3 h-3 shrink-0 ${activeTabId === tab.id ? 'text-orange-400' : 'text-neutral-500'}`} />
                 : (() => { const ft = getFileTypeInfo(tab.fileName); const Icon = ft.icon; return <Icon className={`w-3 h-3 shrink-0 ${activeTabId === tab.id ? ft.color : 'text-neutral-500'}`} /> })()}
               <span className={`max-w-32 truncate ${nameColor} ${
                 tab.type === 'file' ? (getFileSeverity(tabRelPath) === 'error' ? 'diag-error diag-tab' : getFileSeverity(tabRelPath) === 'warning' ? 'diag-warning diag-tab' : '') : ''
