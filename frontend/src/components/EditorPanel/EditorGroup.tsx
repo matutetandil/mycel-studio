@@ -3,7 +3,8 @@ import MonacoEditor from '@monaco-editor/react'
 import type { editor } from 'monaco-editor'
 import { setupMonaco, setActiveIDEFilePath, createIDEValidator } from '../../monaco'
 import { getLastDefinitionLocation, navigateToDefinition } from '../../monaco/ideDefinitionProvider'
-import { computeGutterItems, applyGutterDecorations, toggleBookmark, getBookmarks, type GutterItem } from '../../monaco/gutterDecorations'
+import { computeGutterItems, toggleBookmark, getBookmarks, type GutterItem } from '../../monaco/gutterDecorations'
+import GutterPanel from './GutterPanel'
 
 // Simple DOM-based context menu for gutter right-click
 function showGutterMenu(x: number, y: number, items: Array<{ label: string; action: () => void }>) {
@@ -326,6 +327,11 @@ export default function EditorGroupView({ groupId, isSecondary }: EditorGroupPro
   const [copied, setCopied] = useState(false)
   const gitDecoRef = useRef<string[]>([])
   const [gitDiff, setGitDiff] = useState<LineDiffResult | null>(null)
+  const [gutterItemsState, setGutterItemsState] = useState<GutterItem[]>([])
+  const [blameData, setBlameData] = useState<Array<{ line: number; hash: string; author: string; date: string; summary?: string }> | null>(null)
+  const [editorReady, setEditorReady] = useState(false)
+  const blameDataRef = useRef(blameData)
+  blameDataRef.current = blameData
 
   const existingPaths = useMemo(() => new Set(projectFiles.map(f => f.relativePath)), [projectFiles])
   const project = useMemo(
@@ -707,6 +713,32 @@ export default function EditorGroupView({ groupId, isSecondary }: EditorGroupPro
                   <PreviewComponent content={activeFile.content} fileName={activeFile.name} />
                 </div>
               ) : (
+          <div className="flex h-full">
+            {activeFile.name.endsWith('.mycel') && editorReady && (
+              <GutterPanel
+                editorRef={editorRef}
+                gutterItems={gutterItemsState}
+                blameData={blameData}
+                projectPath={projectPath || ''}
+                onItemClick={(item) => {
+                  if (item.type === 'ref-down' && item.references && item.references.length > 0) {
+                    const handler = ((window as unknown) as Record<string, unknown>).__mycelShowRefs as ((refs: unknown[], name: string, kind: string) => void) | undefined
+                    if (handler && item.entityName && item.entityKind) {
+                      handler(item.references, item.entityName, item.entityKind)
+                    }
+                  } else if (item.type === 'ref-up' && item.references && item.references.length > 0) {
+                    const ref = item.references[0]
+                    const pp = projectPath || ''
+                    const relPath = ref.file.startsWith(pp + '/') ? ref.file.slice(pp.length + 1) : ref.file
+                    const fileName = relPath.split('/').pop() || relPath
+                    useEditorPanelStore.getState().openFile(relPath, fileName, undefined, pp)
+                    setTimeout(() => useEditorPanelStore.getState().setRevealLine(ref.line), 50)
+                  } else if (item.type === 'hint' && item.hint) {
+                    import('../../utils/refactorUtils').then(({ executeHint }) => executeHint(item.hint!))
+                  }
+                }}
+              />
+            )}
           <MonacoEditor
             key={activeFile.path}
             height="100%"
@@ -716,6 +748,7 @@ export default function EditorGroupView({ groupId, isSecondary }: EditorGroupPro
             beforeMount={setupMonaco}
             onMount={(monacoEditor, monacoInstance) => {
               editorRef.current = monacoEditor
+              setEditorReady(true)
               // Apply keymap (IDEA/VS Code)
               applyKeymap(monacoInstance, monacoEditor, useSettingsStore.getState().keymap)
               // Set active file path for IDE engine (completions, hover, diagnostics)
@@ -776,111 +809,20 @@ export default function EditorGroupView({ groupId, isSecondary }: EditorGroupPro
                   // Run initial validation
                   if (monacoEditor.getModel()) ideValidate(monacoEditor.getModel()!)
 
-                  // Compute and apply gutter decorations (references, hints, bookmarks)
-                  let gutterDecoIds: string[] = []
-                  let gutterItems: GutterItem[] = []
+                  // Compute gutter items and update React state (GutterPanel renders them)
                   const absPath = pp + '/' + activeFile.path
                   const refreshGutter = async () => {
-                    gutterItems = await computeGutterItems(absPath)
-                    gutterDecoIds = applyGutterDecorations(monacoEditor, gutterItems, gutterDecoIds)
+                    const items = await computeGutterItems(absPath)
+                    setGutterItemsState(items)
                   }
                   refreshGutter()
-                  // Refresh gutter after validation (content changes may affect references)
                   monacoEditor.onDidChangeModelContent(() => {
-                    setTimeout(refreshGutter, 1000) // debounce
+                    setTimeout(refreshGutter, 1000)
                   })
 
-                  // Handle gutter clicks — if multiple items, show menu; single item, execute directly
-                  monacoEditor.onMouseDown((e) => {
-                    if (e.target.type === 2 /* GUTTER_GLYPH_MARGIN */) {
-                      const line = e.target.position?.lineNumber
-                      if (!line) return
-                      const lineItems = gutterItems.filter(g => g.line === line)
-                      if (lineItems.length === 0) return
-
-                      const executeItem = (item: GutterItem) => {
-                        if (item.type === 'ref-down') {
-                          // Show usages popup
-                          if (item.references && item.references.length > 0) {
-                            const handler = ((window as unknown) as Record<string, unknown>).__mycelShowRefs as ((refs: unknown[], name: string, kind: string) => void) | undefined
-                            if (handler && item.entityName && item.entityKind) {
-                              handler(item.references, item.entityName, item.entityKind)
-                            }
-                          }
-                        } else if (item.type === 'ref-up') {
-                          // Navigate to definition
-                          if (item.references && item.references.length > 0) {
-                            const ref = item.references[0]
-                            const relPath = ref.file.startsWith(pp + '/') ? ref.file.slice(pp.length + 1) : ref.file
-                            const fileName = relPath.split('/').pop() || relPath
-                            useEditorPanelStore.getState().openFile(relPath, fileName, undefined, pp)
-                            setTimeout(() => useEditorPanelStore.getState().setRevealLine(ref.line), 50)
-                          }
-                        } else if (item.type === 'hint' && item.hint) {
-                          import('../../utils/refactorUtils').then(({ executeHint }) => {
-                            executeHint(item.hint!)
-                          })
-                        }
-                      }
-
-                      if (lineItems.length === 1) {
-                        executeItem(lineItems[0])
-                      } else {
-                        // Multiple items — always show menu so user picks which icon action
-                        const menuItems = lineItems.map(item => {
-                          let label = item.tooltip
-                          if (item.type === 'ref-down') label = `▼ ${item.entityName} — show usages`
-                          else if (item.type === 'ref-up') label = `▲ Go to ${item.entityName} definition`
-                          else if (item.type === 'hint') label = `💡 ${item.tooltip}`
-                          else if (item.type === 'bookmark') label = '🔖 Go to bookmark'
-                          return { label, action: () => executeItem(item) }
-                        })
-                        showGutterMenu(e.event.posx, e.event.posy, menuItems)
-                      }
-                    }
-                  })
-
-                  // Git blame state
-                  let blameDecoIds: string[] = []
-                  let blameActive = false
-
-                  const toggleBlame = async () => {
-                    if (blameActive) {
-                      blameDecoIds = monacoEditor.deltaDecorations(blameDecoIds, [])
-                      blameActive = false
-                      return
-                    }
-                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                    const wailsApp = (window as any).go?.main?.App
-                    if (!wailsApp?.GetGitBlame || !activeFile) return
-                    try {
-                      const blameJson = await wailsApp.GetGitBlame(pp, activeFile.path)
-                      const blame = JSON.parse(blameJson) as Array<{ line: number; hash: string; author: string; date: string }>
-                      if (!blame || blame.length === 0) {
-                        wailsApp.DebugLog?.('Git Blame: file not tracked')
-                        // Show inline message
-                        alert('File is not tracked by git yet.')
-                        return
-                      }
-                      const decos: editor.IModelDeltaDecoration[] = blame.map(b => ({
-                        range: { startLineNumber: b.line, startColumn: 1, endLineNumber: b.line, endColumn: 1 },
-                        options: {
-                          after: {
-                            content: `  ${b.hash} ${b.author.substring(0, 15).padEnd(15)} ${b.date}`,
-                            inlineClassName: 'git-blame-inline',
-                          },
-                        },
-                      }))
-                      blameDecoIds = monacoEditor.deltaDecorations(blameDecoIds, decos)
-                      blameActive = true
-                    } catch (err) {
-                      alert('Failed to get blame. File may not be tracked by git.')
-                    }
-                  }
-
-                  // Context menu on gutter — right click for bookmark/blame
+                  // Context menu on line numbers — bookmark/blame
                   monacoEditor.onContextMenu((e) => {
-                    if (e.target.type === 2 /* GUTTER_GLYPH_MARGIN */ || e.target.type === 3 /* GUTTER_LINE_NUMBERS */) {
+                    if (e.target.type === 3 /* GUTTER_LINE_NUMBERS */) {
                       const line = e.target.position?.lineNumber
                       if (line && activeFile) {
                         e.event.preventDefault()
@@ -892,8 +834,27 @@ export default function EditorGroupView({ groupId, isSecondary }: EditorGroupPro
                             action: () => { toggleBookmark(activeFile.path, line); refreshGutter() },
                           },
                           {
-                            label: blameActive ? 'Hide Git Blame' : 'Annotate with Git Blame',
-                            action: toggleBlame,
+                            label: blameDataRef.current ? 'Hide Git Blame' : 'Annotate with Git Blame',
+                            action: async () => {
+                              if (blameDataRef.current) {
+                                setBlameData(null)
+                                return
+                              }
+                              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                              const wailsApp = (window as any).go?.main?.App
+                              if (!wailsApp?.GetGitBlame) return
+                              try {
+                                const json = await wailsApp.GetGitBlame(pp, activeFile.path)
+                                const data = JSON.parse(json)
+                                if (!data || data.length === 0) {
+                                  alert('File is not tracked by git yet.')
+                                } else {
+                                  setBlameData(data)
+                                }
+                              } catch {
+                                alert('Failed to get blame.')
+                              }
+                            },
                           },
                         ])
                       }
@@ -980,9 +941,10 @@ export default function EditorGroupView({ groupId, isSecondary }: EditorGroupPro
               automaticLayout: true,
               wordWrap: 'on',
               padding: { top: 8 },
-              glyphMargin: true,
+              glyphMargin: false,
             }}
           />
+          </div>
               )}
             </div>
           )

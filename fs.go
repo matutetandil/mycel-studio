@@ -226,34 +226,40 @@ func (a *App) GetGitBlame(projectPath, relativePath string) (string, error) {
 	}
 
 	type BlameLine struct {
-		Line   int    `json:"line"`
-		Hash   string `json:"hash"`
-		Author string `json:"author"`
-		Date   string `json:"date"`
+		Line    int    `json:"line"`
+		Hash    string `json:"hash"`
+		Author  string `json:"author"`
+		Date    string `json:"date"`
+		Summary string `json:"summary"`
 	}
 
 	var result []BlameLine
 	var current BlameLine
-	lineNum := 0
 
 	for _, raw := range strings.Split(string(out), "\n") {
 		if len(raw) == 0 {
 			continue
 		}
-		if len(raw) >= 40 && raw[0] != '\t' && !strings.Contains(raw[:10], " ") == false {
+		// Hash line: 40-char hex + orig_line + final_line [+ count]
+		if len(raw) >= 40 && raw[0] != '\t' && isHexChar(raw[0]) {
 			parts := strings.Fields(raw)
 			if len(parts) >= 3 && len(parts[0]) == 40 {
-				lineNum++
-				current.Line = lineNum
-				current.Hash = parts[0][:7]
+				current.Hash = parts[0]
+				// parts[2] is the final line number in the current file
+				var finalLine int
+				if _, err := fmt.Sscanf(parts[2], "%d", &finalLine); err == nil {
+					current.Line = finalLine
+				}
 			}
+		}
+		if strings.HasPrefix(raw, "summary ") {
+			current.Summary = strings.TrimPrefix(raw, "summary ")
 		}
 		if strings.HasPrefix(raw, "author ") {
 			current.Author = strings.TrimPrefix(raw, "author ")
 		}
 		if strings.HasPrefix(raw, "author-time ") {
 			ts := strings.TrimPrefix(raw, "author-time ")
-			// Convert unix timestamp to relative date
 			var unix int64
 			if _, err := fmt.Sscanf(ts, "%d", &unix); err == nil {
 				t := time.Unix(unix, 0)
@@ -269,6 +275,10 @@ func (a *App) GetGitBlame(projectPath, relativePath string) (string, error) {
 	data, _ := json.Marshal(result)
 	return string(data), nil
 }
+func isHexChar(c byte) bool {
+	return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')
+}
+
 func (a *App) DebugLog(message string) {
 	f, err := os.OpenFile("/tmp/mycel-studio-debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
