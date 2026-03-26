@@ -57,13 +57,17 @@ export function createIDECodeActionProvider(
       }
 
       // SOLID organization hints as refactoring suggestions
-      // Only show on the block's declaration line (not the entire block range)
+      // Show when cursor is on the block's declaration line
       const hints = await ideHintsForFile(filePath)
       if (hints && hints.length > 0) {
         for (const hint of hints) {
           if (hint.range && hint.range.start.line === range.startLineNumber) {
-            const title = hint.suggestedFile
-              ? `Move "${hint.blockName}" to ${hint.suggestedFile}`
+            // Normalize suggestedFile to relative path for display
+            const suggestedDisplay = hint.suggestedFile
+              ? hint.suggestedFile.replace(/^.*\/src\//, 'src/').split('/').pop() || hint.suggestedFile
+              : ''
+            const title = suggestedDisplay
+              ? `Rename to ${suggestedDisplay}`
               : hint.message
 
             monacoActions.push({
