@@ -261,6 +261,119 @@ body {
 .markdown-preview tr:nth-child(even) td { background: #1a1a1a; }
 .markdown-preview input[type="checkbox"] { margin-right: 6px; accent-color: #818cf8; }
 
+/* Gutter decorations — IntelliJ-style icons side by side */
+/* Each .gutter-row uses background-image stacking for multiple icons */
+
+/* SVG data URLs for icons */
+/* Reference down (green circle with arrow) */
+/* Reference up (indigo circle with arrow) */
+/* Hint (yellow lightbulb) */
+/* Bookmark (yellow flag) */
+
+.gutter-row { cursor: pointer; width: 36px !important; height: 18px !important; display: flex !important; align-items: center; gap: 2px; padding-left: 2px; }
+
+/* Single icons */
+.gutter-row.has-ref-down::before,
+.gutter-row.has-ref-up::before {
+  content: '';
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  background-size: contain;
+  background-repeat: no-repeat;
+}
+.gutter-row.has-ref-down::before {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Ccircle cx='9' cy='8' r='6' fill='%2322c55e15' stroke='%2322c55e' stroke-width='1'/%3E%3Ctext x='9' y='11' text-anchor='middle' fill='%2322c55e' font-size='8' font-weight='800' font-family='sans-serif'%3EC%3C/text%3E%3Cpath d='M16 13l-3 4-3-4' fill='%2322c55e'/%3E%3C/svg%3E");
+}
+.gutter-row.has-ref-up::before {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Ccircle cx='9' cy='10' r='6' fill='%23818cf815' stroke='%23818cf8' stroke-width='1'/%3E%3Ctext x='9' y='13' text-anchor='middle' fill='%23818cf8' font-size='8' font-weight='800' font-family='sans-serif'%3EC%3C/text%3E%3Cpath d='M16 7l-3-4-3 4' fill='%23818cf8'/%3E%3C/svg%3E");
+}
+
+/* Override letter in SVG based on entity type */
+.gutter-row.ref-letter-f.has-ref-down::before { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Ccircle cx='9' cy='8' r='6' fill='%2322c55e15' stroke='%2322c55e' stroke-width='1'/%3E%3Ctext x='9' y='11' text-anchor='middle' fill='%2322c55e' font-size='8' font-weight='800' font-family='sans-serif'%3EF%3C/text%3E%3Cpath d='M16 13l-3 4-3-4' fill='%2322c55e'/%3E%3C/svg%3E"); }
+.gutter-row.ref-letter-t.has-ref-down::before { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Ccircle cx='9' cy='8' r='6' fill='%2322c55e15' stroke='%2322c55e' stroke-width='1'/%3E%3Ctext x='9' y='11' text-anchor='middle' fill='%2322c55e' font-size='8' font-weight='800' font-family='sans-serif'%3ET%3C/text%3E%3Cpath d='M16 13l-3 4-3-4' fill='%2322c55e'/%3E%3C/svg%3E"); }
+.gutter-row.ref-letter-a.has-ref-down::before { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Ccircle cx='9' cy='8' r='6' fill='%2322c55e15' stroke='%2322c55e' stroke-width='1'/%3E%3Ctext x='9' y='11' text-anchor='middle' fill='%2322c55e' font-size='8' font-weight='800' font-family='sans-serif'%3EA%3C/text%3E%3Cpath d='M16 13l-3 4-3-4' fill='%2322c55e'/%3E%3C/svg%3E"); }
+.gutter-row.ref-letter-f.has-ref-up::before { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Ccircle cx='9' cy='10' r='6' fill='%23818cf815' stroke='%23818cf8' stroke-width='1'/%3E%3Ctext x='9' y='13' text-anchor='middle' fill='%23818cf8' font-size='8' font-weight='800' font-family='sans-serif'%3EF%3C/text%3E%3Cpath d='M16 7l-3-4-3 4' fill='%23818cf8'/%3E%3C/svg%3E"); }
+.gutter-row.ref-letter-t.has-ref-up::before { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Ccircle cx='9' cy='10' r='6' fill='%23818cf815' stroke='%23818cf8' stroke-width='1'/%3E%3Ctext x='9' y='13' text-anchor='middle' fill='%23818cf8' font-size='8' font-weight='800' font-family='sans-serif'%3ET%3C/text%3E%3Cpath d='M16 7l-3-4-3 4' fill='%23818cf8'/%3E%3C/svg%3E"); }
+.gutter-row.ref-letter-a.has-ref-up::before { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Ccircle cx='9' cy='10' r='6' fill='%23818cf815' stroke='%23818cf8' stroke-width='1'/%3E%3Ctext x='9' y='13' text-anchor='middle' fill='%23818cf8' font-size='8' font-weight='800' font-family='sans-serif'%3EA%3C/text%3E%3Cpath d='M16 7l-3-4-3 4' fill='%23818cf8'/%3E%3C/svg%3E"); }
+
+/* Hint icon (::after when there's also a ref, standalone otherwise) */
+.gutter-row.has-hint::after {
+  content: '';
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M8 1a4.5 4.5 0 0 0-2.5 8.2V11a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1V9.2A4.5 4.5 0 0 0 8 1zm0 1.5a3 3 0 0 1 1.5 5.6V11h-3V8.1A3 3 0 0 1 8 2.5zM6.5 12.5h3v.5a1 1 0 0 1-1 1h-1a1 1 0 0 1-1-1z' fill='%23eab308'/%3E%3C/svg%3E");
+  background-size: contain;
+  background-repeat: no-repeat;
+}
+/* When hint is alone (no ref), use ::before instead */
+.gutter-row.has-hint:not(.has-ref-down):not(.has-ref-up)::before {
+  content: '';
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M8 1a4.5 4.5 0 0 0-2.5 8.2V11a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1V9.2A4.5 4.5 0 0 0 8 1zm0 1.5a3 3 0 0 1 1.5 5.6V11h-3V8.1A3 3 0 0 1 8 2.5zM6.5 12.5h3v.5a1 1 0 0 1-1 1h-1a1 1 0 0 1-1-1z' fill='%23eab308'/%3E%3C/svg%3E");
+  background-size: contain;
+  background-repeat: no-repeat;
+}
+.gutter-row.has-hint:not(.has-ref-down):not(.has-ref-up)::after { content: none; }
+
+/* Bookmark flag */
+.gutter-row.has-bookmark::after {
+  content: '';
+  display: inline-block;
+  width: 10px;
+  height: 13px;
+  flex-shrink: 0;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 16'%3E%3Cpath d='M2 0h8a1 1 0 0 1 1 1v14l-5-3-5 3V1a1 1 0 0 1 1-1z' fill='%23eab308'/%3E%3C/svg%3E");
+  background-size: contain;
+  background-repeat: no-repeat;
+}
+/* When bookmark is alone */
+.gutter-row.has-bookmark:not(.has-ref-down):not(.has-ref-up):not(.has-hint)::before {
+  content: '';
+  display: inline-block;
+  width: 10px;
+  height: 13px;
+  flex-shrink: 0;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 16'%3E%3Cpath d='M2 0h8a1 1 0 0 1 1 1v14l-5-3-5 3V1a1 1 0 0 1 1-1z' fill='%23eab308'/%3E%3C/svg%3E");
+  background-size: contain;
+  background-repeat: no-repeat;
+}
+.gutter-row.has-bookmark:not(.has-ref-down):not(.has-ref-up):not(.has-hint)::after { content: none; }
+
+/* Hint/bookmark dots in lines decoration column (when sharing line with ref icon) */
+.gutter-hint-dot {
+  width: 8px !important;
+  margin-left: 2px;
+  cursor: pointer;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M8 1a4.5 4.5 0 0 0-2.5 8.2V11a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1V9.2A4.5 4.5 0 0 0 8 1zm0 1.5a3 3 0 0 1 1.5 5.6V11h-3V8.1A3 3 0 0 1 8 2.5zM6.5 12.5h3v.5a1 1 0 0 1-1 1h-1a1 1 0 0 1-1-1z' fill='%23eab308'/%3E%3C/svg%3E");
+  background-size: 12px 12px;
+  background-repeat: no-repeat;
+  background-position: center;
+}
+.gutter-bookmark-dot {
+  width: 8px !important;
+  margin-left: 2px;
+  cursor: pointer;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 16'%3E%3Cpath d='M2 0h8a1 1 0 0 1 1 1v14l-5-3-5 3V1a1 1 0 0 1 1-1z' fill='%23eab308'/%3E%3C/svg%3E");
+  background-size: 8px 12px;
+  background-repeat: no-repeat;
+  background-position: center;
+}
+
+/* Git blame inline annotations (after each line, like GitLens) */
+.git-blame-inline {
+  color: #4a4a4a !important;
+  font-size: 11px !important;
+  font-style: italic;
+  padding-left: 24px;
+}
+
 /* Diagnostic squiggly underlines (IntelliJ-style) */
 /* File tree: uses text-decoration (overflow is visible there) */
 .diag-error { text-decoration: underline wavy #ef4444; text-underline-offset: 2px; text-decoration-thickness: 1px; }

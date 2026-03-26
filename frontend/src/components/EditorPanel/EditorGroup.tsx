@@ -3,6 +3,29 @@ import MonacoEditor from '@monaco-editor/react'
 import type { editor } from 'monaco-editor'
 import { setupMonaco, setActiveIDEFilePath, createIDEValidator } from '../../monaco'
 import { getLastDefinitionLocation, navigateToDefinition } from '../../monaco/ideDefinitionProvider'
+import { computeGutterItems, applyGutterDecorations, toggleBookmark, getBookmarks, type GutterItem } from '../../monaco/gutterDecorations'
+
+// Simple DOM-based context menu for gutter right-click
+function showGutterMenu(x: number, y: number, items: Array<{ label: string; action: () => void }>) {
+  // Remove existing menu
+  document.getElementById('gutter-ctx-menu')?.remove()
+  const menu = document.createElement('div')
+  menu.id = 'gutter-ctx-menu'
+  menu.style.cssText = `position:fixed;left:${x}px;top:${y}px;z-index:99999;background:#262626;border:1px solid #404040;border-radius:6px;padding:4px 0;box-shadow:0 4px 12px rgba(0,0,0,0.5);min-width:180px;`
+  for (const item of items) {
+    const btn = document.createElement('button')
+    btn.textContent = item.label
+    btn.style.cssText = 'display:block;width:100%;text-align:left;padding:5px 12px;font-size:12px;color:#d4d4d4;background:none;border:none;cursor:pointer;'
+    btn.onmouseenter = () => { btn.style.background = '#3f3f46' }
+    btn.onmouseleave = () => { btn.style.background = 'none' }
+    btn.onclick = () => { item.action(); menu.remove() }
+    menu.appendChild(btn)
+  }
+  document.body.appendChild(menu)
+  // Close on click outside
+  const close = (e: MouseEvent) => { if (!menu.contains(e.target as Node)) { menu.remove(); document.removeEventListener('mousedown', close) } }
+  setTimeout(() => document.addEventListener('mousedown', close), 0)
+}
 import { setHintExecutor } from '../../monaco/ideCodeActionProvider'
 import { useEditorPanelStore, unscopePath } from '../../stores/useEditorPanelStore'
 import { useStudioStore } from '../../stores/useStudioStore'
@@ -752,6 +775,130 @@ export default function EditorGroupView({ groupId, isSecondary }: EditorGroupPro
                   })
                   // Run initial validation
                   if (monacoEditor.getModel()) ideValidate(monacoEditor.getModel()!)
+
+                  // Compute and apply gutter decorations (references, hints, bookmarks)
+                  let gutterDecoIds: string[] = []
+                  let gutterItems: GutterItem[] = []
+                  const absPath = pp + '/' + activeFile.path
+                  const refreshGutter = async () => {
+                    gutterItems = await computeGutterItems(absPath)
+                    gutterDecoIds = applyGutterDecorations(monacoEditor, gutterItems, gutterDecoIds)
+                  }
+                  refreshGutter()
+                  // Refresh gutter after validation (content changes may affect references)
+                  monacoEditor.onDidChangeModelContent(() => {
+                    setTimeout(refreshGutter, 1000) // debounce
+                  })
+
+                  // Handle gutter clicks — if multiple items, show menu; single item, execute directly
+                  monacoEditor.onMouseDown((e) => {
+                    if (e.target.type === 2 /* GUTTER_GLYPH_MARGIN */) {
+                      const line = e.target.position?.lineNumber
+                      if (!line) return
+                      const lineItems = gutterItems.filter(g => g.line === line)
+                      if (lineItems.length === 0) return
+
+                      const executeItem = (item: GutterItem) => {
+                        if (item.type === 'ref-down') {
+                          // Show usages popup
+                          if (item.references && item.references.length > 0) {
+                            const handler = ((window as unknown) as Record<string, unknown>).__mycelShowRefs as ((refs: unknown[], name: string, kind: string) => void) | undefined
+                            if (handler && item.entityName && item.entityKind) {
+                              handler(item.references, item.entityName, item.entityKind)
+                            }
+                          }
+                        } else if (item.type === 'ref-up') {
+                          // Navigate to definition
+                          if (item.references && item.references.length > 0) {
+                            const ref = item.references[0]
+                            const relPath = ref.file.startsWith(pp + '/') ? ref.file.slice(pp.length + 1) : ref.file
+                            const fileName = relPath.split('/').pop() || relPath
+                            useEditorPanelStore.getState().openFile(relPath, fileName, undefined, pp)
+                            setTimeout(() => useEditorPanelStore.getState().setRevealLine(ref.line), 50)
+                          }
+                        } else if (item.type === 'hint' && item.hint) {
+                          import('../../utils/refactorUtils').then(({ executeHint }) => {
+                            executeHint(item.hint!)
+                          })
+                        }
+                      }
+
+                      if (lineItems.length === 1) {
+                        executeItem(lineItems[0])
+                      } else {
+                        // Multiple items — always show menu so user picks which icon action
+                        const menuItems = lineItems.map(item => {
+                          let label = item.tooltip
+                          if (item.type === 'ref-down') label = `▼ ${item.entityName} — show usages`
+                          else if (item.type === 'ref-up') label = `▲ Go to ${item.entityName} definition`
+                          else if (item.type === 'hint') label = `💡 ${item.tooltip}`
+                          else if (item.type === 'bookmark') label = '🔖 Go to bookmark'
+                          return { label, action: () => executeItem(item) }
+                        })
+                        showGutterMenu(e.event.posx, e.event.posy, menuItems)
+                      }
+                    }
+                  })
+
+                  // Git blame state
+                  let blameDecoIds: string[] = []
+                  let blameActive = false
+
+                  const toggleBlame = async () => {
+                    if (blameActive) {
+                      blameDecoIds = monacoEditor.deltaDecorations(blameDecoIds, [])
+                      blameActive = false
+                      return
+                    }
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    const wailsApp = (window as any).go?.main?.App
+                    if (!wailsApp?.GetGitBlame || !activeFile) return
+                    try {
+                      const blameJson = await wailsApp.GetGitBlame(pp, activeFile.path)
+                      const blame = JSON.parse(blameJson) as Array<{ line: number; hash: string; author: string; date: string }>
+                      if (!blame || blame.length === 0) {
+                        wailsApp.DebugLog?.('Git Blame: file not tracked')
+                        // Show inline message
+                        alert('File is not tracked by git yet.')
+                        return
+                      }
+                      const decos: editor.IModelDeltaDecoration[] = blame.map(b => ({
+                        range: { startLineNumber: b.line, startColumn: 1, endLineNumber: b.line, endColumn: 1 },
+                        options: {
+                          after: {
+                            content: `  ${b.hash} ${b.author.substring(0, 15).padEnd(15)} ${b.date}`,
+                            inlineClassName: 'git-blame-inline',
+                          },
+                        },
+                      }))
+                      blameDecoIds = monacoEditor.deltaDecorations(blameDecoIds, decos)
+                      blameActive = true
+                    } catch (err) {
+                      alert('Failed to get blame. File may not be tracked by git.')
+                    }
+                  }
+
+                  // Context menu on gutter — right click for bookmark/blame
+                  monacoEditor.onContextMenu((e) => {
+                    if (e.target.type === 2 /* GUTTER_GLYPH_MARGIN */ || e.target.type === 3 /* GUTTER_LINE_NUMBERS */) {
+                      const line = e.target.position?.lineNumber
+                      if (line && activeFile) {
+                        e.event.preventDefault()
+                        e.event.stopPropagation()
+                        const hasBookmark = getBookmarks(activeFile.path).has(line)
+                        showGutterMenu(e.event.posx, e.event.posy, [
+                          {
+                            label: hasBookmark ? 'Remove Bookmark' : 'Add Bookmark',
+                            action: () => { toggleBookmark(activeFile.path, line); refreshGutter() },
+                          },
+                          {
+                            label: blameActive ? 'Hide Git Blame' : 'Annotate with Git Blame',
+                            action: toggleBlame,
+                          },
+                        ])
+                      }
+                    }
+                  })
                 }
               }
               // Restore full view state (cursor, scroll, selections, folds)
@@ -833,7 +980,7 @@ export default function EditorGroupView({ groupId, isSecondary }: EditorGroupPro
               automaticLayout: true,
               wordWrap: 'on',
               padding: { top: 8 },
-              glyphMargin: false,
+              glyphMargin: true,
             }}
           />
               )}

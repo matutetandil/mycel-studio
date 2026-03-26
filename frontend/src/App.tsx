@@ -267,10 +267,16 @@ function ReferencesPopupWrapper() {
   const [refs, setRefs] = useState<{ references: IDEReference[]; name: string; kind: string } | null>(null)
 
   useEffect(() => {
-    setReferencesHandler((references, entityName, entityKind) => {
+    const handler = (references: IDEReference[], entityName: string, entityKind: string) => {
       setRefs({ references, name: entityName, kind: entityKind })
-    })
-    return () => setReferencesHandler(null)
+    }
+    setReferencesHandler(handler)
+    // Also expose globally for gutter click access
+    ;((window as unknown) as Record<string, unknown>).__mycelShowRefs = handler
+    return () => {
+      setReferencesHandler(null)
+      delete ((window as unknown) as Record<string, unknown>).__mycelShowRefs
+    }
   }, [])
 
   return (

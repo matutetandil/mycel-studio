@@ -1,9 +1,11 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"io/fs"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -214,7 +216,59 @@ func (a *App) ReadFileAtPath(absolutePath string) (string, error) {
 	return string(data), nil
 }
 
-// DebugLog writes a message to /tmp/mycel-studio-debug.log for troubleshooting.
+// GetGitBlame returns git blame for a file as JSON array.
+func (a *App) GetGitBlame(projectPath, relativePath string) (string, error) {
+	cmd := exec.Command("git", "blame", "--line-porcelain", relativePath)
+	cmd.Dir = projectPath
+	out, err := cmd.Output()
+	if err != nil {
+		return "[]", err
+	}
+
+	type BlameLine struct {
+		Line   int    `json:"line"`
+		Hash   string `json:"hash"`
+		Author string `json:"author"`
+		Date   string `json:"date"`
+	}
+
+	var result []BlameLine
+	var current BlameLine
+	lineNum := 0
+
+	for _, raw := range strings.Split(string(out), "\n") {
+		if len(raw) == 0 {
+			continue
+		}
+		if len(raw) >= 40 && raw[0] != '\t' && !strings.Contains(raw[:10], " ") == false {
+			parts := strings.Fields(raw)
+			if len(parts) >= 3 && len(parts[0]) == 40 {
+				lineNum++
+				current.Line = lineNum
+				current.Hash = parts[0][:7]
+			}
+		}
+		if strings.HasPrefix(raw, "author ") {
+			current.Author = strings.TrimPrefix(raw, "author ")
+		}
+		if strings.HasPrefix(raw, "author-time ") {
+			ts := strings.TrimPrefix(raw, "author-time ")
+			// Convert unix timestamp to relative date
+			var unix int64
+			if _, err := fmt.Sscanf(ts, "%d", &unix); err == nil {
+				t := time.Unix(unix, 0)
+				current.Date = t.Format("2006-01-02")
+			}
+		}
+		if raw[0] == '\t' {
+			result = append(result, current)
+			current = BlameLine{}
+		}
+	}
+
+	data, _ := json.Marshal(result)
+	return string(data), nil
+}
 func (a *App) DebugLog(message string) {
 	f, err := os.OpenFile("/tmp/mycel-studio-debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
