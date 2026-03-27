@@ -1,4 +1,4 @@
-// Polls the filesystem for changes made outside Studio (new files, deleted files).
+// Polls the filesystem for changes made outside Studio (new files, deleted files, modified content).
 // Runs every 5 seconds when a project is open.
 
 import { useEffect, useRef } from 'react'
@@ -24,9 +24,10 @@ async function refreshFiles() {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const diskFiles: Array<{ name: string; relativePath: string; content: string; isDirectory: boolean }> = entries
 
-    const diskFilePaths = new Set(
-      diskFiles.filter(e => !e.isDirectory).map(e => e.relativePath)
-    )
+    const diskFileMap = new Map<string, string>()
+    for (const e of diskFiles) {
+      if (!e.isDirectory) diskFileMap.set(e.relativePath, e.content)
+    }
     const currentPaths = new Set(files.map(f => f.relativePath))
 
     // Find new files (on disk but not in store)
@@ -43,28 +44,59 @@ async function refreshFiles() {
     // Find deleted files (in store but not on disk)
     const deletedPaths = new Set<string>()
     for (const f of files) {
-      if (!diskFilePaths.has(f.relativePath)) {
+      if (!diskFileMap.has(f.relativePath)) {
         deletedPaths.add(f.relativePath)
       }
     }
 
+    // Find modified files (content on disk differs from store, and file is NOT dirty)
+    const modifiedFiles = new Set<string>()
+    for (const f of files) {
+      if (f.isDirty || deletedPaths.has(f.relativePath)) continue
+      const diskContent = diskFileMap.get(f.relativePath)
+      if (diskContent !== undefined && diskContent !== f.content) {
+        modifiedFiles.add(f.relativePath)
+      }
+    }
+
     // Only update if something changed
-    if (newFiles.length === 0 && deletedPaths.size === 0) return
+    if (newFiles.length === 0 && deletedPaths.size === 0 && modifiedFiles.size === 0) return
 
     const updatedFiles = [
-      ...files.filter(f => !deletedPaths.has(f.relativePath)),
+      ...files
+        .filter(f => !deletedPaths.has(f.relativePath))
+        .map(f => {
+          if (modifiedFiles.has(f.relativePath)) {
+            return { ...f, content: diskFileMap.get(f.relativePath)!, isDirty: false }
+          }
+          return f
+        }),
       ...newFiles,
     ]
 
     useProjectStore.setState({ files: updatedFiles })
 
-    // Also refresh git status for the new files
+    // Also refresh git status
     useProjectStore.getState().refreshGitStatus()
 
-    // Refresh hints (external changes like git pull may affect project structure)
-    import('../stores/useHintsStore').then(({ useHintsStore }) => {
-      useHintsStore.getState().refreshHints()
-    })
+    // Refresh hints (external changes may affect project structure)
+    if (newFiles.length > 0 || deletedPaths.size > 0) {
+      import('../stores/useHintsStore').then(({ useHintsStore }) => {
+        useHintsStore.getState().refreshHints()
+      })
+    }
+
+    // Refresh IDE engine for modified files so diagnostics/completions update
+    if (modifiedFiles.size > 0) {
+      const { ideUpdateFile } = await import('../lib/api')
+      for (const relPath of modifiedFiles) {
+        const absPath = projectPath + '/' + relPath
+        const content = diskFileMap.get(relPath)
+        if (content !== undefined) {
+          ideUpdateFile(absPath, content)
+        }
+      }
+    }
 
     // Refresh git status for all attached projects (inactive ones)
     useMultiProjectStore.getState().refreshAllProjectsGitStatus()

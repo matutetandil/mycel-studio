@@ -32,9 +32,14 @@ export async function executeHint(hint: IDEHint): Promise<boolean> {
   const projectPath = useProjectStore.getState().projectPath
   if (!projectPath) return false
 
+  // Normalize paths — hints from gutter come with absolute paths, from store with relative
+  const prefix = projectPath + '/'
+  const relSource = hint.file.startsWith(prefix) ? hint.file.slice(prefix.length) : hint.file
+  const relDest = hint.suggestedFile.startsWith(prefix) ? hint.suggestedFile.slice(prefix.length) : hint.suggestedFile
+
   const confirmed = await apiConfirm(
     'Move Block',
-    `Move "${hint.blockName}" ${hint.blockType} to ${hint.suggestedFile}?`
+    `Move "${hint.blockName}" ${hint.blockType} to ${relDest}?`
   )
   if (!confirmed) return false
 
@@ -42,10 +47,10 @@ export async function executeHint(hint: IDEHint): Promise<boolean> {
   const app = (window as any).go?.main?.App
   if (!app) return false
 
-  const absSource = projectPath + '/' + hint.file
-  const absDest = projectPath + '/' + hint.suggestedFile
+  const absSource = prefix + relSource
+  const absDest = prefix + relDest
   const projectStore = useProjectStore.getState()
-  const destRelPath = hint.suggestedFile
+  const destRelPath = relDest
 
   try {
     // Check how many blocks the source file has
@@ -53,54 +58,53 @@ export async function executeHint(hint: IDEHint): Promise<boolean> {
     const symbols = await ideSymbolsForFile(absSource)
 
     if (symbols.length <= 1) {
-      // === SINGLE BLOCK: just rename the file ===
-      await app.RenameFile(absSource, absDest)
+      // === SINGLE BLOCK: rename the file (preserves content exactly) ===
+      // Create dest directory if needed
+      const destDir = absDest.substring(0, absDest.lastIndexOf('/'))
+      await app.CreateDirectory(destDir)
 
-      // Update IDE engine
+      // Use projectStore.renameFile which handles disk rename + store update
+      await projectStore.renameFile(relSource, destRelPath)
+
+      // Update IDE engine index
       const { ideRenameFile } = await import('../lib/api')
       await ideRenameFile(absSource, absDest)
 
-      // Update project store: remove old, add new
-      const oldFile = projectStore.files.find(f => f.relativePath === hint.file)
-      const content = oldFile?.content || ''
-      await projectStore.deleteFile(hint.file)
-      projectStore.addFile({
-        name: destRelPath.split('/').pop() || destRelPath,
-        path: destRelPath,
-        relativePath: destRelPath,
-        content,
-        isDirty: false,
-      })
-
       // Update tab: close old, open new
-      closeTabForFile(hint.file, projectPath)
+      closeTabForFile(relSource, projectPath)
       const fileName = destRelPath.split('/').pop() || destRelPath
       useEditorPanelStore.getState().openFile(destRelPath, fileName, undefined, projectPath)
 
     } else {
       // === MULTIPLE BLOCKS: extract this block to new file ===
+      // Read the FULL source content from disk (not from store, which may be stale)
+      const sourceContent = await app.ReadFile(absSource)
+
+      // Use IDE engine to find the exact block range
       const edit = await ideRemoveBlock(absSource, hint.blockType, hint.blockName)
       if (!edit) return false
 
-      // Read source and extract the block content
-      const sourceContent = await app.ReadFile(absSource)
-      const lines = sourceContent.split('\n')
-      const blockLines = lines.slice(edit.range.start.line - 1, edit.range.end.line)
-      const blockContent = blockLines.join('\n').trim()
+      // Extract the block using byte offsets for precision
+      const startOffset = edit.range.start.offset
+      const endOffset = edit.range.end.offset
+      const blockContent = sourceContent.substring(startOffset, endOffset).trim()
 
-      // Remove the block from source
-      const newSourceLines = [...lines]
-      newSourceLines.splice(edit.range.start.line - 1, edit.range.end.line - edit.range.start.line + 1)
-      const newSourceContent = newSourceLines.join('\n').replace(/\n{3,}/g, '\n\n').trim() + '\n'
+      // Remove the block from source using offsets
+      const before = sourceContent.substring(0, startOffset)
+      const after = sourceContent.substring(endOffset)
+      const newSourceContent = (before + after).replace(/\n{3,}/g, '\n\n').trim() + '\n'
 
-      // Write updated source
+      // Write updated source to disk
       await app.WriteFile(absSource, newSourceContent)
       await ideUpdateFile(absSource, newSourceContent)
-      projectStore.updateFile(hint.file, newSourceContent)
+      projectStore.updateFile(relSource, newSourceContent)
 
-      // Write block to destination (append if exists)
+      // Write block to destination (create dir + append if exists)
+      const destDir = absDest.substring(0, absDest.lastIndexOf('/'))
+      await app.CreateDirectory(destDir)
+
       let destContent = ''
-      try { destContent = await app.ReadFile(absDest) } catch { /* doesn't exist */ }
+      try { destContent = await app.ReadFile(absDest) } catch { /* doesn't exist yet */ }
       const newDestContent = destContent
         ? destContent.trim() + '\n\n' + blockContent + '\n'
         : blockContent + '\n'
