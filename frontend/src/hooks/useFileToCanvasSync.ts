@@ -1,17 +1,18 @@
-// Syncs HCL file edits back to the canvas (file = source of truth)
-// When a user edits an HCL file in Monaco, re-parses ALL project HCL files
+// Syncs .mycel file edits back to the canvas (file = source of truth)
+// When a user edits a .mycel file in Monaco, re-parses the project via IDE engine
 // and updates the canvas nodes/edges to reflect the changes.
 
 import { useEffect, useRef } from 'react'
-import { useProjectStore, type ProjectFile } from '../stores/useProjectStore'
-import { apiParse } from '../lib/api'
+import { useProjectStore } from '../stores/useProjectStore'
+import { ideUpdateFile, ideParseProject } from '../lib/api'
 import { parseProjectToCanvas } from './useSync'
 import { useStudioStore } from '../stores/useStudioStore'
-import { isSuppressingFileToCanvas, suppressCanvasToFile } from './useCanvasToFileSync'
+import { suppressCanvasToFile } from './useCanvasToFileSync'
 
 export function useFileToCanvasSync() {
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const parsingRef = useRef(false)
+  const busyRef = useRef(false)
+  const pendingRef = useRef(false)
 
   useEffect(() => {
     const unsub = useProjectStore.subscribe((state, prev) => {
@@ -19,22 +20,19 @@ export function useFileToCanvasSync() {
       if (state.files === prev.files) return
       if (!state.projectName) return
 
-      // Check if any HCL file content actually changed
-      const changedHcl = state.files.some(file => {
-        if (!file.name.endsWith('.hcl')) return false
+      // Check if any .mycel file content actually changed and is dirty
+      const changedMycel = state.files.some(file => {
+        if (!file.name.endsWith('.mycel')) return false
         const prevFile = prev.files.find(f => f.relativePath === file.relativePath)
         return prevFile && prevFile.content !== file.content && file.isDirty
       })
 
-      if (!changedHcl) return
-
-      // Skip if the change came from canvas→file sync (avoid loop)
-      if (isSuppressingFileToCanvas()) return
+      if (!changedMycel) return
 
       // Debounce re-parse (800ms to avoid parsing on every keystroke)
       if (debounceRef.current) clearTimeout(debounceRef.current)
       debounceRef.current = setTimeout(() => {
-        reparseProject(state.files)
+        reparseProject()
       }, 800)
     })
 
@@ -44,16 +42,31 @@ export function useFileToCanvasSync() {
     }
   }, [])
 
-  async function reparseProject(files: ProjectFile[]) {
-    if (parsingRef.current) return
-    parsingRef.current = true
+  async function reparseProject() {
+    // Pending queue pattern: if busy, mark pending and re-run after
+    if (busyRef.current) {
+      pendingRef.current = true
+      return
+    }
+    busyRef.current = true
 
     try {
-      const hclFiles = files.filter(f => f.name.endsWith('.hcl'))
-      if (hclFiles.length === 0) return
+      // Read fresh state inside the callback, not from subscribe closure
+      const { files, projectPath } = useProjectStore.getState()
+      if (!projectPath) return
 
-      const fileEntries = hclFiles.map(f => ({ path: f.relativePath, content: f.content }))
-      const result = await apiParse({ files: fileEntries })
+      const mycelFiles = files.filter(f => f.name.endsWith('.mycel'))
+      if (mycelFiles.length === 0) return
+
+      // Update IDE engine with changed files
+      for (const file of mycelFiles) {
+        if (file.isDirty) {
+          await ideUpdateFile(`${projectPath}/${file.relativePath}`, file.content)
+        }
+      }
+
+      // Re-parse entire project via IDE engine
+      const result = await ideParseProject(projectPath)
 
       if (result.success && result.project) {
         // Suppress canvas→file sync to avoid loop (file→canvas→file)
@@ -83,7 +96,12 @@ export function useFileToCanvasSync() {
     } catch (err) {
       console.error('File→Canvas sync error:', err)
     } finally {
-      parsingRef.current = false
+      busyRef.current = false
+      // If changes arrived while we were busy, re-run
+      if (pendingRef.current) {
+        pendingRef.current = false
+        reparseProject()
+      }
     }
   }
 }

@@ -257,8 +257,9 @@ export function convertProjectToNodes(project: ParsedProject): {
       hclFile: conn.sourceFile || undefined,
     }
 
+    const connId = conn.sourceFile ? `connector-${conn.sourceFile}` : `connector-${conn.name}`
     newNodes.push({
-      id: `connector-${conn.name}`,
+      id: connId,
       type: 'connector',
       position,
       data: nodeData,
@@ -322,7 +323,7 @@ export function convertProjectToNodes(project: ParsedProject): {
       } : undefined,
     }
 
-    const flowNodeId = `flow-${flow.name}`
+    const flowNodeId = flow.sourceFile ? `flow-${flow.sourceFile}` : `flow-${flow.name}`
     newNodes.push({
       id: flowNodeId,
       type: 'flow',
@@ -332,7 +333,9 @@ export function convertProjectToNodes(project: ParsedProject): {
 
     // Create edges from connector to flow
     if (flow.from?.connector) {
-      const sourceId = `connector-${flow.from.connector}`
+      // Find the connector node to get its stable ID
+      const fromConn = project.connectors.find(c => c.name === flow.from!.connector)
+      const sourceId = fromConn?.sourceFile ? `connector-${fromConn.sourceFile}` : `connector-${flow.from.connector}`
       newEdges.push({
         id: `edge-${sourceId}-${flowNodeId}`,
         source: sourceId,
@@ -342,7 +345,8 @@ export function convertProjectToNodes(project: ParsedProject): {
 
     // Create edges from flow to connector
     if (flow.to?.connector) {
-      const targetId = `connector-${flow.to.connector}`
+      const toConn = project.connectors.find(c => c.name === flow.to!.connector)
+      const targetId = toConn?.sourceFile ? `connector-${toConn.sourceFile}` : `connector-${flow.to.connector}`
       newEdges.push({
         id: `edge-${flowNodeId}-${targetId}`,
         source: flowNodeId,
@@ -367,7 +371,7 @@ export function convertProjectToNodes(project: ParsedProject): {
       fields,
     }
     newNodes.push({
-      id: `type-${typ.name}`,
+      id: typ.sourceFile ? `type-${typ.sourceFile}` : `type-${typ.name}`,
       type: 'type',
       position,
       data: nodeData,
@@ -385,7 +389,7 @@ export function convertProjectToNodes(project: ParsedProject): {
       fields: tr.mappings,
     }
     newNodes.push({
-      id: `transform-${tr.name}`,
+      id: tr.sourceFile ? `transform-${tr.sourceFile}` : `transform-${tr.name}`,
       type: 'transform',
       position,
       data: nodeData,
@@ -408,7 +412,7 @@ export function convertProjectToNodes(project: ParsedProject): {
       message: val.message,
     }
     newNodes.push({
-      id: `validator-${val.name}`,
+      id: val.sourceFile ? `validator-${val.sourceFile}` : `validator-${val.name}`,
       type: 'validator',
       position,
       data: nodeData,
@@ -433,7 +437,7 @@ export function convertProjectToNodes(project: ParsedProject): {
       response: asp.response,
     }
     newNodes.push({
-      id: `aspect-${asp.name}`,
+      id: asp.sourceFile ? `aspect-${asp.sourceFile}` : `aspect-${asp.name}`,
       type: 'aspect',
       position,
       data: nodeData,

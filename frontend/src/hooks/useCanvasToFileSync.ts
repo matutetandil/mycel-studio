@@ -8,10 +8,8 @@ import { useStudioStore } from '../stores/useStudioStore'
 import { generateNodeHCL, replaceHclBlock, getHclBlockType, toIdentifier } from '../utils/hclGenerator'
 import type { ConnectorNodeData, FlowNodeData } from '../types'
 
-// Shared suppression flags to prevent sync loops between canvas→file and file→canvas
-let _suppressFileToCanvas = false
+// Suppression flag to prevent file→canvas→file loop
 let _suppressCanvasToFile = false
-export function isSuppressingFileToCanvas(): boolean { return _suppressFileToCanvas }
 export function suppressCanvasToFile(duration = 1000) {
   _suppressCanvasToFile = true
   setTimeout(() => { _suppressCanvasToFile = false }, duration)
@@ -76,52 +74,49 @@ export function useCanvasToFileSync() {
 
 function syncNodesToFiles(changes: ChangedNodeInfo[]) {
   const { nodes, edges } = useStudioStore.getState()
-  const { files, updateFile } = useProjectStore.getState()
+  const { files } = useProjectStore.getState()
 
-  // Suppress file→canvas sync BEFORE any updateFile calls,
-  // because Zustand subscribers fire synchronously inside set()
-  _suppressFileToCanvas = true
+  for (const change of changes) {
+    const node = nodes.find(n => n.id === change.id)
+    if (!node || !node.type) continue
 
-  try {
-    for (const change of changes) {
-      const node = nodes.find(n => n.id === change.id)
-      if (!node || !node.type) continue
+    const data = node.data as ConnectorNodeData | FlowNodeData
+    const hclFile = (data as Record<string, unknown>).hclFile as string | undefined
+    if (!hclFile) continue // No source file — it's a new node, skip
 
-      const data = node.data as ConnectorNodeData | FlowNodeData
-      const hclFile = (data as Record<string, unknown>).hclFile as string | undefined
-      if (!hclFile) continue // No source file — it's a new node, skip
+    const blockType = getHclBlockType(node.type)
+    if (!blockType) continue
 
-      const blockType = getHclBlockType(node.type)
-      if (!blockType) continue
+    const newHcl = generateNodeHCL(node, nodes, edges)
+    if (!newHcl) continue
 
-      const newHcl = generateNodeHCL(node, nodes, edges)
-      if (!newHcl) continue
+    // Find the file in the project
+    const file = files.find(f => f.relativePath === hclFile)
+    if (!file) continue
 
-      // Find the file in the project
-      const file = files.find(f => f.relativePath === hclFile)
-      if (!file) continue
+    // Try current name first, then previous name (handles renames)
+    const currentName = toIdentifier(data.label)
+    const prevName = toIdentifier(change.prevLabel)
 
-      // Try current name first, then previous name (handles renames)
-      const currentName = toIdentifier(data.label)
-      const prevName = toIdentifier(change.prevLabel)
-
-      let updatedContent = replaceHclBlock(file.content, blockType, currentName, newHcl)
-      if (updatedContent === null && prevName !== currentName) {
-        // Block was renamed — find with old name
-        updatedContent = replaceHclBlock(file.content, blockType, prevName, newHcl)
-      }
-
-      if (updatedContent === null) {
-        console.warn(`Canvas→File sync: block ${blockType} "${currentName}" not found in ${hclFile}`)
-        continue
-      }
-
-      if (updatedContent !== file.content) {
-        updateFile(hclFile, updatedContent)
-      }
+    let updatedContent = replaceHclBlock(file.content, blockType, currentName, newHcl)
+    if (updatedContent === null && prevName !== currentName) {
+      // Block was renamed — find with old name
+      updatedContent = replaceHclBlock(file.content, blockType, prevName, newHcl)
     }
-  } finally {
-    // Release suppression after debounce window of file→canvas sync (800ms)
-    setTimeout(() => { _suppressFileToCanvas = false }, 1200)
+
+    if (updatedContent === null) {
+      console.warn(`Canvas→File sync: block ${blockType} "${currentName}" not found in ${hclFile}`)
+      continue
+    }
+
+    if (updatedContent !== file.content) {
+      // Update file content with isDirty: false to prevent file→canvas re-trigger
+      // (file→canvas only fires when isDirty is true)
+      useProjectStore.setState((state) => ({
+        files: state.files.map((f) =>
+          f.relativePath === hclFile ? { ...f, content: updatedContent!, isDirty: false } : f
+        ),
+      }))
+    }
   }
 }
