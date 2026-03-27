@@ -79,6 +79,14 @@ async function refreshFiles() {
     // Also refresh git status
     useProjectStore.getState().refreshGitStatus()
 
+    // Notify IDE engine about deleted files
+    if (deletedPaths.size > 0) {
+      const { ideRemoveFile } = await import('../lib/api')
+      for (const relPath of deletedPaths) {
+        ideRemoveFile(projectPath + '/' + relPath)
+      }
+    }
+
     // Refresh hints (external changes may affect project structure)
     if (newFiles.length > 0 || deletedPaths.size > 0) {
       import('../stores/useHintsStore').then(({ useHintsStore }) => {
@@ -97,6 +105,8 @@ async function refreshFiles() {
         }
       }
     }
+
+    // Canvas sync is handled by useFileToCanvasSync (reacts to store file changes)
 
     // Refresh git status for all attached projects (inactive ones)
     useMultiProjectStore.getState().refreshAllProjectsGitStatus()

@@ -15,6 +15,7 @@ import (
 func (a *App) IDEInit(projectPath string) string {
 	reg := connectors.FullRegistry()
 	a.ideEngine = ide.NewEngine(projectPath, ide.WithRegistry(reg))
+	a.ideProjectPath = projectPath
 	diags := a.ideEngine.FullReindex()
 	return toJSON(diags)
 }
@@ -255,13 +256,12 @@ func (a *App) IDEGetIndex() string {
 // in the format expected by parseProjectToCanvas on the frontend.
 // This replaces the old ParseHCL binding.
 func (a *App) IDEParseProject(projectPath string) string {
-	// Initialize or reuse engine
-	if a.ideEngine == nil {
+	// Create new engine if none exists or project path changed
+	if a.ideEngine == nil || a.ideProjectPath != projectPath {
 		reg := connectors.FullRegistry()
 		a.ideEngine = ide.NewEngine(projectPath, ide.WithRegistry(reg))
-		a.ideEngine.FullReindex()
+		a.ideProjectPath = projectPath
 	}
-
 	index := a.ideEngine.GetIndex()
 	result := map[string]any{
 		"success": true,

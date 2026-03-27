@@ -19,6 +19,7 @@ type App struct {
 	ctx              context.Context
 	parser           *studioparser.Parser
 	ideEngine        *ide.Engine
+	ideProjectPath   string
 	ptyManager       *PTYManager
 	debugClient      *DebugClient
 	updater          *Updater

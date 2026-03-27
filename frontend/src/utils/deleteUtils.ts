@@ -4,7 +4,7 @@
 import { useStudioStore } from '../stores/useStudioStore'
 import { useProjectStore } from '../stores/useProjectStore'
 import { useEditorPanelStore, scopedPath, unscopePath } from '../stores/useEditorPanelStore'
-import { ideRemoveBlock, ideUpdateFile, ideSymbolsForFile, isWailsRuntime, apiConfirm } from '../lib/api'
+import { ideRemoveBlock, ideRemoveFile, ideUpdateFile, ideSymbolsForFile, isWailsRuntime, apiConfirm } from '../lib/api'
 import { toIdentifier } from './hclGenerator'
 import type { ConnectorNodeData, FlowNodeData, StudioNode } from '../types'
 
@@ -105,6 +105,10 @@ export async function deleteCanvasNode(node: StudioNode): Promise<boolean> {
     useStudioStore.getState().removeNode(node.id)
     await useProjectStore.getState().deleteFile(hclFile)
     closeTabForFile(hclFile, projectPath)
+    // Notify IDE engine so it removes the file from its index
+    if (isWailsRuntime() && projectPath) {
+      await ideRemoveFile(projectPath + '/' + hclFile)
+    }
   } else {
     // Multiple blocks in file — remove only this block
     const confirmed = await apiConfirm(
@@ -117,24 +121,17 @@ export async function deleteCanvasNode(node: StudioNode): Promise<boolean> {
       const absPath = projectPath + '/' + hclFile
       const edit = await ideRemoveBlock(absPath, blockType, blockName)
       if (edit) {
-        // Apply the edit to the file content
-        const file = useProjectStore.getState().files.find(f => f.relativePath === hclFile)
-        if (file) {
-          const lines = file.content.split('\n')
-          const startLine = edit.range.start.line - 1 // 0-based
-          const endLine = edit.range.end.line // exclusive
-          lines.splice(startLine, endLine - startLine, ...edit.newText.split('\n').filter(l => l !== ''))
-          const newContent = lines.join('\n')
+        // Read fresh content from disk and use byte offsets for precision
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const app = (window as any).go?.main?.App
+        const sourceContent = app?.ReadFile ? await app.ReadFile(absPath) : ''
+        if (sourceContent) {
+          const before = sourceContent.substring(0, edit.range.start.offset)
+          const after = sourceContent.substring(edit.range.end.offset)
+          const newContent = (before + after).replace(/\n{3,}/g, '\n\n').trim() + '\n'
+
           useProjectStore.getState().updateFile(hclFile, newContent)
-
-          // Write to disk
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const app = (window as any).go?.main?.App
-          if (app?.WriteFile) {
-            await app.WriteFile(projectPath + '/' + hclFile, newContent)
-          }
-
-          // Update IDE engine
+          if (app?.WriteFile) await app.WriteFile(absPath, newContent)
           await ideUpdateFile(absPath, newContent)
         }
       }
@@ -183,8 +180,17 @@ export async function deleteFileFromExplorer(filePath: string): Promise<boolean>
   // Delete the file
   await useProjectStore.getState().deleteFile(filePath)
 
+  // Notify IDE engine so diagnostics update
+  if (isWailsRuntime() && projectPath) {
+    await ideRemoveFile(projectPath + '/' + filePath)
+  }
+
   // Close editor tab
   closeTabForFile(filePath, projectPath)
+
+  // Refresh diagnostics
+  const { useDiagnosticsStore } = await import('../stores/useDiagnosticsStore')
+  useDiagnosticsStore.getState().refreshAll()
 
   return true
 }

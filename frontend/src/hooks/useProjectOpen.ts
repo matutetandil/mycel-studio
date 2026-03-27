@@ -113,9 +113,39 @@ export function useProjectOpen() {
     }
     useMultiProjectStore.setState({ rootProjectId: null })
 
+    // Close project (clears files, editor tabs, canvas)
     useProjectStore.getState().closeProject()
     clearCurrentProjectUI()
 
+    // Reset all auxiliary stores so no stale state leaks into the new project
+    const { useGitStore } = await import('../stores/useGitStore')
+    useGitStore.setState({ commits: [], branches: [], selectedCommit: null, commitFiles: [], conflicts: [], filterFile: null })
+
+    const { useDiagnosticsStore } = await import('../stores/useDiagnosticsStore')
+    useDiagnosticsStore.setState({ files: {} })
+
+    const { useHintsStore } = await import('../stores/useHintsStore')
+    useHintsStore.setState({ hints: [], bannerDismissed: false })
+
+    const { useDebugStore } = await import('../stores/useDebugStore')
+    const debugState = useDebugStore.getState()
+    if (debugState.status === 'connected') debugState.disconnect()
+    useDebugStore.setState({
+      breakpoints: new Map(), verifiedBreakpoints: new Set(), rejectedBreakpoints: new Set(),
+      stoppedAt: null, variables: null, threads: [], events: [], eventCounter: 0,
+    })
+
+    // Close all terminal sessions
+    const { useTerminalStore } = await import('../stores/useTerminalStore')
+    const termStore = useTerminalStore.getState()
+    for (const t of [...termStore.terminals]) {
+      termStore.closeTerminal(t.id)
+    }
+
+    const { useOutputStore } = await import('../stores/useOutputStore')
+    useOutputStore.setState({ entries: [] })
+
+    // Open the new project (IDE engine will reinitialize for the new path)
     const success = await useProjectStore.getState().openProjectAtPath(pendingProject.path)
     if (success) registerCurrentAsProject()
 
