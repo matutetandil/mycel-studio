@@ -261,6 +261,7 @@ func (a *App) IDEParseProject(projectPath string) string {
 		reg := connectors.FullRegistry()
 		a.ideEngine = ide.NewEngine(projectPath, ide.WithRegistry(reg))
 		a.ideProjectPath = projectPath
+		a.ideEngine.FullReindex()
 	}
 	index := a.ideEngine.GetIndex()
 	result := map[string]any{
