@@ -120,6 +120,7 @@ interface DebugState {
   consume: (connector: string) => Promise<void>
   setBreakpoints: (flow: string, specs: BreakpointSpec[]) => Promise<void>
   toggleBreakpoint: (flow: string, stage: string, ruleIndex: number, condition?: string) => Promise<void>
+  editBreakpointCondition: (flow: string, stage: string, ruleIndex: number, condition: string) => Promise<void>
   clearAllBreakpoints: () => Promise<void>
   debugContinue: (threadId?: string) => Promise<void>
   debugNext: (threadId?: string) => Promise<void>
@@ -406,6 +407,17 @@ export const useDebugStore = create<DebugState>((set, get) => ({
       newSpecs = [...current, { stage, ruleIndex, ...(condition ? { condition } : {}) }]
     }
 
+    await get().setBreakpoints(flow, newSpecs)
+  },
+
+  editBreakpointCondition: async (flow: string, stage: string, ruleIndex: number, condition: string) => {
+    const current = get().breakpoints.get(flow) || []
+    const newSpecs = current.map(b => {
+      if (b.stage === stage && b.ruleIndex === ruleIndex) {
+        return condition ? { ...b, condition } : { stage: b.stage, ruleIndex: b.ruleIndex }
+      }
+      return b
+    })
     await get().setBreakpoints(flow, newSpecs)
   },
 

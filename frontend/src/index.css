@@ -144,6 +144,83 @@ body {
   background: rgba(239, 68, 68, 0.08);
 }
 
+/* Conditional breakpoint: orange circle replacing the line number */
+.debug-bp-conditional-linenum {
+  color: transparent !important;
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: flex-end;
+}
+.debug-bp-conditional-linenum::after {
+  content: '';
+  width: 14px;
+  height: 14px;
+  background: #f59e0b;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+/* Verified conditional breakpoint: orange circle with white checkmark */
+.debug-bp-conditional-verified-linenum {
+  color: transparent !important;
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: flex-end;
+  position: relative;
+}
+.debug-bp-conditional-verified-linenum::before {
+  content: '';
+  position: absolute;
+  right: 0;
+  width: 14px;
+  height: 14px;
+  background: #f59e0b;
+  border-radius: 50%;
+}
+.debug-bp-conditional-verified-linenum::after {
+  content: '✓';
+  position: relative;
+  z-index: 1;
+  width: 14px;
+  font-size: 10px;
+  font-weight: bold;
+  color: white;
+  text-align: center;
+  line-height: 14px;
+}
+
+/* Stopped at conditional breakpoint: orange circle + yellow arrow */
+.debug-stopped-conditional-bp-linenum {
+  color: transparent !important;
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: flex-end;
+  position: relative;
+}
+.debug-stopped-conditional-bp-linenum::before {
+  content: '';
+  position: absolute;
+  right: 0;
+  width: 14px;
+  height: 14px;
+  background: #f59e0b;
+  border-radius: 50%;
+}
+.debug-stopped-conditional-bp-linenum::after {
+  content: '';
+  position: relative;
+  z-index: 1;
+  width: 10px;
+  height: 10px;
+  background: #fbbf24;
+  clip-path: polygon(0% 0%, 100% 50%, 0% 100%);
+  flex-shrink: 0;
+}
+
+.debug-conditional-breakpoint-line {
+  background: rgba(245, 158, 11, 0.08);
+}
+
 /* Hover hint: faded red circle on breakpointable lines */
 .debug-bp-hover-linenum {
   color: transparent !important;

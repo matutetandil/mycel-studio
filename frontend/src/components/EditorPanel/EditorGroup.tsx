@@ -7,25 +7,84 @@ import { computeGutterItems, toggleBookmark, getBookmarks, type GutterItem } fro
 import GutterPanel from './GutterPanel'
 
 // Simple DOM-based context menu for gutter right-click
-function showGutterMenu(x: number, y: number, items: Array<{ label: string; action: () => void }>) {
-  // Remove existing menu
+interface GutterMenuItem {
+  label: string
+  action: (value?: string) => void
+  // When set, clicking the item opens a floating input instead of firing action directly
+  inputPrompt?: { placeholder: string; defaultValue?: string }
+}
+
+function showConditionInput(x: number, y: number, placeholder: string, defaultValue: string, onSubmit: (value: string) => void) {
+  document.getElementById('gutter-condition-input')?.remove()
+  const container = document.createElement('div')
+  container.id = 'gutter-condition-input'
+  container.style.cssText = `position:fixed;left:${x}px;top:${y}px;z-index:99999;background:#262626;border:1px solid #818cf8;border-radius:6px;padding:8px;box-shadow:0 4px 12px rgba(0,0,0,0.5);min-width:280px;`
+
+  const label = document.createElement('div')
+  label.textContent = 'Breakpoint condition (CEL):'
+  label.style.cssText = 'font-size:11px;color:#a3a3a3;margin-bottom:6px;'
+  container.appendChild(label)
+
+  const input = document.createElement('input')
+  input.type = 'text'
+  input.value = defaultValue
+  input.placeholder = placeholder
+  input.style.cssText = 'width:100%;padding:5px 8px;font-size:12px;font-family:monospace;background:#1a1a1a;border:1px solid #525252;border-radius:4px;color:#e5e5e5;outline:none;box-sizing:border-box;'
+  input.onfocus = () => { input.style.borderColor = '#818cf8' }
+  input.onblur = () => { input.style.borderColor = '#525252' }
+  container.appendChild(input)
+
+  const hint = document.createElement('div')
+  hint.textContent = 'Enter to confirm · Escape to cancel'
+  hint.style.cssText = 'font-size:10px;color:#525252;margin-top:4px;'
+  container.appendChild(hint)
+
+  const close = () => { container.remove(); document.removeEventListener('mousedown', outsideClose) }
+  const outsideClose = (e: MouseEvent) => { if (!container.contains(e.target as Node)) close() }
+
+  input.onkeydown = (e: KeyboardEvent) => {
+    if (e.key === 'Enter') { onSubmit(input.value.trim()); close() }
+    if (e.key === 'Escape') close()
+    e.stopPropagation()
+  }
+
+  document.body.appendChild(container)
+  // Focus after appending to DOM
+  requestAnimationFrame(() => { input.focus(); input.select() })
+  setTimeout(() => document.addEventListener('mousedown', outsideClose), 10)
+}
+
+function showGutterMenu(x: number, y: number, items: GutterMenuItem[]) {
   document.getElementById('gutter-ctx-menu')?.remove()
+  document.getElementById('gutter-condition-input')?.remove()
   const menu = document.createElement('div')
   menu.id = 'gutter-ctx-menu'
-  menu.style.cssText = `position:fixed;left:${x}px;top:${y}px;z-index:99999;background:#262626;border:1px solid #404040;border-radius:6px;padding:4px 0;box-shadow:0 4px 12px rgba(0,0,0,0.5);min-width:180px;`
+  menu.style.cssText = `position:fixed;left:${x}px;top:${y}px;z-index:99999;background:#262626;border:1px solid #404040;border-radius:6px;padding:4px 0;box-shadow:0 4px 12px rgba(0,0,0,0.5);min-width:220px;`
+
+  const closeMenu = () => { menu.remove(); document.removeEventListener('mousedown', outsideClose) }
+  const outsideClose = (e: MouseEvent) => { if (!menu.contains(e.target as Node)) closeMenu() }
+
   for (const item of items) {
     const btn = document.createElement('button')
     btn.textContent = item.label
     btn.style.cssText = 'display:block;width:100%;text-align:left;padding:5px 12px;font-size:12px;color:#d4d4d4;background:none;border:none;cursor:pointer;'
     btn.onmouseenter = () => { btn.style.background = '#3f3f46' }
     btn.onmouseleave = () => { btn.style.background = 'none' }
-    btn.onclick = () => { item.action(); menu.remove() }
+    btn.onclick = () => {
+      closeMenu()
+      if (item.inputPrompt) {
+        // Open a separate floating input at the same position
+        showConditionInput(x, y, item.inputPrompt.placeholder, item.inputPrompt.defaultValue || '', (value) => {
+          item.action(value)
+        })
+      } else {
+        item.action()
+      }
+    }
     menu.appendChild(btn)
   }
   document.body.appendChild(menu)
-  // Close on click outside
-  const close = (e: MouseEvent) => { if (!menu.contains(e.target as Node)) { menu.remove(); document.removeEventListener('mousedown', close) } }
-  setTimeout(() => document.addEventListener('mousedown', close), 0)
+  setTimeout(() => document.addEventListener('mousedown', outsideClose), 0)
 }
 import { setHintExecutor } from '../../monaco/ideCodeActionProvider'
 import { useEditorPanelStore, unscopePath } from '../../stores/useEditorPanelStore'
@@ -519,28 +578,41 @@ export default function EditorGroupView({ groupId, isSecondary }: EditorGroupPro
 
     const newDecorations: editor.IModelDeltaDecoration[] = []
 
-    // Breakpoint decorations — red circle replacing line number
-    // Verified: checkmark, Rejected: exclamation, Default: plain red circle
+    // Breakpoint decorations — red/orange circle replacing line number
+    // Red = unconditional, Orange = conditional (has CEL expression)
+    // Verified: checkmark, Rejected: exclamation, Default: plain circle
     for (const line of breakpointLines) {
       const info = lineStageMap.get(line)
       const isStopped = stoppedLine === line
-      let lineNumClass = 'debug-bp-linenum'
+      // Check if this breakpoint has a condition
+      // Prefer exact ruleIndex match, fallback to stage-level (-1) only if no exact match
+      const flowBps = info ? debugBreakpoints.get(info.flow) : undefined
+      const bpSpec = flowBps?.find(b => b.stage === info!.stage && b.ruleIndex === info!.ruleIndex)
+        || flowBps?.find(b => b.stage === info!.stage && b.ruleIndex === -1)
+      const isConditional = !!bpSpec?.condition
+
+      let lineNumClass: string
       if (isStopped) {
-        lineNumClass = 'debug-stopped-bp-linenum'
+        lineNumClass = isConditional ? 'debug-stopped-conditional-bp-linenum' : 'debug-stopped-bp-linenum'
       } else if (info) {
         const key = breakpointKey(info.flow, info.stage, info.ruleIndex)
         if (rejectedBreakpoints.has(key)) {
           lineNumClass = 'debug-bp-rejected-linenum'
         } else if (verifiedBreakpoints.has(key)) {
-          lineNumClass = 'debug-bp-verified-linenum'
+          lineNumClass = isConditional ? 'debug-bp-conditional-verified-linenum' : 'debug-bp-verified-linenum'
+        } else {
+          lineNumClass = isConditional ? 'debug-bp-conditional-linenum' : 'debug-bp-linenum'
         }
+      } else {
+        lineNumClass = isConditional ? 'debug-bp-conditional-linenum' : 'debug-bp-linenum'
       }
+
       newDecorations.push({
         range: { startLineNumber: line, startColumn: 1, endLineNumber: line, endColumn: 1 },
         options: {
           isWholeLine: true,
           lineNumberClassName: lineNumClass,
-          className: isStopped ? 'debug-stopped-line' : 'debug-breakpoint-line',
+          className: isStopped ? 'debug-stopped-line' : (isConditional ? 'debug-conditional-breakpoint-line' : 'debug-breakpoint-line'),
         },
       })
     }
@@ -558,7 +630,7 @@ export default function EditorGroupView({ groupId, isSecondary }: EditorGroupPro
     }
 
     decorationsRef.current = ed.deltaDecorations(decorationsRef.current, newDecorations)
-  }, [breakpointLines, stoppedLine, lineStageMap, verifiedBreakpoints, rejectedBreakpoints])
+  }, [breakpointLines, stoppedLine, lineStageMap, verifiedBreakpoints, rejectedBreakpoints, debugBreakpoints])
 
   // Apply hover decoration — faded red circle on breakpointable line
   const applyHoverDecoration = useCallback(() => {
@@ -873,7 +945,7 @@ export default function EditorGroupView({ groupId, isSecondary }: EditorGroupPro
                     setTimeout(refreshGutter, 1000)
                   })
 
-                  // Context menu on line numbers — bookmark/blame
+                  // Context menu on line numbers — breakpoints, bookmark, blame
                   monacoEditor.onContextMenu((e) => {
                     if (e.target.type === 3 /* GUTTER_LINE_NUMBERS */) {
                       const line = e.target.position?.lineNumber
@@ -881,12 +953,73 @@ export default function EditorGroupView({ groupId, isSecondary }: EditorGroupPro
                         e.event.preventDefault()
                         e.event.stopPropagation()
                         const hasBookmark = getBookmarks(activeFile.path).has(line)
-                        showGutterMenu(e.event.posx, e.event.posy, [
-                          {
-                            label: hasBookmark ? 'Remove Bookmark' : 'Add Bookmark',
-                            action: () => { toggleBookmark(activeFile.path, line); refreshGutter() },
-                          },
-                          {
+                        const stageInfo = lineStageMapRef.current.get(line)
+                        const flowBpsCtx = stageInfo ? (useDebugStore.getState().breakpoints.get(stageInfo.flow) || []) : []
+                        // Prefer exact ruleIndex match, fallback to stage-level
+                        const existingBp = stageInfo
+                          ? (flowBpsCtx.find(b => b.stage === stageInfo.stage && b.ruleIndex === stageInfo.ruleIndex)
+                            || flowBpsCtx.find(b => b.stage === stageInfo.stage && b.ruleIndex === -1))
+                          : undefined
+
+                        const menuItems: GutterMenuItem[] = []
+
+                        // Breakpoint items (only for breakpointable lines)
+                        if (stageInfo) {
+                          const bpRuleIndex = existingBp ? existingBp.ruleIndex : stageInfo.ruleIndex
+
+                          if (existingBp && existingBp.condition) {
+                            // Orange (conditional) breakpoint: Edit Condition, Remove Condition, Remove Breakpoint
+                            menuItems.push({
+                              label: 'Edit Condition...',
+                              inputPrompt: { placeholder: 'CEL expression', defaultValue: existingBp.condition },
+                              action: (value) => {
+                                if (value) useDebugStore.getState().editBreakpointCondition(stageInfo.flow, stageInfo.stage, bpRuleIndex, value)
+                              },
+                            })
+                            menuItems.push({
+                              label: 'Remove Condition',
+                              action: () => useDebugStore.getState().editBreakpointCondition(stageInfo.flow, stageInfo.stage, bpRuleIndex, ''),
+                            })
+                            menuItems.push({
+                              label: 'Remove Breakpoint',
+                              action: () => useDebugStore.getState().toggleBreakpoint(stageInfo.flow, stageInfo.stage, bpRuleIndex),
+                            })
+                          } else if (existingBp) {
+                            // Red (unconditional) breakpoint: Add Condition, Remove Breakpoint
+                            menuItems.push({
+                              label: 'Add Condition...',
+                              inputPrompt: { placeholder: 'CEL expression, e.g. input.status == "active"' },
+                              action: (value) => {
+                                if (value) useDebugStore.getState().editBreakpointCondition(stageInfo.flow, stageInfo.stage, bpRuleIndex, value)
+                              },
+                            })
+                            menuItems.push({
+                              label: 'Remove Breakpoint',
+                              action: () => useDebugStore.getState().toggleBreakpoint(stageInfo.flow, stageInfo.stage, bpRuleIndex),
+                            })
+                          } else {
+                            // No breakpoint: Add Breakpoint, Add Conditional Breakpoint
+                            menuItems.push({
+                              label: 'Add Breakpoint',
+                              action: () => useDebugStore.getState().toggleBreakpoint(stageInfo.flow, stageInfo.stage, stageInfo.ruleIndex),
+                            })
+                            menuItems.push({
+                              label: 'Add Conditional Breakpoint...',
+                              inputPrompt: { placeholder: 'CEL expression, e.g. input.email != ""' },
+                              action: (value) => {
+                                if (!value) return
+                                useDebugStore.getState().toggleBreakpoint(stageInfo.flow, stageInfo.stage, stageInfo.ruleIndex, value)
+                              },
+                            })
+                          }
+                        }
+
+                        // Separator + other items
+                        menuItems.push({
+                          label: hasBookmark ? 'Remove Bookmark' : 'Add Bookmark',
+                          action: () => { toggleBookmark(activeFile.path, line); refreshGutter() },
+                        })
+                        menuItems.push({
                             label: blameMapRef.current[activeFile.path] ? 'Hide Git Blame' : 'Annotate with Git Blame',
                             action: async () => {
                               if (blameMapRef.current[activeFile.path]) {
@@ -897,12 +1030,9 @@ export default function EditorGroupView({ groupId, isSecondary }: EditorGroupPro
                               const wailsApp = (window as any).go?.main?.App
                               if (!wailsApp?.GetGitBlame) return
                               try {
-                                // Use fresh activeFile path from the current context
                                 const currentPath = activeFile?.path || ''
-                                wailsApp.DebugLog?.(`GetGitBlame: pp=${pp}, path=${currentPath}`)
                                 const json = await wailsApp.GetGitBlame(pp, currentPath)
                                 const data = JSON.parse(json)
-                                wailsApp.DebugLog?.(`GetGitBlame result: ${data?.length || 0} lines`)
                                 if (!data || data.length === 0) {
                                   alert('File is not tracked by git yet.')
                                 } else {
@@ -912,8 +1042,9 @@ export default function EditorGroupView({ groupId, isSecondary }: EditorGroupPro
                                 alert('Failed to get blame.')
                               }
                             },
-                          },
-                        ])
+                        })
+
+                        showGutterMenu(e.event.posx, e.event.posy, menuItems)
                       }
                     }
                   })
@@ -956,8 +1087,9 @@ export default function EditorGroupView({ groupId, isSecondary }: EditorGroupPro
               monacoEditor.onDidBlurEditorText(() => {
                 triggerAutoSave()
               })
-              // Breakpoint click handler on line numbers (uses ref for latest data)
+              // Breakpoint click handler on line numbers — LEFT click only (uses ref for latest data)
               monacoEditor.onMouseDown((e) => {
+                if (e.event.rightButton) return // right-click handled by onContextMenu
                 if (e.target.type === 3 /* GUTTER_LINE_NUMBERS */) {
                   const lineNumber = e.target.position?.lineNumber
                   if (lineNumber) {
