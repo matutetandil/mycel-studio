@@ -49,17 +49,30 @@ function BookmarkIcon() {
   )
 }
 
-function BlamePopup({ blame, anchorRect }: {
+function BlamePopup({ blame, anchorRect, onEnter, onLeave }: {
   blame: { hash: string; author: string; date: string; summary?: string }
   anchorRect: DOMRect
+  onEnter?: () => void
+  onLeave?: () => void
 }) {
   return createPortal(
     <div
       className="fixed z-[99999] bg-neutral-800 border border-neutral-600 rounded-md shadow-xl p-3 w-72"
       style={{ top: anchorRect.bottom + 4, left: anchorRect.left }}
+      onMouseEnter={onEnter}
+      onMouseLeave={onLeave}
     >
       <div className="flex items-center gap-2 mb-2">
-        <span className="text-[10px] font-mono text-indigo-400 bg-indigo-950 px-1.5 py-0.5 rounded cursor-pointer hover:bg-indigo-900">
+        <span
+          className="text-[10px] font-mono text-indigo-400 bg-indigo-950 px-1.5 py-0.5 rounded cursor-pointer hover:bg-indigo-900"
+          onClick={async () => {
+            // Open Git panel and select this commit
+            const { useGitStore } = await import('../../stores/useGitStore')
+            await useGitStore.getState().selectCommitByHash(blame.hash)
+            document.dispatchEvent(new CustomEvent('mycel:switch-panel', { detail: 'git' }))
+          }}
+          title="Open in Git panel"
+        >
           {blame.hash.substring(0, 8)}
         </span>
         <span className="text-[10px] text-neutral-500">{blame.date}</span>
@@ -76,19 +89,31 @@ function BlamePopup({ blame, anchorRect }: {
 function BlameCell({ blame }: { blame?: { hash: string; author: string; date: string; summary?: string } }) {
   const [showPopup, setShowPopup] = useState(false)
   const cellRef = useRef<HTMLSpanElement>(null)
+  const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   if (!blame) return <span className="w-40 pr-2">&nbsp;</span>
+
+  const show = () => { if (hideTimer.current) clearTimeout(hideTimer.current); setShowPopup(true) }
+  const hide = () => { hideTimer.current = setTimeout(() => setShowPopup(false), 300) }
+
+  const handleClick = async () => {
+    const { useGitStore } = await import('../../stores/useGitStore')
+    await useGitStore.getState().selectCommitByHash(blame.hash)
+    document.dispatchEvent(new CustomEvent('mycel:switch-panel', { detail: 'git' }))
+    setShowPopup(false)
+  }
 
   return (
     <span
       ref={cellRef}
-      className="text-[10px] text-neutral-600 font-mono pr-2 w-40 text-right truncate cursor-default"
-      onMouseEnter={() => setShowPopup(true)}
-      onMouseLeave={() => setShowPopup(false)}
+      className="text-[10px] text-neutral-600 font-mono pr-2 w-40 text-right truncate cursor-pointer hover:text-neutral-400"
+      onMouseEnter={show}
+      onMouseLeave={hide}
+      onClick={handleClick}
     >
       {blame.date} {blame.author.substring(0, 10)}
       {showPopup && cellRef.current && (
-        <BlamePopup blame={blame} anchorRect={cellRef.current.getBoundingClientRect()} />
+        <BlamePopup blame={blame} anchorRect={cellRef.current.getBoundingClientRect()} onEnter={show} onLeave={hide} />
       )}
     </span>
   )
@@ -119,7 +144,9 @@ export default function GutterPanel({ editorRef, gutterItems, blameData, onItemC
       const lines: VisibleLine[] = []
       for (let line = startLine; line <= endLine; line++) {
         const top = ed.getTopForLineNumber(line) - scrollTop
-        const height = ed.getTopForLineNumber(line + 1) - ed.getTopForLineNumber(line)
+        let height = ed.getTopForLineNumber(line + 1) - ed.getTopForLineNumber(line)
+        // Last line: getTopForLineNumber(n+1) might equal getTopForLineNumber(n), use fallback
+        if (height <= 0) height = Number(ed.getOption(66 /* lineHeight */)) || 19
         lines.push({ line, top, height })
       }
       setVisibleLines(lines)

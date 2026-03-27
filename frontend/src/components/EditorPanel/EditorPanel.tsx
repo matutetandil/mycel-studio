@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { ChevronDown, ChevronUp, AlertTriangle, FileCode, Terminal, Bug, Eye, ScrollText, Lightbulb, GitBranch } from 'lucide-react'
 import { useEditorPanelStore } from '../../stores/useEditorPanelStore'
 import { useStudioStore } from '../../stores/useStudioStore'
@@ -136,6 +136,19 @@ export default function EditorPanel() {
   }, [switchToTerminal, switchToDebug])
 
   const hasErrors = project.errors.length > 0
+
+  // Listen for external panel switch requests (e.g., from FileTree "Show History")
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const panel = (e as CustomEvent).detail as PanelTab
+      if (panel) {
+        setActivePanel(panel)
+        if (isCollapsed) toggleCollapse()
+      }
+    }
+    document.addEventListener('mycel:switch-panel', handler)
+    return () => document.removeEventListener('mycel:switch-panel', handler)
+  }, [isCollapsed, toggleCollapse])
 
   const panelContent = (
     <div className="flex h-full">

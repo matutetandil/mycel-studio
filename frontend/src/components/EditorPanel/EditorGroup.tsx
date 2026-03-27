@@ -328,10 +328,10 @@ export default function EditorGroupView({ groupId, isSecondary }: EditorGroupPro
   const gitDecoRef = useRef<string[]>([])
   const [gitDiff, setGitDiff] = useState<LineDiffResult | null>(null)
   const [gutterItemsState, setGutterItemsState] = useState<GutterItem[]>([])
-  const [blameData, setBlameData] = useState<Array<{ line: number; hash: string; author: string; date: string; summary?: string }> | null>(null)
+  const [blameMap, setBlameMap] = useState<Record<string, Array<{ line: number; hash: string; author: string; date: string; summary?: string }>>>({})
   const [editorReady, setEditorReady] = useState(false)
-  const blameDataRef = useRef(blameData)
-  blameDataRef.current = blameData
+  const blameMapRef = useRef(blameMap)
+  blameMapRef.current = blameMap
 
   const existingPaths = useMemo(() => new Set(projectFiles.map(f => f.relativePath)), [projectFiles])
   const project = useMemo(
@@ -341,6 +341,10 @@ export default function EditorGroupView({ groupId, isSecondary }: EditorGroupPro
 
   // Compute active file (safe when group is null)
   const activeTab = group?.tabs.find(t => t.id === group.activeTabId)
+
+  // Current file's blame data (per-file from blameMap)
+  const currentBlameKey = activeTab?.type === 'file' ? unscopePath(activeTab.filePath).relativePath : ''
+  const blameData = currentBlameKey ? (blameMap[currentBlameKey] || null) : null
 
   // Resolve file content — may come from a different project than the active one
   const { activeFile, isRealFile } = useMemo(() => {
@@ -694,20 +698,54 @@ export default function EditorGroupView({ groupId, isSecondary }: EditorGroupPro
 
       <div className="flex-1 min-h-0">
         {activeTab?.type === 'diff' ? (
-          <DiffEditor
-            height="100%"
-            original={activeTab.diffOriginal || ''}
-            modified={activeTab.diffModified || ''}
-            language={activeTab.diffLanguage || 'mycel'}
-            theme="mycel-dark"
-            options={{
-              readOnly: activeTab.diffReadOnly !== false,
-              renderSideBySide: true,
-              minimap: { enabled: false },
-              fontSize: 12,
-              scrollBeyondLastLine: false,
-            }}
-          />
+          <div className="h-full flex flex-col">
+            {/* Diff header — show labels and resolve button for conflicts */}
+            <div className="flex items-center gap-3 px-3 py-1.5 bg-neutral-850 border-b border-neutral-800 shrink-0 text-xs">
+              <span className="text-neutral-500">{activeTab.diffOriginalLabel || 'Original'}</span>
+              <span className="text-neutral-600">↔</span>
+              <span className="text-neutral-500">{activeTab.diffModifiedLabel || 'Modified'}</span>
+              {activeTab.diffReadOnly === false && activeTab.diffFilePath && (
+                <button
+                  onClick={async () => {
+                    // Save resolved content and stage the file
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    const app = (window as any).go?.main?.App
+                    const pp = useProjectStore.getState().projectPath
+                    if (!app || !pp || !activeTab.diffFilePath) return
+                    // Get the modified content from the diff editor
+                    // For now, use the modified side as-is (user edits it)
+                    const modified = activeTab.diffModified || ''
+                    await app.WriteFile(pp + '/' + activeTab.diffFilePath, modified)
+                    const { apiGitStageFile } = await import('../../lib/api')
+                    await apiGitStageFile(activeTab.diffFilePath)
+                    useProjectStore.getState().updateFile(activeTab.diffFilePath, modified)
+                    useProjectStore.getState().refreshGitStatus()
+                    // Close the diff tab
+                    useEditorPanelStore.getState().closeTab(groupId, activeTab.id)
+                  }}
+                  className="ml-auto px-2 py-0.5 text-xs bg-green-700 hover:bg-green-600 text-white rounded"
+                >
+                  Mark as Resolved
+                </button>
+              )}
+            </div>
+            <div className="flex-1 min-h-0">
+              <DiffEditor
+                height="100%"
+                original={activeTab.diffOriginal || ''}
+                modified={activeTab.diffModified || ''}
+                language={activeTab.diffLanguage || 'mycel'}
+                theme="mycel-dark"
+                options={{
+                  readOnly: activeTab.diffReadOnly !== false,
+                  renderSideBySide: true,
+                  minimap: { enabled: false },
+                  fontSize: 12,
+                  scrollBeyondLastLine: false,
+                }}
+              />
+            </div>
+          </div>
         ) : activeTab?.type === 'canvas' && activeTab.projectId ? (
           <CanvasTab projectId={activeTab.projectId} />
         ) : activeFile ? (() => {
@@ -729,7 +767,7 @@ export default function EditorGroupView({ groupId, isSecondary }: EditorGroupPro
                 </div>
               ) : (
           <div className="flex h-full">
-            {activeFile.name.endsWith('.mycel') && editorReady && (
+            {editorReady && (
               <GutterPanel
                 editorRef={editorRef}
                 gutterItems={gutterItemsState}
@@ -849,22 +887,26 @@ export default function EditorGroupView({ groupId, isSecondary }: EditorGroupPro
                             action: () => { toggleBookmark(activeFile.path, line); refreshGutter() },
                           },
                           {
-                            label: blameDataRef.current ? 'Hide Git Blame' : 'Annotate with Git Blame',
+                            label: blameMapRef.current[activeFile.path] ? 'Hide Git Blame' : 'Annotate with Git Blame',
                             action: async () => {
-                              if (blameDataRef.current) {
-                                setBlameData(null)
+                              if (blameMapRef.current[activeFile.path]) {
+                                setBlameMap(prev => { const next = { ...prev }; delete next[activeFile.path]; return next })
                                 return
                               }
                               // eslint-disable-next-line @typescript-eslint/no-explicit-any
                               const wailsApp = (window as any).go?.main?.App
                               if (!wailsApp?.GetGitBlame) return
                               try {
-                                const json = await wailsApp.GetGitBlame(pp, activeFile.path)
+                                // Use fresh activeFile path from the current context
+                                const currentPath = activeFile?.path || ''
+                                wailsApp.DebugLog?.(`GetGitBlame: pp=${pp}, path=${currentPath}`)
+                                const json = await wailsApp.GetGitBlame(pp, currentPath)
                                 const data = JSON.parse(json)
+                                wailsApp.DebugLog?.(`GetGitBlame result: ${data?.length || 0} lines`)
                                 if (!data || data.length === 0) {
                                   alert('File is not tracked by git yet.')
                                 } else {
-                                  setBlameData(data)
+                                  setBlameMap(prev => ({ ...prev, [activeFile.path]: data }))
                                 }
                               } catch {
                                 alert('Failed to get blame.')

@@ -374,6 +374,15 @@ body {
   padding-left: 24px;
 }
 
+/* Git graph — selected commit highlight */
+.git-commit-selected {
+  filter: brightness(1.5);
+}
+.git-commit-selected text {
+  fill: #c7d2fe !important;
+  font-weight: bold;
+}
+
 /* Diagnostic squiggly underlines (IntelliJ-style) */
 /* File tree: uses text-decoration (overflow is visible there) */
 .diag-error { text-decoration: underline wavy #ef4444; text-underline-offset: 2px; text-decoration-thickness: 1px; }

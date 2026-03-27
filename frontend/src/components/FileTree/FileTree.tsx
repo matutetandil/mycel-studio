@@ -21,6 +21,7 @@ import { useStudioStore } from '../../stores/useStudioStore'
 import { useEditorPanelStore, scopedPath, unscopePath } from '../../stores/useEditorPanelStore'
 import { useMultiProjectStore } from '../../stores/useMultiProjectStore'
 import { generateProject, toIdentifier, type GeneratedFile } from '../../utils/hclGenerator'
+import { apiGetGitFileAtCommit } from '../../lib/api'
 import HintsBanner from './HintsBanner'
 import { useDiagnosticsStore, type DiagnosticSeverity } from '../../stores/useDiagnosticsStore'
 import { cursorDrivenSelection } from '../EditorPanel/EditorGroup'
@@ -562,6 +563,108 @@ function SingleProjectFileTree({ hideHeader }: { hideHeader?: boolean } = {}) {
           })
         }
         return items
+      })(),
+    },
+    { label: '', separator: true, onClick: () => {} },
+    {
+      label: 'Git',
+      icon: <GitBranch className="w-3.5 h-3.5" />,
+      onClick: () => {},
+      submenu: (() => {
+        const gitItems: ContextMenuItem[] = []
+        const filePath = fileContextMenu.path
+        const gitStatus = (files.find(f => f.relativePath === filePath) as ProjectFile)?.gitStatus
+
+        // Show History — opens Git panel filtered to this file
+        gitItems.push({
+          label: 'Show History',
+          onClick: async () => {
+            const { useGitStore } = await import('../../stores/useGitStore')
+            await useGitStore.getState().fetchFileLog(filePath)
+            // Switch to Git panel — emit event that EditorPanel picks up
+            document.dispatchEvent(new CustomEvent('mycel:switch-panel', { detail: 'git' }))
+          },
+        })
+
+        // Show Diff with HEAD
+        gitItems.push({
+          label: 'Show Diff with HEAD',
+          onClick: async () => {
+            if (!projectPath) return
+            try {
+              const headContent = await apiGetGitFileAtCommit('HEAD', filePath)
+              const currentFile = files.find(f => f.relativePath === filePath)
+              if (currentFile) {
+                const fileName = filePath.split('/').pop() || filePath
+                useEditorPanelStore.getState().openDiff(
+                  `head-diff-${filePath}`, `${fileName} (diff)`,
+                  headContent, currentFile.content,
+                  'HEAD', 'Working Copy',
+                  undefined, true, filePath,
+                )
+              }
+            } catch { /* file not in git */ }
+          },
+        })
+
+        // Resolve Conflicts — only when file has conflict status
+        if (gitStatus === 'modified' || gitStatus === 'untracked') {
+          // Check for actual conflicts on demand
+          gitItems.push({
+            label: 'Resolve Conflicts',
+            onClick: async () => {
+              if (!projectPath) return
+              try {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const app = (window as any).go?.main?.App
+                if (!app) return
+                // Get ours (stage 2) and theirs (stage 3)
+                let ours = ''
+                let theirs = ''
+                try { ours = await app.GetGitFileAtCommit(projectPath, ':2:' + filePath, '') } catch { /* no ours */ }
+                try { theirs = await app.GetGitFileAtCommit(projectPath, ':3:' + filePath, '') } catch { /* no theirs */ }
+
+                if (!ours && !theirs) {
+                  alert('No merge conflicts found for this file.')
+                  return
+                }
+
+                const fileName = filePath.split('/').pop() || filePath
+                useEditorPanelStore.getState().openDiff(
+                  `conflict-${filePath}`, `${fileName} (resolve)`,
+                  theirs || '', ours || '',
+                  'Theirs (incoming)', 'Ours (current)',
+                  undefined, false, filePath, // readOnly=false for editing
+                )
+              } catch {
+                alert('Failed to get conflict sides.')
+              }
+            },
+          })
+        }
+
+        // Revert to HEAD
+        gitItems.push({
+          label: 'Revert to HEAD',
+          onClick: async () => {
+            if (!projectPath) return
+            const confirmed = confirm(`Revert "${filePath}" to HEAD? This will discard all local changes.`)
+            if (!confirmed) return
+            try {
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              const app = (window as any).go?.main?.App
+              if (!app) return
+              const headContent = await apiGetGitFileAtCommit('HEAD', filePath)
+              await app.WriteFile(projectPath + '/' + filePath, headContent)
+              // Update store
+              useProjectStore.getState().updateFile(filePath, headContent)
+            } catch {
+              alert('Failed to revert. File may not be in git.')
+            }
+          },
+        })
+
+        return gitItems
       })(),
     },
     { label: '', separator: true, onClick: () => {} },

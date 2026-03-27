@@ -183,6 +183,40 @@ func (a *App) GetGitLog(path string, limit int) (string, error) {
 	return string(data), nil
 }
 
+// GetGitFileLog returns commits that touched a specific file.
+func (a *App) GetGitFileLog(path string, filePath string, limit int) (string, error) {
+	if limit <= 0 { limit = 50 }
+	format := `%H%x1e%h%x1e%an%x1e%aI%x1e%s%x1e%P%x1e%D%x1d`
+	cmd := exec.Command("git", "log", "--follow", "--format="+format, "-n", fmt.Sprintf("%d", limit), "--", filePath)
+	cmd.Dir = path
+	out, err := cmd.Output()
+	if err != nil { return "[]", err }
+
+	var entries []GitLogEntry
+	records := strings.Split(string(out), "\x1d")
+	for _, record := range records {
+		record = strings.TrimSpace(record)
+		if record == "" { continue }
+		fields := strings.Split(record, "\x1e")
+		if len(fields) < 7 { continue }
+		parents := []string{}
+		if fields[5] != "" { parents = strings.Fields(fields[5]) }
+		refs := []string{}
+		if fields[6] != "" {
+			for _, r := range strings.Split(fields[6], ", ") {
+				r = strings.TrimSpace(r)
+				if r != "" { refs = append(refs, r) }
+			}
+		}
+		entries = append(entries, GitLogEntry{
+			Hash: fields[0], Abbrev: fields[1], Author: fields[2],
+			Date: fields[3], Message: fields[4], Parents: parents, Refs: refs,
+		})
+	}
+	data, _ := json.Marshal(entries)
+	return string(data), nil
+}
+
 // GitBranchInfo represents a git branch.
 type GitBranchInfo struct {
 	Name    string `json:"name"`
@@ -221,8 +255,9 @@ type GitCommitFile struct {
 }
 
 // GetGitCommitFiles returns files changed in a commit (with rename detection).
+// Uses --root for the initial commit (no parent).
 func (a *App) GetGitCommitFiles(path string, hash string) (string, error) {
-	cmd := exec.Command("git", "diff-tree", "--no-commit-id", "-r", "-M", "--name-status", hash)
+	cmd := exec.Command("git", "diff-tree", "--no-commit-id", "--root", "-r", "-M", "--name-status", hash)
 	cmd.Dir = path
 	out, err := cmd.Output()
 	if err != nil { return "[]", err }

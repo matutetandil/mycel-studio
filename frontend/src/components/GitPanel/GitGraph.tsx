@@ -1,12 +1,19 @@
 // Git graph visualization using @gitgraph/js
 
-import { useRef, useEffect } from 'react'
+import { useRef, useEffect, memo } from 'react'
 import { createGitgraph, templateExtend, TemplateName } from '@gitgraph/js'
-import { useGitStore } from '../../stores/useGitStore'
+import type { GitCommit } from '../../lib/api'
 
-export default function GitGraph() {
+interface GitGraphProps {
+  commits: GitCommit[]
+  onSelectCommit: (commit: GitCommit) => void
+}
+
+const GitGraph = memo(function GitGraph({ commits, onSelectCommit, selectedHash }: GitGraphProps & { selectedHash?: string }) {
   const containerRef = useRef<HTMLDivElement>(null)
-  const { commits, selectCommit } = useGitStore()
+  const isSelectingRef = useRef(false)
+  const onSelectRef = useRef(onSelectCommit)
+  onSelectRef.current = onSelectCommit
 
   useEffect(() => {
     if (!containerRef.current || commits.length === 0) return
@@ -76,7 +83,15 @@ export default function GitGraph() {
         hash: commit.abbrev,
         subject: commit.message,
         author: commit.author,
-        onClick: () => selectCommit(commit),
+        onClick: () => {
+          if (isSelectingRef.current) return
+          isSelectingRef.current = true
+          // Defer to avoid DOM mutation during gitgraph callback
+          setTimeout(() => {
+            onSelectRef.current(commit)
+            isSelectingRef.current = false
+          }, 0)
+        },
         tag: commit.refs.find(r => r.startsWith('tag: '))?.replace('tag: ', '') || undefined,
       })
     }
@@ -94,7 +109,14 @@ export default function GitGraph() {
         )
         if (commit) {
           (textEl as SVGElement).style.cursor = 'pointer'
-          textEl.addEventListener('click', () => selectCommit(commit))
+          textEl.addEventListener('click', () => {
+            if (isSelectingRef.current) return
+            isSelectingRef.current = true
+            setTimeout(() => {
+              onSelectRef.current(commit)
+              isSelectingRef.current = false
+            }, 0)
+          })
         }
       })
     }, 100)
@@ -102,6 +124,23 @@ export default function GitGraph() {
   // Only re-render graph when commits list changes
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [commits])
+
+  // Highlight selected commit in the SVG
+  useEffect(() => {
+    if (!containerRef.current || !selectedHash) return
+    // Remove previous highlights
+    containerRef.current.querySelectorAll('.git-commit-selected').forEach(el => el.classList.remove('git-commit-selected'))
+    // Find and highlight the selected commit's text
+    const texts = containerRef.current.querySelectorAll('svg text')
+    const abbrev = selectedHash.substring(0, 7)
+    texts.forEach(textEl => {
+      if (textEl.textContent?.includes(abbrev)) {
+        // Highlight the parent group or the text itself
+        const g = textEl.closest('g') || textEl
+        g.classList.add('git-commit-selected')
+      }
+    })
+  }, [selectedHash])
 
   if (commits.length === 0) {
     return (
@@ -118,4 +157,6 @@ export default function GitGraph() {
       style={{ minWidth: 300 }}
     />
   )
-}
+})
+
+export default GitGraph

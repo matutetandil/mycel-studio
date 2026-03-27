@@ -374,6 +374,16 @@ export async function apiGetGitLog(limit = 100): Promise<GitCommit[]> {
   }
 }
 
+export async function apiGetGitFileLog(filePath: string, limit = 50): Promise<GitCommit[]> {
+  const app = getApp()
+  if (!app?.GetGitFileLog) return []
+  const pp = (await import('../stores/useProjectStore')).useProjectStore.getState().projectPath
+  if (!pp) return []
+  try {
+    return JSON.parse(await app.GetGitFileLog(pp, filePath, limit)) || []
+  } catch { return [] }
+}
+
 export async function apiGetGitBranches(): Promise<GitBranch[]> {
   const app = getApp()
   if (!app?.GetGitBranches) return []
