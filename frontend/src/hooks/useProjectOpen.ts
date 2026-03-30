@@ -106,12 +106,13 @@ export function useProjectOpen() {
     setShowAttachDialog(false)
     if (!pendingProject) return
 
-    // Close current project and clear multi-project state
-    const multiStore = useMultiProjectStore.getState()
-    for (const id of [...multiStore.projectOrder]) {
-      multiStore.removeProject(id)
-    }
-    useMultiProjectStore.setState({ rootProjectId: null })
+    // Clear multi-project state atomically (avoid per-project restoreToStores side effects)
+    useMultiProjectStore.setState({
+      projects: new Map(),
+      projectOrder: [],
+      activeProjectId: null,
+      rootProjectId: null,
+    })
 
     // Close project (clears files, editor tabs, canvas)
     useProjectStore.getState().closeProject()
