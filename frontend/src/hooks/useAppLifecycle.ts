@@ -79,6 +79,21 @@ export function useAppLifecycle() {
     }, 300)
   }, [])
 
+  // Listen for IPC open-project events from other instances
+  useEffect(() => {
+    if (!isWailsRuntime()) return
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const runtime = (window as any).runtime
+    if (!runtime?.EventsOn) return
+
+    runtime.EventsOn('ipc:open-project', (projectPath: string) => {
+      const { openProjectAtPath } = useProjectStore.getState()
+      openProjectAtPath(projectPath)
+    })
+
+    return () => runtime.EventsOff('ipc:open-project')
+  }, [])
+
   // Save workspace + window size before closing
   useEffect(() => {
     if (isWailsRuntime()) {

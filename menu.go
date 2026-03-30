@@ -87,6 +87,29 @@ func (a *App) buildMenu() *menu.Menu {
 		wailsRuntime.EventsEmit(a.ctx, "menu:check-updates")
 	})
 	helpMenu.AddSeparator()
+	if a.IsCLIInstalled() {
+		helpMenu.AddText("Uninstall 'mycel-studio' Command", nil, func(_ *menu.CallbackData) {
+			if err := a.UninstallCLI(); err != nil {
+				wailsRuntime.EventsEmit(a.ctx, "notification", map[string]string{"type": "error", "message": "Failed to uninstall CLI: " + err.Error()})
+			} else if !a.IsCLIInstalled() {
+				wailsRuntime.EventsEmit(a.ctx, "notification", map[string]string{"type": "success", "message": "'mycel-studio' command removed from PATH"})
+			} else {
+				wailsRuntime.EventsEmit(a.ctx, "notification", map[string]string{"type": "error", "message": "Failed to remove 'mycel-studio' — file still exists"})
+			}
+		})
+	} else {
+		helpMenu.AddText("Install 'mycel-studio' Command in PATH...", nil, func(_ *menu.CallbackData) {
+			path, err := a.InstallCLI()
+			if err != nil {
+				wailsRuntime.EventsEmit(a.ctx, "notification", map[string]string{"type": "error", "message": "Failed to install CLI: " + err.Error()})
+			} else if a.IsCLIInstalled() {
+				wailsRuntime.EventsEmit(a.ctx, "notification", map[string]string{"type": "success", "message": "'mycel-studio' command installed at " + path})
+			} else {
+				wailsRuntime.EventsEmit(a.ctx, "notification", map[string]string{"type": "error", "message": "Install command ran but 'mycel-studio' was not found at " + path})
+			}
+		})
+	}
+	helpMenu.AddSeparator()
 	helpMenu.AddText("Documentation", nil, func(_ *menu.CallbackData) {
 		wailsRuntime.BrowserOpenURL(a.ctx, "https://github.com/mycelframework/mycel")
 	})

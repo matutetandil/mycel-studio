@@ -20,6 +20,11 @@ func main() {
 	projectFlag := flag.String("project", "", "Project path to open on startup")
 	flag.Parse()
 
+	// If a project was specified, try to reuse an existing instance
+	if *projectFlag != "" && tryReuseInstance(*projectFlag) {
+		return // Existing instance will handle it
+	}
+
 	app := NewApp()
 	app.startupProject = *projectFlag
 

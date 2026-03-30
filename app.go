@@ -4,10 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os"
-	"os/exec"
-	"path/filepath"
-	"strings"
+	"net"
 	"time"
 
 	"mycel-studio/handlers"
@@ -29,7 +26,8 @@ type App struct {
 	updater          *Updater
 	confirmOnClose   bool
 	skipCloseConfirm bool
-	startupProject   string // --project flag passed on launch
+	startupProject   string       // --project flag passed on launch
+	ipcListener      net.Listener // Unix socket for inter-instance IPC
 }
 
 // NewApp creates a new App instance.
@@ -48,6 +46,7 @@ func (a *App) Startup(ctx context.Context) {
 	a.ptyManager.SetApp(a)
 	a.updater.app = a
 	a.updater.cleanupOldBinary()
+	a.startIPCServer()
 
 	// Check for updates periodically (first check after 5s, then every 4 hours)
 	// Auto-downloads and installs silently; frontend only sees "restart now/later"
@@ -92,6 +91,7 @@ func (a *App) BeforeClose(ctx context.Context) (prevent bool) {
 
 // Shutdown is called when the Wails app is closing.
 func (a *App) Shutdown(ctx context.Context) {
+	a.stopIPCServer()
 	a.ptyManager.Shutdown()
 	if a.debugClient != nil {
 		a.debugClient.Disconnect()
@@ -231,35 +231,5 @@ func (a *App) GetStartupProject() string {
 	return a.startupProject
 }
 
-// OpenNewWindow launches a new instance of Mycel Studio with the given project path.
-// On macOS, uses "open -n" to create a truly independent process.
-func (a *App) OpenNewWindow(projectPath string) error {
-	execPath, err := os.Executable()
-	if err != nil {
-		return fmt.Errorf("failed to get executable path: %w", err)
-	}
-
-	// Navigate from .app/Contents/MacOS/binary up to .app
-	appBundle := execPath
-	if idx := strings.Index(execPath, ".app/"); idx != -1 {
-		appBundle = execPath[:idx+4] // include ".app"
-	}
-
-	if strings.HasSuffix(appBundle, ".app") {
-		// macOS: use "open -n" to launch a new instance of the app bundle
-		args := []string{"-n", appBundle}
-		if projectPath != "" {
-			args = append(args, "--args", "--project", projectPath)
-		}
-		return exec.Command("open", args...).Start()
-	}
-
-	// Fallback for non-bundled (dev mode): launch the binary directly
-	args := []string{}
-	if projectPath != "" {
-		args = append(args, "--project", projectPath)
-	}
-	cmd := exec.Command(execPath, args...)
-	cmd.Dir = filepath.Dir(execPath)
-	return cmd.Start()
-}
+// InstallCLI, UninstallCLI, IsCLIInstalled, and OpenNewWindow
+// are defined in platform_darwin.go, platform_linux.go, and platform_windows.go
