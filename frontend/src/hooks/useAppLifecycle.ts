@@ -52,14 +52,26 @@ export function useAppLifecycle() {
 
     restoreWindowGeometry()
 
-    const { lastProjectPath } = useSettingsStore.getState()
-    if (!lastProjectPath) return
+    // Check if a --project flag was passed (New Window flow)
+    // Falls back to lastProjectPath from settings (normal startup)
+    const resolveStartupProject = async (): Promise<string | null> => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const app = (window as any).go?.main?.App
+      if (app?.GetStartupProject) {
+        const flagPath = await app.GetStartupProject()
+        if (flagPath) return flagPath
+      }
+      return useSettingsStore.getState().lastProjectPath
+    }
 
     // Small delay to let the app fully mount
-    setTimeout(() => {
+    setTimeout(async () => {
+      const projectPath = await resolveStartupProject()
+      if (!projectPath) return
+
       const { projectName, openProjectAtPath } = useProjectStore.getState()
       if (!projectName) {
-        openProjectAtPath(lastProjectPath).catch(() => {
+        openProjectAtPath(projectPath).catch(() => {
           // Project path no longer exists — clear it
           useSettingsStore.getState().setLastProjectPath(null)
         })

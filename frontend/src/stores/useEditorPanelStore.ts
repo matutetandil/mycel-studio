@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { registerSnapshotProvider } from './snapshotRegistry'
 
 export interface EditorTab {
   id: string        // Scoped path: `{projectPath}::{relativePath}` or `canvas:{projectId}` or `diff:{id}`
@@ -402,3 +403,18 @@ export const useEditorPanelStore = create<EditorPanelState>((set, get) => ({
     })
   },
 }))
+
+registerSnapshotProvider('editor', {
+  capture: () => {
+    const e = useEditorPanelStore.getState()
+    return JSON.parse(JSON.stringify({
+      groups: e.groups, activeGroupId: e.activeGroupId, splitDirection: e.splitDirection,
+      splitRatio: e.splitRatio, panelHeight: e.panelHeight, isCollapsed: e.isCollapsed,
+    }))
+  },
+  restore: (data) => useEditorPanelStore.setState(data as Record<string, unknown>),
+  clear: () => useEditorPanelStore.setState({
+    groups: [{ id: 'main', tabs: [], activeTabId: null }],
+    activeGroupId: 'main', splitDirection: null,
+  }),
+})

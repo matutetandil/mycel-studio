@@ -3,6 +3,7 @@ import { getFileSystemProvider, getCapabilities, type FSCapabilities } from '../
 import { loadWorkspace, applyWorkspace, type WorkspaceState } from './useWorkspaceStore'
 import { useEditorPanelStore } from './useEditorPanelStore'
 import { generateProject } from '../utils/hclGenerator'
+import { registerSnapshotProvider } from './snapshotRegistry'
 import { apiParse, apiConfirm, ideParseProject, isWailsRuntime } from '../lib/api'
 import { useSettingsStore } from './useSettingsStore'
 
@@ -68,7 +69,7 @@ interface ProjectState {
   // Async operations (works with all providers)
   newProject: () => Promise<boolean>
   openProject: () => Promise<boolean>
-  openProjectAtPath: (path: string) => Promise<boolean>
+  openProjectAtPath: (path: string, options?: { skipChildren?: boolean }) => Promise<boolean>
   saveProject: () => Promise<boolean>
   createFile: (relativePath: string, content?: string) => Promise<boolean>
   createDirectory: (relativePath: string) => Promise<boolean>
@@ -106,7 +107,7 @@ function debugLog(msg: string) {
 
 // Shared logic for loading a project into the store (used by openProject and openProjectAtPath)
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function loadProjectIntoStore(set: any, get: any, provider: any, project: any): Promise<boolean> {
+async function loadProjectIntoStore(set: any, get: any, provider: any, project: any, options?: { skipChildren?: boolean }): Promise<boolean> {
   const files: ProjectFile[] = project.files.map((f: { name: string; relativePath: string; content: string }) => ({
     name: f.name,
     path: f.relativePath,
@@ -219,7 +220,8 @@ async function loadProjectIntoStore(set: any, get: any, provider: any, project: 
 
   // If this project is a CHILD, redirect to load the PARENT as the primary project.
   // The parent's workspace has the full IDE state (sidebar, view mode, terminals, etc.)
-  if (loadedWorkspace?.workspace?.role === 'child' && loadedWorkspace.workspace.parent) {
+  // Skip redirect when attaching (skipChildren) — the project should load standalone.
+  if (!options?.skipChildren && loadedWorkspace?.workspace?.role === 'child' && loadedWorkspace.workspace.parent) {
     const parentPath = loadedWorkspace.workspace.parent
     const currentPath = provider.getProjectPath()
     // Don't apply child's workspace — the parent's workspace will be applied instead.
@@ -233,8 +235,8 @@ async function loadProjectIntoStore(set: any, get: any, provider: any, project: 
     setTimeout(() => applyWorkspace(loadedWorkspace!), 100)
   }
 
-  // Auto-load attached projects if this is a parent
-  if (loadedWorkspace?.workspace?.role === 'parent' && loadedWorkspace.workspace.attachments) {
+  // Auto-load attached projects if this is a parent (unless explicitly skipped)
+  if (!options?.skipChildren && loadedWorkspace?.workspace?.role === 'parent' && loadedWorkspace.workspace.attachments) {
     setTimeout(() => loadChildProjects(loadedWorkspace!.workspace!.attachments!, provider.getProjectPath()), 200)
   }
 
@@ -661,7 +663,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     }
   },
 
-  openProjectAtPath: async (path: string) => {
+  openProjectAtPath: async (path: string, options?: { skipChildren?: boolean }) => {
     try {
       set({ isLoading: true, error: null })
 
@@ -679,7 +681,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
         return false
       }
 
-      return await loadProjectIntoStore(set, get, provider, project)
+      return await loadProjectIntoStore(set, get, provider, project, options)
     } catch (error) {
       set({ error: String(error), isLoading: false })
       return false
@@ -931,3 +933,19 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     }
   },
 }))
+
+registerSnapshotProvider('project', {
+  capture: () => {
+    const p = useProjectStore.getState()
+    return JSON.parse(JSON.stringify({
+      projectPath: p.projectPath, projectName: p.projectName, mycelRoot: p.mycelRoot,
+      files: p.files, activeFile: p.activeFile, gitBranch: p.gitBranch, capabilities: p.capabilities,
+    }))
+  },
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  restore: (data) => useProjectStore.setState(data as any),
+  clear: () => useProjectStore.setState({
+    projectPath: null, projectName: null, mycelRoot: '', files: [],
+    activeFile: null, gitBranch: null, metadata: null, error: null,
+  }),
+})

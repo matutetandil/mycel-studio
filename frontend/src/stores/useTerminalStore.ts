@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { getTerminalBackend } from '../lib/terminal'
 import { useProjectStore } from './useProjectStore'
+import { registerSnapshotProvider } from './snapshotRegistry'
 
 export interface TerminalInstance {
   id: string       // session ID from backend (e.g., "term-1")
@@ -66,3 +67,29 @@ export const useTerminalStore = create<TerminalState>((set, get) => ({
     }))
   },
 }))
+
+registerSnapshotProvider('terminal', {
+  capture: async () => {
+    const t = useTerminalStore.getState()
+    const backend = getTerminalBackend()
+    const terminals = await Promise.all(
+      t.terminals.map(async (term) => {
+        const cwd = await backend.getCwd(term.id).catch(() => '')
+        return { name: term.name, workDir: cwd || term.workDir }
+      })
+    )
+    return { terminals }
+  },
+  restore: (data) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const d = data as any
+    const termStore = useTerminalStore.getState()
+    // Close existing terminals, recreate from snapshot
+    for (const t of [...termStore.terminals]) termStore.closeTerminal(t.id)
+    for (const t of d.terminals) termStore.createTerminal(t.workDir, t.name)
+  },
+  clear: () => {
+    const termStore = useTerminalStore.getState()
+    for (const t of [...termStore.terminals]) termStore.closeTerminal(t.id)
+  },
+})

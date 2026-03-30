@@ -4,6 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
 	"time"
 
 	"mycel-studio/handlers"
@@ -25,6 +29,7 @@ type App struct {
 	updater          *Updater
 	confirmOnClose   bool
 	skipCloseConfirm bool
+	startupProject   string // --project flag passed on launch
 }
 
 // NewApp creates a new App instance.
@@ -219,4 +224,42 @@ func (a *App) ShowConfirmDialog(title, message string) (string, error) {
 		return "No", err
 	}
 	return result, nil
+}
+
+// GetStartupProject returns the --project flag passed on launch (empty if none).
+func (a *App) GetStartupProject() string {
+	return a.startupProject
+}
+
+// OpenNewWindow launches a new instance of Mycel Studio with the given project path.
+// On macOS, uses "open -n" to create a truly independent process.
+func (a *App) OpenNewWindow(projectPath string) error {
+	execPath, err := os.Executable()
+	if err != nil {
+		return fmt.Errorf("failed to get executable path: %w", err)
+	}
+
+	// Navigate from .app/Contents/MacOS/binary up to .app
+	appBundle := execPath
+	if idx := strings.Index(execPath, ".app/"); idx != -1 {
+		appBundle = execPath[:idx+4] // include ".app"
+	}
+
+	if strings.HasSuffix(appBundle, ".app") {
+		// macOS: use "open -n" to launch a new instance of the app bundle
+		args := []string{"-n", appBundle}
+		if projectPath != "" {
+			args = append(args, "--args", "--project", projectPath)
+		}
+		return exec.Command("open", args...).Start()
+	}
+
+	// Fallback for non-bundled (dev mode): launch the binary directly
+	args := []string{}
+	if projectPath != "" {
+		args = append(args, "--project", projectPath)
+	}
+	cmd := exec.Command(execPath, args...)
+	cmd.Dir = filepath.Dir(execPath)
+	return cmd.Start()
 }

@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { getDebugBackend } from '../lib/debug'
 import { debugLog, debugSend, debugRecv, debugError, debugWarn } from './useOutputStore'
+import { registerSnapshotProvider } from './snapshotRegistry'
 
 // --- Protocol types ---
 
@@ -592,3 +593,31 @@ function handleDebugEvent(method: string, params: unknown) {
     }
   }
 }
+
+registerSnapshotProvider('debug', {
+  capture: () => {
+    const d = useDebugStore.getState()
+    return {
+      runtimeUrl: d.runtimeUrl,
+      breakpoints: Array.from(d.breakpoints.entries()).map(([k, v]) => [k, JSON.parse(JSON.stringify(v))]),
+      watchExpressions: [...d.watchExpressions],
+    }
+  },
+  restore: (data) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const d = data as any
+    const bpMap = new Map()
+    for (const [k, v] of d.breakpoints) bpMap.set(k, v)
+    useDebugStore.setState({
+      runtimeUrl: d.runtimeUrl, breakpoints: bpMap, watchExpressions: d.watchExpressions,
+      // Reset connection state
+      status: 'disconnected' as const, sessionId: null, stoppedAt: null,
+      variables: null, threads: [], events: [], eventCounter: 0,
+    })
+  },
+  clear: () => useDebugStore.setState({
+    breakpoints: new Map(), verifiedBreakpoints: new Set(), rejectedBreakpoints: new Set(),
+    stoppedAt: null, variables: null, threads: [], events: [], eventCounter: 0,
+    status: 'disconnected' as const, sessionId: null,
+  }),
+})

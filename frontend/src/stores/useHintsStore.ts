@@ -3,6 +3,7 @@
 
 import { create } from 'zustand'
 import { ideHints, isWailsRuntime, type IDEHint } from '../lib/api'
+import { registerSnapshotProvider } from './snapshotRegistry'
 import { useProjectStore } from './useProjectStore'
 
 export type HintStatus = 'active' | 'applied' | 'dismissed'
@@ -90,3 +91,13 @@ export const useHintsStore = create<HintsState>((set, get) => ({
     return get().hints.filter(h => h.hint.kind === 6)
   },
 }))
+
+registerSnapshotProvider('hints', {
+  capture: () => {
+    const h = useHintsStore.getState()
+    return JSON.parse(JSON.stringify({ hints: h.hints, bannerDismissed: h.bannerDismissed }))
+  },
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  restore: (data) => useHintsStore.setState(data as any),
+  clear: () => useHintsStore.setState({ hints: [], bannerDismissed: false }),
+})

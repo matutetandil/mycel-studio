@@ -1,5 +1,6 @@
 // Layout store — sidebar widths and collapse states (accessible globally for workspace persistence)
 import { create } from 'zustand'
+import { registerSnapshotProvider } from './snapshotRegistry'
 
 export type ViewMode = 'visual-first' | 'text-first'
 
@@ -32,3 +33,12 @@ export const useLayoutStore = create<LayoutState>((set) => ({
   setViewMode: (viewMode) => set({ viewMode }),
   toggleViewMode: () => set((s) => ({ viewMode: s.viewMode === 'visual-first' ? 'text-first' : 'visual-first' })),
 }))
+
+registerSnapshotProvider('layout', {
+  capture: () => {
+    const l = useLayoutStore.getState()
+    return { leftWidth: l.leftWidth, leftCollapsed: l.leftCollapsed, rightWidth: l.rightWidth, rightCollapsed: l.rightCollapsed, viewMode: l.viewMode }
+  },
+  restore: (data) => useLayoutStore.setState(data as Record<string, unknown>),
+  clear: () => useLayoutStore.setState({ leftWidth: 280, leftCollapsed: false, rightWidth: 400, rightCollapsed: false, viewMode: 'visual-first' as const }),
+})

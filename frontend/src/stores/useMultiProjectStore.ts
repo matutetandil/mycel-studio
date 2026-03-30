@@ -3,6 +3,7 @@ import type { Edge } from '@xyflow/react'
 import type { ServiceConfig, AuthConfig, EnvironmentConfig, SecurityConfig, PluginConfig } from '../types'
 import { useStudioStore } from './useStudioStore'
 import { useProjectStore, type ProjectFile } from './useProjectStore'
+import { registerSnapshotProvider } from './snapshotRegistry'
 import { useEditorPanelStore, type EditorGroup, type SplitDirection } from './useEditorPanelStore'
 import { useDebugStore } from './useDebugStore'
 import type { FSCapabilities } from '../lib/fileSystem'
@@ -413,3 +414,29 @@ export function registerCurrentAsProject(): string {
   useMultiProjectStore.setState({ activeProjectId: id })
   return id
 }
+
+registerSnapshotProvider('multiProject', {
+  capture: () => {
+    const m = useMultiProjectStore.getState()
+    m.snapshotActiveProject()
+    return {
+      projects: Array.from(m.projects.entries()).map(([k, v]) => [k, JSON.parse(JSON.stringify(v))]),
+      activeProjectId: m.activeProjectId,
+      projectOrder: [...m.projectOrder],
+      rootProjectId: m.rootProjectId,
+    }
+  },
+  restore: (data) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const d = data as any
+    const projects = new Map<string, ProjectInstance>()
+    for (const [k, v] of d.projects) projects.set(k, v)
+    useMultiProjectStore.setState({
+      projects, activeProjectId: d.activeProjectId,
+      projectOrder: d.projectOrder, rootProjectId: d.rootProjectId,
+    })
+  },
+  clear: () => useMultiProjectStore.setState({
+    projects: new Map(), activeProjectId: null, projectOrder: [], rootProjectId: null,
+  }),
+})

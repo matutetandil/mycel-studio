@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { registerSnapshotProvider } from './snapshotRegistry'
 
 export type OutputLevel = 'info' | 'warn' | 'error' | 'debug' | 'send' | 'recv'
 export type OutputChannel = 'Debug' | 'App'
@@ -76,3 +77,13 @@ export function debugError(message: string) {
 export function debugWarn(message: string) {
   useOutputStore.getState().log('Debug', 'warn', message)
 }
+
+registerSnapshotProvider('output', {
+  capture: () => {
+    const o = useOutputStore.getState()
+    return JSON.parse(JSON.stringify({ entries: o.entries, counter: o.counter, activeChannel: o.activeChannel }))
+  },
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  restore: (data) => useOutputStore.setState(data as any),
+  clear: () => useOutputStore.setState({ entries: [], counter: 0 }),
+})

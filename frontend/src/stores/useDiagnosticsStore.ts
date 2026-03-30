@@ -2,6 +2,7 @@
 import { create } from 'zustand'
 import { ideDiagnoseAll, isWailsRuntime, type IDEDiagnostic } from '../lib/api'
 import { useProjectStore } from './useProjectStore'
+import { registerSnapshotProvider } from './snapshotRegistry'
 
 export type DiagnosticSeverity = 'error' | 'warning' | 'info' | 'none'
 
@@ -130,3 +131,10 @@ export const useDiagnosticsStore = create<DiagnosticsState>((set, get) => ({
     return 'none'
   },
 }))
+
+registerSnapshotProvider('diagnostics', {
+  capture: () => JSON.parse(JSON.stringify({ files: useDiagnosticsStore.getState().files })),
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  restore: (data) => useDiagnosticsStore.setState(data as any),
+  clear: () => useDiagnosticsStore.setState({ files: {} }),
+})

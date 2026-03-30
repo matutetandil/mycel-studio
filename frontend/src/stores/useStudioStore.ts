@@ -11,6 +11,7 @@ import {
 } from '@xyflow/react'
 import type { ConnectorNodeData, FlowNodeData, FlowTo, ServiceConfig, AuthConfig, EnvironmentConfig, SecurityConfig, PluginConfig, TypeNodeData, TransformNodeData, ValidatorNodeData, AspectNodeData, SagaNodeData, StateMachineNodeData } from '../types'
 import { useHistoryStore } from './useHistoryStore'
+import { registerSnapshotProvider } from './snapshotRegistry'
 
 // Convert label to identifier (same logic as toIdentifier in hclGenerator)
 function labelToId(label: string): string {
@@ -495,3 +496,19 @@ export const useStudioStore = create<StudioState>((set, get) => ({
     set({ edges: addEdge(connection, state.edges) })
   },
 }))
+
+registerSnapshotProvider('studio', {
+  capture: () => {
+    const s = useStudioStore.getState()
+    return JSON.parse(JSON.stringify({
+      nodes: s.nodes, edges: s.edges, selectedNodeId: s.selectedNodeId,
+      serviceConfig: s.serviceConfig, authConfig: s.authConfig,
+      envConfig: s.envConfig, securityConfig: s.securityConfig, pluginConfig: s.pluginConfig,
+    }))
+  },
+  restore: (data) => useStudioStore.setState(data as Record<string, unknown>),
+  clear: () => useStudioStore.setState({
+    nodes: [], edges: [], selectedNodeId: null, activeFlowEditor: null,
+    serviceConfig: { name: 'my-service', version: '1.0.0' },
+  }),
+})

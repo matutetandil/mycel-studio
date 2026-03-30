@@ -28,17 +28,18 @@ import NotificationToast from './components/NotificationToast'
 import NotificationPopup from './components/NotificationPopup'
 import WhatsNewDialog from './components/WhatsNewDialog'
 import AttachDialog from './components/AttachDialog'
+import ChildrenDialog from './components/ChildrenDialog'
 import RefactorDialog from './components/RefactorDialog'
 import ReferencesPopup from './components/ReferencesPopup'
 import { useRefactorStore } from './stores/useRefactorStore'
 import { setReferencesHandler } from './utils/navigationUtils'
 import type { IDEReference } from './lib/api'
-import InstanceTabBar from './components/InstanceTabs/InstanceTabBar'
+// Instance tabs removed — "New Window" launches a separate OS process instead
 import { useProjectStore } from './stores/useProjectStore'
 import { useStudioStore } from './stores/useStudioStore'
 import { useEditorPanelStore } from './stores/useEditorPanelStore'
 import { useLayoutStore } from './stores/useLayoutStore'
-import { useInstanceStore } from './stores/useInstanceStore'
+// useInstanceStore removed — each window is now an independent OS process
 import { useProjectOpen } from './hooks/useProjectOpen'
 import EditorPanelComponent from './components/EditorPanel/EditorPanel'
 import EditorGroupView from './components/EditorPanel/EditorGroup'
@@ -129,7 +130,7 @@ function AppInner() {
   const { undo, redo, duplicateNode } = useStudioStore()
   const { toggleCollapse } = useEditorPanelStore()
   const viewMode = useLayoutStore((s) => s.viewMode)
-  const instanceCount = useInstanceStore(s => s.instances.length)
+  // Instance tabs removed — "New Window" launches a separate OS process
   const projectOpen = useProjectOpen()
   useAutoSave()
   useWorkspacePersistence()
@@ -173,10 +174,6 @@ function AppInner() {
 
   return (
     <div className={`h-screen flex flex-col ${theme === 'dark' ? 'bg-neutral-950 text-white' : 'bg-white text-gray-900'}`}>
-      {/* Menu Bar — only shown in browser/Docker mode */}
-      {/* Instance tab bar — shown when there are multiple workspace instances */}
-      {instanceCount > 1 && <InstanceTabBar />}
-
       {/* Menu Bar — only shown in browser/Docker mode */}
       {!isDesktop && (
         <MenuBar
@@ -243,8 +240,16 @@ function AppInner() {
         projectName={projectOpen.pendingProjectName}
         onThisWindow={projectOpen.handleThisWindow}
         onAttach={projectOpen.handleAttach}
-        onNewTab={projectOpen.handleNewTab}
+        onNewWindow={projectOpen.handleNewWindow}
         onCancel={projectOpen.handleCancel}
+      />
+      <ChildrenDialog
+        isOpen={projectOpen.showChildrenDialog}
+        projectName={projectOpen.pendingProjectName}
+        childrenCount={projectOpen.pendingChildrenCount}
+        onIncludeChildren={projectOpen.handleAttachWithChildren}
+        onIgnoreChildren={projectOpen.handleAttachIgnoreChildren}
+        onCancel={projectOpen.handleChildrenCancel}
       />
     </div>
   )

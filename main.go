@@ -2,6 +2,7 @@ package main
 
 import (
 	"embed"
+	"flag"
 
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
@@ -16,7 +17,11 @@ var assets embed.FS
 var version = "dev"
 
 func main() {
+	projectFlag := flag.String("project", "", "Project path to open on startup")
+	flag.Parse()
+
 	app := NewApp()
+	app.startupProject = *projectFlag
 
 	err := wails.Run(&options.App{
 		Title:     "Mycel Studio",

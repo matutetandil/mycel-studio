@@ -1,5 +1,6 @@
 // Git panel state — commits, branches, selected commit, conflicts
 import { create } from 'zustand'
+import { registerSnapshotProvider } from './snapshotRegistry'
 import {
   apiGetGitLog, apiGetGitFileLog, apiGetGitBranches, apiGetGitCommitFiles, apiGetGitMergeConflicts,
   type GitCommit, type GitBranch, type GitCommitFile,
@@ -108,3 +109,18 @@ export const useGitStore = create<GitState>((set, get) => ({
     ])
   },
 }))
+
+registerSnapshotProvider('git', {
+  capture: () => {
+    const g = useGitStore.getState()
+    return JSON.parse(JSON.stringify({
+      commits: g.commits, branches: g.branches, selectedCommit: g.selectedCommit,
+      commitFiles: g.commitFiles, conflicts: g.conflicts, filterFile: g.filterFile,
+    }))
+  },
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  restore: (data) => useGitStore.setState(data as any),
+  clear: () => useGitStore.setState({
+    commits: [], branches: [], selectedCommit: null, commitFiles: [], conflicts: [], filterFile: null,
+  }),
+})

@@ -2,17 +2,31 @@
 // IntelliJ-style: picker opens first, THEN if there's already a project open,
 // shows the Attach/New Tab dialog.
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useRef } from 'react'
 import { useProjectStore } from '../stores/useProjectStore'
 import { useStudioStore } from '../stores/useStudioStore'
 import { useMultiProjectStore, registerCurrentAsProject } from '../stores/useMultiProjectStore'
-import { useInstanceStore } from '../stores/useInstanceStore'
 import { useEditorPanelStore } from '../stores/useEditorPanelStore'
 import { isWailsRuntime } from '../lib/api'
 
 interface PendingProject {
   path: string
   name: string
+}
+
+// Read .mycel-studio.json from a project path to check for children
+async function readProjectWorkspace(path: string): Promise<{ role?: string; attachments?: string[] } | null> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const app = (window as any).go?.main?.App
+  if (!app?.ReadFileAtPath) return null
+  try {
+    const content = await app.ReadFileAtPath(`${path}/.mycel-studio.json`)
+    if (!content) return null
+    const ws = JSON.parse(content)
+    return ws?.workspace || null
+  } catch {
+    return null
+  }
 }
 
 // Open native directory picker and return the selected path (without loading files)
@@ -49,7 +63,9 @@ function clearCurrentProjectUI() {
 
 export function useProjectOpen() {
   const [showAttachDialog, setShowAttachDialog] = useState(false)
+  const [showChildrenDialog, setShowChildrenDialog] = useState(false)
   const [pendingProject, setPendingProject] = useState<PendingProject | null>(null)
+  const pendingChildrenRef = useRef<string[]>([])
 
   // NOTE: All callbacks read hasProject() fresh from the store inside the function,
   // NOT from a closure. This avoids stale state from useMemo/useCallback deps.
@@ -158,6 +174,65 @@ export function useProjectOpen() {
     setShowAttachDialog(false)
     if (!pendingProject) return
 
+    // Check if the project being attached has children
+    const ws = await readProjectWorkspace(pendingProject.path)
+    if (ws?.role === 'parent' && ws.attachments && ws.attachments.length > 0) {
+      // Project has children — ask user what to do
+      pendingChildrenRef.current = ws.attachments
+      setShowChildrenDialog(true)
+      return
+    }
+
+    // No children — attach directly (skip child auto-loading since this is an attach)
+    await performAttach(pendingProject, true)
+    setPendingProject(null)
+  }, [pendingProject])
+
+  // User chose "Ignore children" in the children dialog
+  const handleAttachIgnoreChildren = useCallback(async () => {
+    setShowChildrenDialog(false)
+    if (!pendingProject) return
+    await performAttach(pendingProject, true)
+    setPendingProject(null)
+  }, [pendingProject])
+
+  // User chose "Include children" in the children dialog
+  const handleAttachWithChildren = useCallback(async () => {
+    setShowChildrenDialog(false)
+    if (!pendingProject) return
+    await performAttach(pendingProject, false)
+    setPendingProject(null)
+  }, [pendingProject])
+
+  const handleChildrenCancel = useCallback(() => {
+    setShowChildrenDialog(false)
+    setPendingProject(null)
+    pendingChildrenRef.current = []
+  }, [])
+
+  // User chose "New Window" — launch a separate OS process
+  const handleNewWindow = useCallback(async () => {
+    setShowAttachDialog(false)
+    if (!pendingProject) return
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const app = (window as any).go?.main?.App
+    if (app?.OpenNewWindow) {
+      await app.OpenNewWindow(pendingProject.path)
+    }
+
+    setPendingProject(null)
+  }, [pendingProject])
+
+  const handleCancel = useCallback(() => {
+    setShowAttachDialog(false)
+    setShowChildrenDialog(false)
+    setPendingProject(null)
+    pendingChildrenRef.current = []
+  }, [])
+
+  // Shared attach logic — skipChildren controls whether child projects are loaded
+  async function performAttach(project: PendingProject, skipChildren: boolean) {
     const multiStore = useMultiProjectStore.getState()
     const projectStore = useProjectStore.getState()
 
@@ -173,50 +248,33 @@ export function useProjectOpen() {
 
     // Clear UI and open the new project
     clearCurrentProjectUI()
-    const success = await projectStore.openProjectAtPath(pendingProject.path)
+    const success = await projectStore.openProjectAtPath(project.path, { skipChildren })
 
     if (success) {
       const newProjectId = registerCurrentAsProject()
-      const newProjectName = useProjectStore.getState().projectName || pendingProject.name
+      const newProjectName = useProjectStore.getState().projectName || project.name
       useEditorPanelStore.getState().openCanvas(newProjectId, newProjectName)
 
       // Save workspace files with attachment config so they persist across restarts
       const { saveAllProjectWorkspaces } = await import('../stores/useWorkspaceStore')
       saveAllProjectWorkspaces(null)
     }
-
-    setPendingProject(null)
-  }, [pendingProject])
-
-  // User chose "New Tab" — open in independent workspace instance
-  const handleNewTab = useCallback(async () => {
-    setShowAttachDialog(false)
-    if (!pendingProject) return
-
-    // Create a new instance (snapshots current, clears stores)
-    useInstanceStore.getState().addInstance()
-
-    // Open the project in the clean workspace
-    await useProjectStore.getState().openProjectAtPath(pendingProject.path)
-    registerCurrentAsProject()
-
-    setPendingProject(null)
-  }, [pendingProject])
-
-  const handleCancel = useCallback(() => {
-    setShowAttachDialog(false)
-    setPendingProject(null)
-  }, [])
+  }
 
   return {
     openProject,
     openProjectAtPath,
     newProject,
     showAttachDialog,
+    showChildrenDialog,
     pendingProjectName: pendingProject?.name || '',
+    pendingChildrenCount: pendingChildrenRef.current.length,
     handleThisWindow,
     handleAttach,
-    handleNewTab,
+    handleAttachIgnoreChildren,
+    handleAttachWithChildren,
+    handleNewWindow,
     handleCancel,
+    handleChildrenCancel,
   }
 }

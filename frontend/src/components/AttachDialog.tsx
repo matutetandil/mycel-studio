@@ -2,18 +2,18 @@
 // Options: This Window, Attach to Workspace, New Tab, Cancel.
 
 import { createPortal } from 'react-dom'
-import { FolderOpen, Layers, Plus } from 'lucide-react'
+import { FolderOpen, Layers, AppWindow } from 'lucide-react'
 
 interface AttachDialogProps {
   isOpen: boolean
   projectName: string
   onThisWindow: () => void
   onAttach: () => void
-  onNewTab: () => void
+  onNewWindow: () => void
   onCancel: () => void
 }
 
-export default function AttachDialog({ isOpen, projectName, onThisWindow, onAttach, onNewTab, onCancel }: AttachDialogProps) {
+export default function AttachDialog({ isOpen, projectName, onThisWindow, onAttach, onNewWindow, onCancel }: AttachDialogProps) {
   if (!isOpen) return null
 
   return createPortal(
@@ -61,16 +61,16 @@ export default function AttachDialog({ isOpen, projectName, onThisWindow, onAtta
             </div>
           </button>
 
-          {/* New Tab */}
+          {/* New Window */}
           <button
-            onClick={onNewTab}
+            onClick={onNewWindow}
             className="flex items-start gap-3 p-3 rounded-lg border border-neutral-700 hover:border-green-500 hover:bg-neutral-750 transition-colors text-left group"
           >
-            <Plus className="w-5 h-5 text-green-400 shrink-0 mt-0.5" />
+            <AppWindow className="w-5 h-5 text-green-400 shrink-0 mt-0.5" />
             <div>
-              <div className="text-sm font-medium text-white group-hover:text-green-300">New Tab</div>
+              <div className="text-sm font-medium text-white group-hover:text-green-300">New Window</div>
               <div className="text-xs text-neutral-500 mt-0.5">
-                Open in a completely independent workspace tab.
+                Open in a completely independent window.
               </div>
             </div>
           </button>
