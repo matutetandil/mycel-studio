@@ -5,9 +5,8 @@
 import { useEffect, useRef } from 'react'
 import { useProjectStore } from '../stores/useProjectStore'
 import { ideUpdateFile, ideParseProject } from '../lib/api'
-import { parseProjectToCanvas } from './useSync'
+import { convertProjectToNodes, type ParsedProject } from './useSync'
 import { useStudioStore } from '../stores/useStudioStore'
-import { suppressCanvasToFile } from './useCanvasToFileSync'
 
 export function useFileToCanvasSync() {
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -43,6 +42,10 @@ export function useFileToCanvasSync() {
   }, [])
 
   async function reparseProject() {
+    // Skip if properties or canvas is actively editing — only run for Monaco edits or external changes
+    const { editSource } = useStudioStore.getState()
+    if (editSource === 'properties' || editSource === 'canvas') return
+
     // Pending queue pattern: if busy, mark pending and re-run after
     if (busyRef.current) {
       pendingRef.current = true
@@ -69,29 +72,104 @@ export function useFileToCanvasSync() {
       const result = await ideParseProject(projectPath)
 
       if (result.success && result.project) {
-        // Suppress canvas→file sync to avoid loop (file→canvas→file)
-        suppressCanvasToFile()
+        // Convert to nodes/edges
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { newNodes, newEdges } = convertProjectToNodes(result.project as any)
 
-        // Preserve existing node positions — only update data, not layout
-        const existingNodes = useStudioStore.getState().nodes
-        const positionMap = new Map<string, { x: number; y: number }>()
+        // Read current state for position/selection preservation
+        const store = useStudioStore.getState()
+        const { nodes: existingNodes, selectedNodeId } = store
+
+        // Build position map by ID
+        const positionById = new Map<string, { x: number; y: number }>()
         for (const node of existingNodes) {
-          positionMap.set(node.id, node.position)
+          positionById.set(node.id, node.position)
         }
 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        parseProjectToCanvas(result.project as any)
+        // Build a map of old nodes by hclFile+type for rename fallback.
+        // When a block is renamed, its ID changes but its sourceFile+type stays the same.
+        // We greedily match unmatched old nodes to unmatched new nodes by hclFile+type.
+        const matchedOldIds = new Set<string>()
 
-        // Restore positions for nodes that existed before
-        const { nodes, setNodes } = useStudioStore.getState()
-        const repositioned = nodes.map(node => {
-          const prevPos = positionMap.get(node.id)
+        // First pass: match by exact ID
+        const repositioned = newNodes.map(node => {
+          const prevPos = positionById.get(node.id)
           if (prevPos) {
+            matchedOldIds.add(node.id)
             return { ...node, position: prevPos }
           }
           return node
         })
-        setNodes(repositioned)
+
+        // Second pass: for unmatched new nodes, find unmatched old nodes by hclFile+type
+        for (let i = 0; i < repositioned.length; i++) {
+          if (positionById.has(repositioned[i].id)) continue // already matched
+          const newData = repositioned[i].data as { hclFile?: string }
+          if (!newData.hclFile || !repositioned[i].type) continue
+
+          // Find an old node with same hclFile+type that wasn't matched by ID
+          const oldMatch = existingNodes.find(old => {
+            if (matchedOldIds.has(old.id)) return false
+            if (old.type !== repositioned[i].type) return false
+            const oldData = old.data as { hclFile?: string }
+            return oldData.hclFile === newData.hclFile
+          })
+          if (oldMatch) {
+            matchedOldIds.add(oldMatch.id)
+            repositioned[i] = { ...repositioned[i], position: oldMatch.position }
+          }
+        }
+
+        // Resolve selectedNodeId: keep if still exists, fallback to hclFile+type match
+        let resolvedSelectedId = selectedNodeId
+        if (selectedNodeId && !repositioned.some(n => n.id === selectedNodeId)) {
+          const oldNode = existingNodes.find(n => n.id === selectedNodeId)
+          if (oldNode) {
+            const oldData = oldNode.data as { hclFile?: string; label?: string }
+            // Try to find new node by hclFile+type (rename case)
+            const match = repositioned.find(n => {
+              if (n.type !== oldNode.type) return false
+              const d = n.data as { hclFile?: string }
+              return d.hclFile && d.hclFile === oldData.hclFile
+            })
+            // Fallback: try by type+label (non-rename case where ID changed for other reasons)
+            const labelMatch = !match ? repositioned.find(n => {
+              if (n.type !== oldNode.type) return false
+              const d = n.data as { label?: string }
+              return d.label === oldData.label
+            }) : null
+            resolvedSelectedId = match?.id ?? labelMatch?.id ?? null
+          } else {
+            resolvedSelectedId = null
+          }
+        }
+
+        // Mark the selected node with selected:true so React Flow doesn't
+        // trigger onSelectionChange({nodes:[]}) and clear our selection
+        const finalNodes = repositioned.map(node => ({
+          ...node,
+          selected: node.id === resolvedSelectedId,
+        }))
+
+        // Apply everything atomically in a single setState to prevent intermediate
+        // states that would cause React Flow to clear the selection
+        const stateUpdate: Record<string, unknown> = {
+          nodes: finalNodes,
+          edges: newEdges,
+          selectedNodeId: resolvedSelectedId,
+        }
+
+        // Apply service config if present
+        const project = result.project as unknown as ParsedProject
+        if (project.service) {
+          stateUpdate.serviceConfig = {
+            ...store.serviceConfig,
+            name: project.service.name || 'my-service',
+            version: project.service.version || '1.0.0',
+          }
+        }
+
+        useStudioStore.setState(stateUpdate)
       }
     } catch (err) {
       console.error('File→Canvas sync error:', err)

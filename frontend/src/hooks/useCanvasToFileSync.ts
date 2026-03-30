@@ -8,13 +8,6 @@ import { useStudioStore } from '../stores/useStudioStore'
 import { generateNodeHCL, replaceHclBlock, getHclBlockType, toIdentifier } from '../utils/hclGenerator'
 import type { ConnectorNodeData, FlowNodeData } from '../types'
 
-// Suppression flag to prevent file→canvas→file loop
-let _suppressCanvasToFile = false
-export function suppressCanvasToFile(duration = 1000) {
-  _suppressCanvasToFile = true
-  setTimeout(() => { _suppressCanvasToFile = false }, duration)
-}
-
 interface ChangedNodeInfo {
   id: string
   prevLabel: string  // label before the change, for finding old block name
@@ -33,8 +26,8 @@ export function useCanvasToFileSync() {
       const { projectName } = useProjectStore.getState()
       if (!projectName) return
 
-      // Skip if change came from file→canvas sync (avoid loop)
-      if (_suppressCanvasToFile) return
+      // Skip if Monaco is the active editor — it's writing to files, don't write back
+      if (state.editSource === 'monaco') return
 
       // Find which nodes actually changed data (not position)
       const changedNodes: ChangedNodeInfo[] = []

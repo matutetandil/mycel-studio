@@ -383,6 +383,7 @@ export default function EditorGroupView({ groupId, isSecondary }: EditorGroupPro
   const previewModes = useEditorPanelStore(s => s.previewModes)
   const setPreviewMode = useEditorPanelStore(s => s.setPreviewMode)
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null)
+  const localContentRef = useRef<string>('')
   const [copied, setCopied] = useState(false)
   const gitDecoRef = useRef<string[]>([])
   const [gitDiff, setGitDiff] = useState<LineDiffResult | null>(null)
@@ -466,6 +467,43 @@ export default function EditorGroupView({ groupId, isSecondary }: EditorGroupPro
     const genFile = generated.files.find(f => f.path === relPath)
     return { activeFile: genFile, isRealFile: false }
   }, [activeTab, projectFiles, nodes, edges, serviceConfig, authConfig, envConfig, securityConfig, pluginConfig, mycelRoot, projectName])
+
+  // Apply external content changes imperatively (when properties/canvas writes to the file)
+  // Since we use defaultValue (uncontrolled), we must push external changes via executeEdits
+  // to preserve cursor position and scroll state.
+  const editSource = useStudioStore(s => s.editSource)
+  useEffect(() => {
+    const ed = editorRef.current
+    if (!ed || !activeFile) return
+    // Only apply external changes — skip if Monaco is the source of truth
+    if (editSource === 'monaco') return
+    // Skip if content matches what Monaco already has (from user typing)
+    if (activeFile.content === localContentRef.current) return
+
+    const model = ed.getModel()
+    if (!model) return
+
+    // Save cursor and scroll position
+    const position = ed.getPosition()
+    const scrollTop = ed.getScrollTop()
+    const scrollLeft = ed.getScrollLeft()
+
+    // Apply the change as an edit operation (preserves undo stack)
+    model.pushEditOperations(
+      [],
+      [{
+        range: model.getFullModelRange(),
+        text: activeFile.content,
+      }],
+      () => null
+    )
+    localContentRef.current = activeFile.content
+
+    // Restore cursor and scroll
+    if (position) ed.setPosition(position)
+    ed.setScrollTop(scrollTop)
+    ed.setScrollLeft(scrollLeft)
+  }, [activeFile?.content, editSource])
 
   // Scroll to specific line when revealLine changes
   useEffect(() => {
@@ -868,12 +906,23 @@ export default function EditorGroupView({ groupId, isSecondary }: EditorGroupPro
             key={activeFile.path}
             height="100%"
             language={getLanguageForFile(activeFile.name)}
-            value={activeFile.content}
+            defaultValue={activeFile.content}
             theme="mycel-dark"
             beforeMount={setupMonaco}
             onMount={(monacoEditor, monacoInstance) => {
               editorRef.current = monacoEditor
+              localContentRef.current = activeFile.content
               setEditorReady(true)
+              // Focus tracking: set editSource when editor gains/loses focus
+              monacoEditor.onDidFocusEditorText(() => {
+                useStudioStore.getState().setEditSource('monaco')
+              })
+              monacoEditor.onDidBlurEditorText(() => {
+                const { editSource } = useStudioStore.getState()
+                if (editSource === 'monaco') {
+                  useStudioStore.getState().setEditSource(null)
+                }
+              })
               // Apply keymap (IDEA/VS Code)
               applyKeymap(monacoInstance, monacoEditor, useSettingsStore.getState().keymap)
               // Set active file path for IDE engine (completions, hover, diagnostics)
@@ -1117,6 +1166,7 @@ export default function EditorGroupView({ groupId, isSecondary }: EditorGroupPro
             }}
             onChange={(value) => {
               if (value !== undefined && isRealFile && activeFile) {
+                localContentRef.current = value
                 // Use the unscoped relative path for updating the project store
                 updateFile(activeFile.path, value)
               }

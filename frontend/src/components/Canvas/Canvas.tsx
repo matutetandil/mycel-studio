@@ -269,8 +269,16 @@ export default function Canvas() {
     ({ nodes: selectedNodes }) => {
       if (selectedNodes.length === 1) {
         selectNode(selectedNodes[0].id)
-      } else {
-        selectNode(null)
+      } else if (selectedNodes.length === 0) {
+        // Only clear selection if this was a user action (click on empty canvas).
+        // When file→canvas sync replaces all nodes, React Flow fires onSelectionChange
+        // with empty selection because the old node objects are gone — we must ignore that.
+        // editSource being 'monaco' or null (during async reparse) indicates a sync, not user action.
+        const { editSource } = useStudioStore.getState()
+        if (editSource === 'canvas') {
+          selectNode(null)
+        }
+        // If editSource is 'monaco', 'properties', or null — don't clear, let the sync preserve it
       }
     },
     [selectNode]
@@ -348,6 +356,7 @@ export default function Canvas() {
   // Save snapshot before drag starts (for undo of position changes)
   const onNodeDragStart: NodeMouseHandler = useCallback(() => {
     saveSnapshot()
+    useStudioStore.getState().setEditSource('canvas')
   }, [saveSnapshot])
 
   const closeContextMenu = useCallback(() => {
@@ -406,6 +415,7 @@ export default function Canvas() {
         onDrop={onDrop}
         onNodeDragStart={onNodeDragStart}
         onNodeContextMenu={onNodeContextMenu}
+        onPaneClick={() => useStudioStore.getState().setEditSource('canvas')}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
         fitView

@@ -1,8 +1,9 @@
-import { useMemo, useRef, useCallback } from 'react'
+import { useMemo, useRef, useCallback, useEffect } from 'react'
 import MonacoEditor from '@monaco-editor/react'
 import type { editor } from 'monaco-editor'
 import { X, Circle, FileCode, RefreshCw } from 'lucide-react'
 import { useProjectStore } from '../../stores/useProjectStore'
+import { useStudioStore } from '../../stores/useStudioStore'
 import { useThemeStore } from '../../stores/useThemeStore'
 import { useSync } from '../../hooks/useSync'
 import { setupMonaco, createValidationRunner } from '../../monaco'
@@ -50,8 +51,13 @@ export default function Editor() {
   const { theme } = useThemeStore()
   const { syncFromHCL, isSyncing } = useSync()
   const validationRunnerRef = useRef<ReturnType<typeof createValidationRunner> | null>(null)
+  const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null)
+  const localContentRef = useRef<string>('')
+  const editSource = useStudioStore(s => s.editSource)
 
   const handleEditorMount = useCallback((editorInstance: editor.IStandaloneCodeEditor, monacoInstance: typeof import('monaco-editor')) => {
+    editorRef.current = editorInstance
+    localContentRef.current = currentFile?.content || ''
     const runner = createValidationRunner(monacoInstance)
     validationRunnerRef.current = runner
 
@@ -63,6 +69,15 @@ export default function Editor() {
     editorInstance.onDidChangeModelContent(() => {
       const m = editorInstance.getModel()
       if (m) runner(m)
+    })
+
+    // Focus tracking
+    editorInstance.onDidFocusEditorText(() => {
+      useStudioStore.getState().setEditSource('monaco')
+    })
+    editorInstance.onDidBlurEditorText(() => {
+      const { editSource: es } = useStudioStore.getState()
+      if (es === 'monaco') useStudioStore.getState().setEditSource(null)
     })
   }, [])
 
@@ -84,6 +99,32 @@ export default function Editor() {
       setActiveFile(null)
     }
   }
+
+  // Apply external content changes imperatively (preserve cursor)
+  useEffect(() => {
+    const ed = editorRef.current
+    if (!ed || !currentFile) return
+    if (editSource === 'monaco') return
+    if (currentFile.content === localContentRef.current) return
+
+    const model = ed.getModel()
+    if (!model) return
+
+    const position = ed.getPosition()
+    const scrollTop = ed.getScrollTop()
+    const scrollLeft = ed.getScrollLeft()
+
+    model.pushEditOperations(
+      [],
+      [{ range: model.getFullModelRange(), text: currentFile.content }],
+      () => null
+    )
+    localContentRef.current = currentFile.content
+
+    if (position) ed.setPosition(position)
+    ed.setScrollTop(scrollTop)
+    ed.setScrollLeft(scrollLeft)
+  }, [currentFile?.content, editSource])
 
   if (openFiles.length === 0) {
     return (
@@ -123,14 +164,16 @@ export default function Editor() {
       <div className="flex-1">
         {currentFile ? (
           <MonacoEditor
+            key={currentFile.path}
             height="100%"
             language="hcl"
             theme={theme === 'dark' ? 'mycel-dark' : 'mycel-light'}
             beforeMount={setupMonaco}
             onMount={handleEditorMount}
-            value={currentFile.content}
+            defaultValue={currentFile.content}
             onChange={(value) => {
               if (value !== undefined) {
+                localContentRef.current = value
                 updateFile(currentFile.path, value)
                 // Sync HCL changes to canvas (debounced)
                 syncFromHCL(value)

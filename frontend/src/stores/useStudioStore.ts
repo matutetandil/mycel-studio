@@ -158,6 +158,7 @@ interface StudioState {
   selectedNodeId: string | null
   activeFlowEditor: string | null
   clipboard: ClipboardEntry | null
+  editSource: 'monaco' | 'properties' | 'canvas' | null
   serviceConfig: ServiceConfig
   authConfig: AuthConfig
   envConfig: EnvironmentConfig
@@ -169,6 +170,7 @@ interface StudioState {
   updateNode: (id: string, data: Partial<ConnectorNodeData | FlowNodeData>) => void
   removeNode: (id: string) => void
   selectNode: (id: string | null) => void
+  setEditSource: (source: 'monaco' | 'properties' | 'canvas' | null) => void
   openFlowEditor: (editor: string | null) => void
   copyNode: () => void
   pasteNode: () => void
@@ -200,6 +202,7 @@ export const useStudioStore = create<StudioState>((set, get) => ({
   selectedNodeId: null,
   activeFlowEditor: null,
   clipboard: null,
+  editSource: null,
   serviceConfig: { name: 'my-service', version: '1.0.0' },
   authConfig: {
     enabled: false,
@@ -282,6 +285,7 @@ export const useStudioStore = create<StudioState>((set, get) => ({
   },
 
   selectNode: (id) => set({ selectedNodeId: id }),
+  setEditSource: (source) => set({ editSource: source }),
   openFlowEditor: (editor) => set({ activeFlowEditor: editor }),
 
   copyNode: () => {

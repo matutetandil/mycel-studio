@@ -4079,7 +4079,21 @@ export default function Properties() {
         style={{ width: collapsed ? 0 : width }}
         className={`bg-neutral-900 border-l border-neutral-800 overflow-hidden h-full transition-[width] duration-200 ease-in-out ${isResizing || isSplitResizing ? 'select-none transition-none' : ''}`}
       >
-        <div style={{ width }} className="flex flex-col h-full" data-properties-container>
+        <div
+          style={{ width }}
+          className="flex flex-col h-full"
+          data-properties-container
+          onFocus={() => useStudioStore.getState().setEditSource('properties')}
+          onBlur={(e) => {
+            // Only clear if focus truly leaves the properties panel
+            if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+              const { editSource } = useStudioStore.getState()
+              if (editSource === 'properties') {
+                useStudioStore.getState().setEditSource(null)
+              }
+            }
+          }}
+        >
           {/* Properties section — top */}
           <div className="overflow-y-auto p-4" style={{ flex: `0 0 ${100 - envSplit}%` }}>
             {renderContent()}
