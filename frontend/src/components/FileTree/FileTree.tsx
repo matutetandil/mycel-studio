@@ -837,17 +837,22 @@ function SingleProjectFileTree({ hideHeader }: { hideHeader?: boolean } = {}) {
       <button
         onClick={() => setIsExpanded(!isExpanded)}
         onContextMenu={(e) => handleDirContextMenu(e, '')}
-        className="w-full flex items-center gap-1 px-2 py-1.5 hover:bg-neutral-800 font-medium"
+        className="w-full flex items-center gap-1 px-2 py-1.5 hover:bg-neutral-800 font-medium min-w-0"
+        title={projectPath || undefined}
       >
-        {isExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
-        {isExpanded ? <FolderOpen className="w-4 h-4 text-amber-500" /> : <Folder className="w-4 h-4 text-amber-500" />}
+        {isExpanded ? <ChevronDown className="w-4 h-4 shrink-0" /> : <ChevronRight className="w-4 h-4 shrink-0" />}
+        {isExpanded ? <FolderOpen className="w-4 h-4 text-amber-500 shrink-0" /> : <Folder className="w-4 h-4 text-amber-500 shrink-0" />}
         <span className={`truncate ${(() => {
-          // Project root shows worst severity across all files
           const diagFiles = useDiagnosticsStore.getState().files
           const hasErrors = Object.values(diagFiles).some(d => d.severity === 'error')
           const hasWarnings = Object.values(diagFiles).some(d => d.severity === 'warning')
           return hasErrors ? 'diag-error' : hasWarnings ? 'diag-warning' : ''
-        })()}`}>{projectName}</span>
+        })()}`}>{serviceConfig.name !== 'my-service' ? serviceConfig.name : projectName}</span>
+        {projectPath && (
+          <span className="truncate text-[10px] text-neutral-600 font-normal ml-1">
+            {projectPath.startsWith('/Users/') ? '~/' + projectPath.slice(projectPath.indexOf('/', 7) + 1) : projectPath}
+          </span>
+        )}
       </button>
 
       {isExpanded && (

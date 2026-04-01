@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
+	"runtime"
 	"time"
 
 	"mycel-studio/handlers"
@@ -38,6 +39,13 @@ func NewApp() *App {
 		updater:        NewUpdater(version),
 		confirmOnClose: true,
 	}
+}
+
+// MemoryUsageMB returns the current process memory usage in megabytes.
+func (a *App) MemoryUsageMB() float64 {
+	var m runtime.MemStats
+	runtime.ReadMemStats(&m)
+	return float64(m.Sys) / 1024 / 1024
 }
 
 // Startup is called when the Wails app starts.

@@ -533,7 +533,17 @@ export default function EditorGroupView({ groupId, isSecondary }: EditorGroupPro
   // Track which block the cursor is in — select the corresponding canvas node
   const lastSelectedBlockRef = useRef<string | null>(null)
   const handleCursorChange = useCallback((lineNumber: number) => {
-    if (blockRanges.length === 0) return
+    if (blockRanges.length === 0) {
+      // File has no named blocks (e.g., config.mycel with only `service {}`)
+      // Deselect any previously selected node so Properties shows ServiceProperties
+      if (lastSelectedBlockRef.current !== null) {
+        lastSelectedBlockRef.current = null
+        cursorDrivenSelection = true
+        useStudioStore.getState().selectNode(null)
+        setTimeout(() => { cursorDrivenSelection = false }, 0)
+      }
+      return
+    }
     const block = blockRanges.find(b => lineNumber >= b.startLine && lineNumber <= b.endLine)
     const blockKey = block ? `${block.type}:${block.name}` : null
     if (blockKey !== lastSelectedBlockRef.current) {
@@ -541,7 +551,9 @@ export default function EditorGroupView({ groupId, isSecondary }: EditorGroupPro
       if (block) {
         selectNodeByBlock(block.type, block.name)
       } else {
+        cursorDrivenSelection = true
         useStudioStore.getState().selectNode(null)
+        setTimeout(() => { cursorDrivenSelection = false }, 0)
       }
     }
   }, [blockRanges])

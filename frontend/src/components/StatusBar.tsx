@@ -2,8 +2,9 @@ import { useState, useRef, useEffect } from 'react'
 import { useProjectStore } from '../stores/useProjectStore'
 import { useEditorPanelStore, unscopePath } from '../stores/useEditorPanelStore'
 import { useNotificationStore } from '../stores/useNotificationStore'
-import { GitBranch, Bell, BellDot, CheckCircle, Download } from 'lucide-react'
+import { GitBranch, Bell, BellDot, CheckCircle, Download, MemoryStick } from 'lucide-react'
 import { getFileTypeInfo, KNOWN_LANGUAGES, setLanguageOverride, removeLanguageOverride, getLanguageOverride } from '../utils/fileIcons'
+import { isWailsRuntime } from '../lib/api'
 
 interface StatusBarProps {
   downloadProgress?: { percent: number; message: string } | null
@@ -83,6 +84,19 @@ export default function StatusBar({ downloadProgress, isDownloading, updateReady
     !langSearch || l.label.toLowerCase().includes(langSearch.toLowerCase())
   )
 
+  // Memory usage polling (every 5s)
+  const [memoryMB, setMemoryMB] = useState<number | null>(null)
+  useEffect(() => {
+    if (!isWailsRuntime()) return
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const app = (window as any).go?.main?.App
+    if (!app?.MemoryUsageMB) return
+    const poll = () => app.MemoryUsageMB().then((mb: number) => setMemoryMB(mb))
+    poll()
+    const id = setInterval(poll, 5000)
+    return () => clearInterval(id)
+  }, [])
+
   const BellIcon = notifCount > 0 ? BellDot : Bell
 
   return (
@@ -153,6 +167,12 @@ export default function StatusBar({ downloadProgress, isDownloading, updateReady
           >
             {fileTypeInfo.label}{hasOverride ? ' *' : ''}
           </button>
+        )}
+        {memoryMB !== null && (
+          <span className="flex items-center gap-1 text-neutral-500" title="Memory usage">
+            <MemoryStick className="w-3 h-3" />
+            {memoryMB < 1024 ? `${Math.round(memoryMB)} MB` : `${(memoryMB / 1024).toFixed(1)} GB`}
+          </span>
         )}
         {projectName && (
           <span>{projectName}</span>

@@ -13,7 +13,8 @@ interface AttachDialogProps {
   onCancel: () => void
 }
 
-export default function AttachDialog({ isOpen, projectName, onThisWindow, onAttach, onNewWindow, onCancel }: AttachDialogProps) {
+export default function AttachDialog({ isOpen, projectName, onThisWindow, onAttach: _onAttach, onNewWindow, onCancel }: AttachDialogProps) {
+  void _onAttach // reserved for future use
   if (!isOpen) return null
 
   return createPortal(
@@ -47,19 +48,21 @@ export default function AttachDialog({ isOpen, projectName, onThisWindow, onAtta
             </div>
           </button>
 
-          {/* Attach */}
-          <button
-            onClick={onAttach}
-            className="flex items-start gap-3 p-3 rounded-lg border border-neutral-700 hover:border-indigo-500 hover:bg-neutral-750 transition-colors text-left group"
+          {/* Attach (disabled — coming soon) */}
+          <div
+            className="flex items-start gap-3 p-3 rounded-lg border border-neutral-700 opacity-50 cursor-not-allowed text-left"
           >
             <Layers className="w-5 h-5 text-indigo-400 shrink-0 mt-0.5" />
             <div>
-              <div className="text-sm font-medium text-white group-hover:text-indigo-300">Attach to Workspace</div>
-              <div className="text-xs text-neutral-500 mt-0.5">
-                Keep the current project open and add this one alongside it.
+              <div className="text-sm font-medium text-neutral-400">
+                Attach to Workspace
+                <span className="ml-2 text-[10px] font-normal text-indigo-400/70 uppercase tracking-wide">coming soon</span>
+              </div>
+              <div className="text-xs text-neutral-600 mt-0.5">
+                Multi-project workspaces are being redesigned. Stay tuned!
               </div>
             </div>
-          </button>
+          </div>
 
           {/* New Window */}
           <button
