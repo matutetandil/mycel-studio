@@ -2,102 +2,91 @@
 
 All notable changes to this project will be documented in this file.
 
-## [2.1.0] - Multi-Project Parent-Child Architecture
-
-### Fixed
-
-- **Canvas empty/disordered on reopen:** Each project's `.mycel-studio.json` is now saved independently from its own snapshot. Previously, the active project's store state was written to all project files, causing incorrect node positions.
-- **Same-name files both selected across projects:** Editor tab IDs are now scoped with the project path (`{projectPath}::{relativePath}`), so `config.hcl` from project A and project B are distinct tabs.
-- **Git status not showing for attached projects:** Added `refreshAllProjectsGitStatus()` that polls git for all inactive projects alongside the active project refresh.
+## [2.0.0] - Full IDE Engine Integration & Multi-Project Infrastructure
 
 ### Added
 
-- **Persistent parent-child workspace architecture:**
-  - `.mycel-studio.json` schema v1.1 with `workspace` field
-  - Parent projects store `attachments` array with absolute paths to children
-  - Child projects store `parent` reference to the parent project path
-  - Opening a child auto-loads the parent and all siblings
-  - Opening a parent auto-loads all attached children
-  - Detaching removes references from both parent and child workspace files
+**IDE Engine (Mycel pkg/ide integration)**
+- Integrated Mycel IDE engine (`pkg/ide`) for HCL intelligence — replaces manual HCL parsing for all editor features
+- Go backend now maintains a `map[string]*ide.Engine` keyed by project path; `engineForFile()` routes each request to the correct engine using longest-prefix matching
+- IDE engine powers breakpoint valid locations, diagnostics, Go to Definition, and Find Usages
+- Updated Mycel dependency to v1.17.2 for IDE engine bugfixes
+- Skip IDE validation for non-HCL files to avoid spurious diagnostics
 
-- **Per-project workspace save (`saveAllProjectWorkspaces`):**
-  - Snapshots each project independently before saving
-  - Parent gets shared UI state (sidebar, terminals, breakpoints, view mode)
-  - Children get only their own canvas, nodes, and editor tabs
+**Diagnostics & Code Intelligence**
+- Diagnostic squiggly underlines rendered in the Monaco editor
+- Diagnostic indicators on editor tabs, the file tree, and directory nodes (bubble up from children)
+- Code actions surfaced from the IDE engine (quick-fix lightbulb)
+- Go to Definition and Find Usages commands wired through IDE engine
+- Gutter decorations for referenced lines and git blame (IntelliJ-style pixel-aligned gutter panel)
 
-- **Scoped editor tab IDs:**
-  - `scopedPath()` / `unscopePath()` helpers in `useEditorPanelStore`
-  - EditorGroup resolves content from the correct project via scoped path
-  - TabBar shows project name in tooltip, switches project on tab click
+**SOLID Hints & Refactoring**
+- SOLID hints panel: IDE engine emits refactoring hints (single-responsibility, extract transform, etc.)
+- Hint lightbulb appears on block declaration lines with relative path display
+- Refactor dialog with context-aware rename
+- Extract transform refactoring action
+- Rename file support with reference updates
 
-- **Go bindings:** `WriteFileAtPath()`, `ReadFileAtPath()` for cross-project file operations
+**Git Panel**
+- Full Git panel with commit graph, diff viewer, and resizable details pane
+- Git blame annotations in editor gutter
+- Commit highlighting and staged-status indicators
+- Git staged status displayed per file in the file tree and editor tabs
 
-## [2.0.0] - Multi-Project Support
+**Conditional Breakpoints**
+- Breakpoints support optional CEL conditions — orange indicator distinguishes conditional from unconditional breakpoints
+- Inline CEL input renders below the breakpoint line in the editor
+- Breakpoint valid locations resolved via IDE engine instead of manual HCL parsing
 
-### Added
+**Editor UX**
+- Cursor position persisted per file; Ln/Col displayed in status bar
+- Full editor view state persisted per file: scroll position, folded regions, and selections
+- File preview system: hovering a file in the tree opens a transient preview tab; confirmed on edit
+- Cursor-aware HCL property selection: clicking inside a block in Monaco highlights the corresponding node in the canvas and selects its properties
+- Auto-focus terminal on tab switch and panel activation
+- Split panels in debug view with persistent layout
 
-- **Multi-project store (`useMultiProjectStore.ts`):**
-  - Manages multiple attached projects within a single workspace
-  - Each project maintains isolated canvas state, HCL files, configuration, and git status
-  - Projects can be attached and detached at runtime without losing canvas state
-  - Active project switching propagates to canvas, file tree, and debug panel
+**File Extension Migration**
+- Project files migrated from `.hcl` to `.mycel` extension throughout the editor, file tree, and generator
+- Connector registry updated to use `.mycel` as the default file extension
+- Backend parser updated to handle the new extension; fallback connector path corrected
 
-- **Instance tabs (`useInstanceStore.ts`, `InstanceTabBar.tsx`):**
-  - Chrome-style workspace tabs at the top of the IDE window
-  - Each instance is a fully independent workspace with its own set of attached projects, layout, and editor state
-  - New instances open in a clean state; existing instances persist across switches
+**Multi-Project Infrastructure (foundation only — Attach disabled)**
+- `useMultiProjectStore` manages multiple projects in a single workspace; each project has isolated canvas state, HCL files, and git status
+- Per-project debug tabs (`DebugProjectTabs`) replace the project selector dropdown
+- Multi-root file tree: each attached project appears as a separate root with git branch badge
+- Scoped editor tab IDs (`{projectPath}::{relativePath}`) prevent same-name files from different projects sharing a tab
+- `WailsFileSystem` singleton fixed: `getCurrentPath()` now reads from the active store on every operation, preventing cross-project file writes
+- Parent-child workspace architecture: `.mycel-studio.json` schema v1.1 stores `workspace.attachments` and `workspace.parent`; opening either side auto-loads the other
+- Go bindings: `WriteFileAtPath()` / `ReadFileAtPath()` for cross-project file operations
+- RAM usage indicator in status bar
+- Attach menu item present but disabled; multi-project switching stabilized for future enablement
 
-- **Canvas as editor tab:**
-  - `EditorTab` type extended with `type: 'file' | 'canvas'` and `projectId` fields
-  - Canvas tabs render a React Flow instance embedded alongside Monaco editor tabs in the same tab bar
-  - `openCanvas(projectId)` method in `useEditorPanelStore` opens a canvas tab for any attached project
-  - `CanvasTab.tsx` — canvas-in-tab component for text-first view mode
+**Project Open Modes**
+- "This Window" option in the project open dialog replaces the current project in place
+- New Window option opens a project in a separate OS process (replaces the earlier instance-tab approach)
+- IPC instance reuse: a second launch detects a running instance and forwards the open request to it
+- Cross-platform support for New Window and IPC paths
 
-- **CanvasPanel (`CanvasPanel.tsx`):**
-  - Tab-based canvas area used in visual-first mode
-  - Shows one tab per attached project when multiple projects are open
-  - Switching tabs activates the corresponding project in all panels
-
-- **Multi-root file tree:**
-  - Each attached project appears as a separate root in the file explorer
-  - Git branch badge displayed next to each project root
-  - Click a root to switch the active project; X button to detach the project from the workspace
-
-- **Attach/New Tab dialog (`AttachDialog.tsx`, `useProjectOpen.ts`):**
-  - When opening a project while another project is already open, a dialog offers two choices:
-    - "Attach to Workspace" — adds the project to the current workspace; both projects share the IDE sidebar and bottom panel with separate canvases
-    - "Open in New Tab" — opens the project in a new independent instance tab
-  - `useProjectOpen.ts` — hook that centralizes open-project logic and drives the dialog
-
-- **Multi-project debug support:**
-  - Project selector dropdown in `DebugToolbar` when multiple projects are attached
-  - Each project stores its own Mycel runtime URL for the debug connection
-  - Switching projects in the toolbar reconnects to the corresponding runtime
-
-- **"Attach Project..." menu item:**
-  - Added to the File menu in both the native macOS menu (`menu.go`) and the browser menu bar (`MenuBar.tsx`)
-  - `useNativeMenu.ts` — `onAttachProject` callback wired to the native menu event
+**File & Canvas Operations**
+- Delete file with confirmation dialog
+- Auto-create `.mycel` files when a component is dropped onto the canvas with no file selected
+- Aspect-to-flow edges fixed: HCL list values extracted correctly from source blocks
 
 ### Changed
 
-- **`useEditorPanelStore.ts`:** `EditorTab` interface extended with optional `type`, `projectId` fields; workspace serialization skips canvas-type tabs (they are restored from project state, not serialized position)
-- **`useWorkspaceStore.ts`:** Tab serialization now handles the new `type` field and omits canvas tabs from persisted state to avoid stale references on reload
-- **`FileTree.tsx`:** Rewritten to support multi-root display; each project root is rendered independently with its own git status and expand/collapse state
-- **`EditorGroup.tsx`:** Renders `CanvasTab` when the active tab has `type === 'canvas'`, falling back to Monaco for file tabs
-- **`TabBar.tsx`:** Shows a `LayoutGrid` icon for canvas-type tabs; clicking a canvas tab activates the corresponding project in the multi-project store
-- **`DebugToolbar.tsx`:** Added project selector dropdown; only visible when more than one project is attached
-- **`MenuBar.tsx`:** Accepts `onNewProject` and `onOpenProject` override props so `App.tsx` can inject the attach-aware open handler
-- **`App.tsx`:** Integrates `CanvasPanel`, `InstanceTabBar`, `AttachDialog`, and the `useProjectOpen` hook; routes all open-project actions through the centralized hook
+- **Bidirectional file-canvas sync rewritten:** Uses a focus-based `editSource` state (`'monaco' | 'properties' | 'canvas' | null`) as the authoritative source of truth. Each editor surface sets/clears `editSource` on focus/blur; sync updates are gated to prevent feedback loops. Node IDs stabilized to `${type}-${sourceFile}-${name}` for reliable position and selection preservation across renames
+- **Instance tabs removed:** replaced by New Window (separate OS process); workspace tabs no longer exist
+- **`useProjectStore` / `useStudioStore` / `useDebugStore`:** internal architecture prepared for per-project store instances (per-project store factory and context helpers added as foundation for next phase)
+- CLI install menu item removed (deferred; channel to frontend not yet implemented)
 
-### New Files
+### Fixed
 
-- `frontend/src/stores/useMultiProjectStore.ts`
-- `frontend/src/stores/useInstanceStore.ts`
-- `frontend/src/components/Canvas/CanvasPanel.tsx`
-- `frontend/src/components/EditorPanel/CanvasTab.tsx`
-- `frontend/src/components/InstanceTabs/InstanceTabBar.tsx`
-- `frontend/src/components/AttachDialog.tsx`
-- `frontend/src/hooks/useProjectOpen.ts`
+- Empty canvas on project open: `FullReindex` call restored after project switch
+- Project switch leaving stale files from previous session in "This Window" mode
+- External file refresh not propagating to editor and canvas
+- Duplicate tabs on tab click and stale breakpoint click handler
+- Fix breakpoint placement offset in HCL editor
 
 ---
 
@@ -540,456 +529,3 @@ All notable changes to this project will be documented in this file.
 - **Queue type renamed to `mq`** — Aligns with Mycel runtime's `type = "mq"` (was incorrectly `"queue"`)
 - **`env()` expression escaping** — Values like `env("DB_HOST")` now generate `host = env("DB_HOST")` instead of `host = "env(\"DB_HOST\")"`
 - **gRPC client field naming** — Renamed `address` to `target` to match Mycel docs
-- **SSE heartbeat naming** — Renamed `heartbeat_interval` to `heartbeat` to match Mycel docs
-
-### Added
-
-- **Environment Variables panel** — Always-visible panel at bottom ~30% of Properties sidebar with resizable split divider
-- **REST CORS expansion** — Full CORS configuration: origins, methods, headers (was boolean-only)
-- **Database connection pooling** — `pool_max`, `pool_min`, `pool_max_lifetime` for Postgres/MySQL
-- **HTTP client retry** — Retry block with count, interval, backoff; added `oauth2` auth type
-- **gRPC TLS & limits** — TLS block, `proto_files`, `max_recv_mb`, `max_send_mb`
-- **MQTT TLS & timeouts** — TLS block, `connect_timeout`, `keep_alive`, `clean_session`, `max_reconnect_interval`
-- **GraphQL server options** — `playground_path`, `introspection`, CORS fields
-- **Cache Redis options** — `default_ttl`, connection pool fields
-- **File connector** — Added `binary` format, `create_dirs`, `permissions`
-- **S3 MinIO support** — `force_path_style` for MinIO compatibility
-- **Exec connector** — `input_format`, `output_format`, retry fields
-- **HCL block generation** — Proper `cors {}`, `tls {}`, `pool {}`, `retry {}` sub-blocks
-
-## [0.12.0] - Auto-save, Connector Profiles & Backend Validation
-
-### Added
-
-- **Auto-save (Phase 8.5):**
-  - `useAutoSave` hook with debounced file writes
-  - Subscribes to Zustand store changes, saves when dirty files exist
-  - Configurable debounce interval (default 2000ms)
-  - Status tracking: idle → saving → saved → error
-  - Toggle in ServiceProperties (only shown when project is open)
-
-- **Connector Profiles (Phase 6.6):**
-  - `ConnectorProfile` and `ConnectorProfileConfig` types
-  - `ProfilesEditor` component in Properties panel
-  - CEL-based profile selection (`select` expression)
-  - Default profile and fallback chain configuration
-  - Per-profile config fields matching connector type
-  - Optional per-profile transform overrides
-  - HCL generation: `select`, `default`, `fallback`, `profile` blocks
-
-- **Backend Validation (Phase 8.6):**
-  - `ValidateContent()` method with 3-step validation pipeline
-  - Step 1: HCL syntax validation (parse errors with line numbers)
-  - Step 2: Structure validation against extended schema
-  - Step 3: Semantic validation (duplicate names, missing attributes, undefined references)
-  - Extended `rootSchema` with saga, state_machine, auth, security, plugin, workflow, batch, environment
-  - Structured `ValidationError` with message, file, line, column, severity
-  - Multi-file validation support in `/api/validate` endpoint
-
-## [0.11.0] - Phase 9: Monaco IDE Enhancement
-
-### Added
-
-- **HCL Syntax Highlighting (9.1):**
-  - Monarch tokenizer for HCL2 with full token classification
-  - Top-level blocks, sub-blocks, built-in functions, context variables
-  - String interpolation (`${...}`) and heredoc support
-  - Custom dark theme (`mycel-dark`) and light theme (`mycel-light`)
-  - Color-coded: keywords (purple), sub-blocks (blue), strings (orange), numbers (green), functions (yellow), comments (green italic), context vars (cyan italic), block names (teal bold)
-
-- **Context-Aware Autocompletion (9.2):**
-  - Top-level block snippets (connector, flow, type, saga, etc.)
-  - Connector attributes based on current block context
-  - Flow sub-block snippets (from, to, step, transform, response, etc.)
-  - Connector type values from registry (25 types)
-  - Driver values, backoff strategies, on_error strategies
-  - Connector name references from canvas state (dynamic)
-  - CEL function completions with signatures
-  - Context variable suggestions (input.*, output.*, step.*, etc.)
-  - Nested block awareness (retry, cache, lock, semaphore, etc.)
-
-- **Hover Information (9.4):**
-  - Block keyword documentation with examples
-  - Connector type descriptions
-  - CEL function signatures and descriptions
-  - Context variable documentation
-  - Attribute documentation (port, driver, timeout, etc.)
-
-- **Client-Side Validation (9.3):**
-  - Real-time syntax validation with error markers (squiggles)
-  - Unclosed strings, unmatched braces, unclosed block comments
-  - Malformed attribute assignments (warnings)
-  - Debounced validation (500ms) for performance
-
-- **Shared Documentation Data:**
-  - `hclDocs.ts` — Comprehensive docs for blocks, CEL functions, variables, connector types
-  - Used by both completion and hover providers
-
-### Changed
-
-- `Preview.tsx` — Uses `mycel-dark` theme and `beforeMount` for language registration
-- `Editor.tsx` — Uses custom themes, `beforeMount` for registration, `onMount` for validation wiring
-
-### New Files
-
-- `frontend/src/monaco/index.ts` — Entry point with idempotent `setupMonaco()`
-- `frontend/src/monaco/hclLanguage.ts` — Monarch tokenizer and language configuration
-- `frontend/src/monaco/hclTheme.ts` — Dark and light themes
-- `frontend/src/monaco/hclDocs.ts` — Shared documentation data
-- `frontend/src/monaco/hclCompletionProvider.ts` — Context-aware completion provider
-- `frontend/src/monaco/hclHoverProvider.ts` — Hover tooltip provider
-- `frontend/src/monaco/hclValidator.ts` — Client-side validation and marker management
-
-## [0.10.0] - Phase 8: UX Polish
-
-### Added
-
-- **Undo/Redo (8.1):**
-  - `useHistoryStore.ts` — Snapshot-based history with configurable max depth (50)
-  - Tracks: node add/remove/update, edge connect/remove, node drag
-  - Keyboard shortcuts: Ctrl+Z (undo), Ctrl+Shift+Z (redo)
-  - Menu bar Edit menu shows enabled/disabled state
-
-- **Copy/Paste (8.2):**
-  - Copy selected node with Ctrl+C, paste with Ctrl+V (offset +50px)
-  - Duplicate in-place with Ctrl+D
-  - Clipboard persists across paste operations
-  - Menu bar Edit menu with copy/paste/duplicate
-
-- **Keyboard Shortcuts (8.3):**
-  - `useKeyboardShortcuts.ts` — Global shortcut handler
-  - `ShortcutsDialog.tsx` — Modal showing all available shortcuts (Ctrl+/)
-  - Skips shortcuts when typing in inputs, textareas, or Monaco editor
-  - Platform-aware key labels (Cmd on Mac, Ctrl on others)
-
-- **Template Gallery (8.4):**
-  - `templates.ts` — 6 pre-built project templates
-  - `TemplateGallery.tsx` — Modal with categorized template browser
-  - Templates: REST+DB CRUD, GraphQL+DB, Scheduled Job, Event Processing, Real-time WebSocket, Order Saga
-  - Categories: Basic, Messaging, Real-time, Enterprise
-  - Ctrl+N or File > New from Template
-
-### Changed
-
-- `useStudioStore.ts` — Added clipboard state, undo/redo/copy/paste/duplicate/loadTemplate methods
-- `MenuBar.tsx` — Edit menu now functional (undo/redo/copy/paste/duplicate), File menu has template entry
-- `Canvas.tsx` — Saves snapshot on node drag start for undo support
-- `App.tsx` — Integrates keyboard shortcuts hook, shortcuts dialog, and template gallery
-
-## [0.9.0] - Phase 7: Enterprise Features
-
-### Added
-
-- **Batch Processing (7.1):**
-  - `BatchEditor.tsx` — Custom editor for batch/ETL flows
-  - Source connector, SQL query, chunk size, on_error (stop/continue)
-  - Per-item transform and target connector configuration
-  - HCL preview, visual indicator on flow nodes
-  - `batch` flow block definition
-
-- **Sagas (7.2) — Distributed Transactions:**
-  - `SagaNode.tsx` — Top-level node with step preview (action/delay/await icons)
-  - `SagaProperties` — Step editor with action/compensate pairs, delay, await
-  - On_complete/on_failure callbacks, per-step timeout and on_error
-  - HCL generation: `saga "name" { from, step "name" { action {}, compensate {} }, on_complete, on_failure }`
-  - Output to `sagas/sagas.hcl`
-
-- **State Machines (7.3) — Entity Lifecycle:**
-  - `StateMachineNode.tsx` — Top-level node with state visualization
-  - `StateMachineProperties` — State editor with transitions (event → target + guard + action)
-  - Initial state selector, final state marking
-  - HCL generation: `state_machine "name" { initial, state "name" { on "event" { transition_to, guard, action } } }`
-  - Output to `machines/machines.hcl`
-
-- **Long-Running Workflows (7.6):**
-  - Workflow storage configuration in service block (`workflow { storage, table, auto_create }`)
-  - UI appears automatically when saga nodes exist on canvas
-  - Warning when sagas with delay/await lack persistent storage
-  - Database connector selector for workflow state persistence
-  - Auto-generated REST endpoints info (GET status, POST signal, POST cancel)
-  - SagaNode now shows "WORKFLOW" label when it contains delay/await steps
-  - `WorkflowStorageConfig` type, generates `workflow {}` block in `config.hcl`
-
-- **Security (7.7) — Input Sanitization:**
-  - `SecurityProperties` — Enable/disable, input limits, WASM sanitizers
-  - Input limits: max_input_length, max_field_length, max_field_depth, allowed_control_chars
-  - WASM sanitizer management: name, wasm path, entrypoint, apply_to (globs), fields
-  - `SecurityConfig`, `SecuritySanitizer` types
-  - HCL generation: `security { max_input_length, sanitizer "name" { source, wasm, apply_to, fields } }`
-  - Output to `security/security.hcl`
-
-- **WASM Plugins (7.9):**
-  - `PluginProperties` — Plugin management panel
-  - Plugin definition: name, source (git URL or path), version (semver), exported functions
-  - `PluginConfig`, `PluginDefinition` types
-  - HCL generation: `plugin "name" { source, version, functions }`
-  - Output to `plugins/plugins.hcl`
-
-- **Environment Variables (7.5):**
-  - `EnvProperties` — Variables panel with two tabs (Variables / Environments)
-  - Auto-scan of env() references across all nodes and auth config
-  - Warning panel showing undefined references with click-to-add
-  - Secret marking (hidden in `.env.example`)
-  - Per-environment overlays (dev/staging/production) with variable overrides
-  - Active environment selector
-  - File generation: `.env`, `.env.example`, `environments/{name}.env`
-  - `EnvironmentConfig`, `EnvVariable`, `EnvironmentOverlay` types
-
-- **Auth UI (7.4) — Authentication Configuration:**
-  - `AuthProperties` — Full auth configuration panel in Properties sidebar
-  - Preset selector (strict/standard/relaxed/development) with auto-apply defaults
-  - JWT: algorithm (HS256-RS512), secret, access/refresh TTL, issuer, rotation
-  - Password policy: min length, require upper/lower/number/special, breach check
-  - MFA: required/optional/off, methods (TOTP, WebAuthn, SMS, email, push), TOTP issuer
-  - Sessions: max active, idle timeout, on_max_reached policy
-  - Security: brute force protection (max attempts, lockout), replay protection
-  - Storage: users connector reference, token driver (memory/redis)
-  - Social login: Google, GitHub, Apple with client ID/secret
-  - Endpoint prefix customization
-  - Enable/disable toggle for the entire auth system
-  - HCL generation: `auth { preset, jwt {}, password {}, mfa {}, sessions {}, security {}, social {}, storage {}, users {} }`
-  - Output to `auth/auth.hcl`
-  - `AuthConfig` type with full sub-type hierarchy (JWT, Password, MFA, Sessions, Security, Storage, Social)
-
-### Changed
-
-- **useStudioStore:** Added `authConfig`, `envConfig`, `securityConfig`, `pluginConfig` state with update methods
-- **Properties.tsx:** AuthProperties panel shown below ServiceProperties when no node selected
-- **hclGenerator.ts:** `generateProject()` and `generateHCL()` accept optional `authConfig`, `envConfig`, `securityConfig`, `pluginConfig` parameters
-- **FileTree.tsx:** Passes all configs to `generateProject()`, expanded dirs include `auth`, `security`, `plugins`, `environments`
-- **Preview.tsx:** Passes all configs to `generateProject()`
-- **SagaNode.tsx:** Shows "WORKFLOW" label for sagas with delay/await steps
-- **Palette.tsx:** Saga and State Machine in Logic category
-- **Nodes/index.ts:** Registered SagaNode and StateMachineNode
-
----
-
-## [0.8.1] - Mycel v1.12.0 Compatibility
-
-### Changed
-
-- **ResponseEditor rewritten** — Now a CEL transform editor instead of HTTP status/headers/body:
-  - Field mappings with `input.*` and `output.*` variables
-  - CEL pattern helpers and templates (pass through, normalize, echo with metadata)
-  - `http_status_code` and `grpc_status_code` override fields
-  - Context-aware help text (echo flow vs normal flow)
-  - HCL preview with correct v1.12.0 syntax
-
-- **FlowResponse type** — Changed from `{status, headers, body}` to `{fields, httpStatusCode?, grpcStatusCode?}`
-
-- **Echo flows supported** — Flows without a `to` block are now valid. The ResponseEditor detects echo flows and adjusts variable hints accordingly
-
-- **HCL generation** — Response block now generates CEL field mappings with optional status code overrides instead of HTTP status/headers/body
-
-- **Response flow block definition** — Updated description and isActive check for new data structure
-
-### Fixed
-
-- `.gitignore` — Added `backend/backend` binary
-
----
-
-## [0.8.0] - Phase 5: Named Transforms & Aspects
-
-### Added
-
-- **Transform nodes:**
-  - `TransformNode.tsx` — Visual node showing field mappings preview (up to 4 fields with overflow indicator)
-  - `TransformProperties` in Properties panel — Field mappings editor with add/rename/remove
-  - CEL expressions for field values
-  - Generates `transform "name" { field = "expression" }` HCL
-
-- **Aspect nodes (AOP - cross-cutting concerns):**
-  - `AspectNode.tsx` — Visual node with when-based colors (before=blue, after=green, around=purple, on_error=red)
-  - Shows matching patterns and action/cache/invalidate indicators
-  - `AspectProperties` in Properties panel:
-    - When selector (before/after/around/on_error)
-    - Glob pattern matching for flow targeting
-    - Optional condition and priority
-    - Action block (connector + target + transform) for before/after/on_error
-    - Cache block (storage + key + TTL) for around aspects
-    - Invalidation block (storage + keys/patterns) for after aspects
-  - Generates `aspect "name" { on, when, if, priority, action {}, cache {}, invalidate {} }` HCL
-
-- **HCL generation:**
-  - `generateNamedTransformHCL()` — Top-level named transform blocks
-  - `generateAspectHCL()` — Aspect blocks with all sub-blocks (action, cache, invalidate)
-  - Output to `transforms/transforms.hcl` and `aspects/aspects.hcl`
-
-### Changed
-
-- **Palette:** Added Transform and Aspect to Schema category with proper drag initialization
-- **Nodes/index.ts:** Registered TransformNode and AspectNode in nodeTypes
-- **Properties.tsx:** Added TransformProperties and AspectProperties panels (6 node types total)
-- **FileTree.tsx:** Transform/aspect node selection auto-navigates to correct generated file; expanded default directories include transforms/aspects
-- **hclGenerator.ts:** Extended generateProject to output transforms and aspects files
-
----
-
-## [0.7.0] - Phase 4: Types & Validators
-
-### Added
-
-- **Type nodes:**
-  - `TypeNode.tsx` — Visual node showing type name and field preview (names, types, required markers)
-  - `TypeProperties` in Properties panel — Full type field editor with add/remove/rename
-  - Per-field constraints: string (format, min_length, max_length, pattern, enum, validate), number (min, max), boolean
-  - Format presets: email, url, uuid, date, datetime, phone, ip
-  - Validator reference dropdown (populated from validator nodes on canvas)
-
-- **Validator nodes with registry pattern (`src/validators/`):**
-  - `ValidatorNode.tsx` — Visual node with type-specific icon and color
-  - `ValidatorProperties` — Type selector (regex/cel/wasm) with registry-driven fields
-  - `validators/definitions/regex.ts` — Pattern field
-  - `validators/definitions/cel.ts` — CEL expression field
-  - `validators/definitions/wasm.ts` — WASM path + entrypoint fields
-  - `validators/registry.ts` — Central Map with `getValidatorType()`, `getAllValidatorTypes()`
-
-- **Validate flow block (`flow-blocks/definitions/validate.ts`):**
-  - Simple block (data-driven via GenericBlockEditor)
-  - Input/output type references
-  - Appears in flow context menu under "Data" group
-  - Node indicator icon on flow nodes
-
-- **HCL generation:**
-  - `generateTypeHCL()` — Generates `type "name" { field = base_type { constraints } }` with proper HCL2 multi-line syntax
-  - `generateValidatorHCL()` — Generates `validator "name" { type, pattern/expr/wasm, message }`
-  - Types output to `types/types.hcl`, validators to `validators/validators.hcl`
-
-### Changed
-
-- **Palette:** Added Type and Validator to Schema category (replaced Transform placeholder)
-- **Nodes/index.ts:** Registered TypeNode and ValidatorNode in nodeTypes
-- **Properties.tsx:** Added TypeProperties and ValidatorProperties panels
-- **FileTree.tsx:** Type/validator node selection auto-navigates to correct generated file
-- **hclGenerator.ts:** Extended generateProject to output types and validators files
-
----
-
-## [0.6.0] - Flow Block Registry (SOLID)
-
-### Added
-
-- **Data-driven flow block registry (`src/flow-blocks/`):**
-  - `types.ts` — Core interfaces: `FlowBlockDefinition`, `FlowBlockField`, `HclFieldMapping`
-  - `registry.ts` — Central Map with helpers: `getFlowBlock()`, `getAllFlowBlocks()`, `getFlowBlocksByGroup()`, `getSimpleFlowBlocks()`, `getCustomFlowBlocks()`
-  - `GenericBlockEditor.tsx` — Generic modal editor that renders any simple block from its definition (supports field types: storage_select, cel_expression, duration, number, select, boolean, string)
-  - `index.ts` — Public API barrel export
-
-- **One definition file per flow block (`src/flow-blocks/definitions/`):**
-  - Simple blocks (fully data-driven): `cache`, `lock`, `semaphore`, `dedupe`
-  - Complex blocks (definition + custom editor): `transform`, `step`, `response`, `errorHandling`
-
-### Changed
-
-- **`FlowContextMenu.tsx`:** Replaced 8 hardcoded menu items with registry-driven menu via `getFlowBlocksByGroup()`. Props simplified from 8 individual `onAdd*` callbacks to single `onSelectBlock(key)`
-- **`Canvas.tsx`:** Replaced 9 individual `useState` booleans + 16 handler functions with unified `activeEditor` state. Simple blocks render via `GenericBlockEditor`, complex blocks use their existing custom editors
-- **`hclGenerator.ts`:** Replaced hardcoded cache/lock/semaphore/dedupe HCL blocks with generic loop using `getSimpleFlowBlocks()` + `hclFields` mappings
-- **`FlowConfig/index.ts`:** Removed exports for `CacheEditor`, `LockEditor`, `SemaphoreEditor`, `EnrichEditor` (replaced by GenericBlockEditor)
-
-### Architecture
-
-- Adding a new simple flow block now requires only creating a definition file in `src/flow-blocks/definitions/` — no changes needed to FlowContextMenu, Canvas, or hclGenerator
-- Field-driven HCL generation: each definition declares `hclFields` with key→hclKey mapping, type, and optional `omitDefault`
-- Block groups (data, concurrency, output) control menu organization
-
----
-
-## [0.5.0] - Connector Registry Refactor (SOLID)
-
-### Added
-
-- **Data-driven connector registry (`src/connectors/`):**
-  - `types.ts` — Core interfaces: `ConnectorDefinition`, `FieldDefinition`, `DriverDefinition`
-  - `registry.ts` — Central Map with helper functions: `getConnector()`, `getAllConnectors()`, `getConnectorsByCategory()`, `getConnectorMode()`, `getDefaultDirection()`
-  - `index.ts` — Public API barrel export
-
-- **One definition file per connector (`src/connectors/definitions/`):**
-  - 10 existing connectors migrated: `rest`, `database`, `queue`, `cache`, `grpc`, `graphql`, `tcp`, `file`, `s3`, `exec`
-  - 15 new connectors added: `http`, `websocket`, `sse`, `cdc`, `elasticsearch`, `oauth`, `mqtt`, `ftp`, `soap`, `email`, `slack`, `discord`, `sms`, `push`, `webhook`
-  - Each file defines: type, label, icon, color, category, defaultDirection, fields, drivers, modeMapping
-
-- **25 connector types total** (was 10), matching Mycel runtime v1.11.0
-
-### Changed
-
-- **`ConnectorNode.tsx`:** Replaced hardcoded `iconMap`/`colorMap` with `getConnector()` registry lookup
-- **`Palette.tsx`:** Replaced hardcoded categories array with `getConnectorsByCategory()`, auto-generates palette from registry
-- **`Properties.tsx`:** Replaced ~460 lines of hardcoded switch/case with generic `FieldRenderer` component (~100 lines) that renders any connector's fields from its definition
-- **`hclGenerator.ts`:** Replaced hardcoded `switch` in `generateConnectorHCL()` with generic field-driven algorithm that reads fields from the registry
-- **`types/index.ts`:** Extended `ConnectorType` union from 10 to 25 types; updated `DEFAULT_CONNECTOR_DIRECTIONS` to include all 25
-
-### Architecture
-
-- Adding a new connector now requires only creating a single file in `src/connectors/definitions/` — no changes needed to Palette, Properties, ConnectorNode, or hclGenerator
-- Connector categories: API & Web, Database, Messaging, Real-time, Storage, Execution, Integration, Notifications
-
----
-
-## [0.4.0] - Phase 3: Fix Foundations (Complete)
-
-### Added
-
-- **Step Editor (`StepEditor.tsx`):**
-  - Replaces `enrich` as the primary orchestration mechanism
-  - Configure multiple steps with: name, connector, operation, query, params
-  - Advanced options: conditional execution (`when`), timeout, on_error (fail/skip/default)
-  - Default value editor for on_error="default" steps
-  - Results available as `step.name.field` in transforms
-
-- **Response Editor (`ResponseEditor.tsx`):**
-  - Configure HTTP response status code with presets (200, 201, 202, 204, 4xx, 5xx)
-  - Custom response headers
-  - Response body with CEL expressions
-  - Body templates: "Success with data", "Created with ID", "Accepted"
-  - Live HCL preview
-
-- **Deduplication (inline in Canvas):**
-  - Prevent processing duplicate events
-  - Configure: storage (cache connector), key (CEL), TTL, on_duplicate (skip/error)
-  - Visual indicator on flow nodes
-
-- **Filter in `from` block:**
-  - CEL expression field in flow Properties panel
-  - Skip events where condition evaluates to false
-  - Visual "(filtered)" indicator on flow nodes
-
-- **Multi-to (fan-out):**
-  - "Add Target" button in flow Properties
-  - Each `to` block: connector, target, optional condition (`when`)
-  - Per-destination transforms
-  - Visual "+N more" indicator on flow nodes
-
-### Changed
-
-- **ErrorHandlingEditor:** Complete rewrite with three collapsible sections:
-  - **Retry:** attempts, initial delay, max delay (NEW), backoff strategy, preview
-  - **Fallback (NEW):** dead letter queue — connector, target, include_error, transform
-  - **Error Response (NEW):** custom HTTP error — status, headers, body with CEL expressions
-  - Now receives `availableConnectors` prop for fallback connector selection
-
-- **FlowContextMenu:** Added Steps and Dedupe entries, removed legacy Enrich from menu
-
-- **FlowNode:** New visual indicators for steps, dedupe, response, filter, multi-to count
-
-- **Properties/FlowProperties:** Filter field in FROM section, multi-to support with add/remove targets
-
-- **hclGenerator.ts:** Complete rewrite of flow generation:
-  - Step blocks with on_error, when, timeout, params, default
-  - Filter in from (string and block syntax)
-  - Multi-to with per-destination when, parallel, transform
-  - Dedupe block
-  - Response block with headers and body
-  - Fallback block in error_handling
-  - Error response block in error_handling
-  - Max delay in retry config
-  - Redis Pub/Sub queue driver support (channels, patterns)
-
-- **Types (`types/index.ts`):** Added FlowStep, FlowFilter, FlowDedupe, FlowResponse, FlowFallback, FlowErrorResponse; FlowTo now supports when/parallel/transform; FlowNodeData.to supports array for multi-to
-
-### New Files
-
-- `src/components/FlowConfig/ResponseEditor.tsx`
-- `src/components/FlowConfig/StepEditor.tsx`
-
----

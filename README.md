@@ -69,14 +69,27 @@ It ships as a **cross-platform desktop app** for macOS, Windows, and Linux (via 
 
 ## Features
 
-### Multi-Project Workspace
+### IDE Engine & Code Intelligence
 
-- **Attach multiple projects** to a single workspace — each project gets its own canvas, file tree root, and git state
-- **Instance tabs** (Chrome-style) — open independent workspaces, each with its own set of attached projects and layout
-- **Canvas as editor tab** — in Text First mode, each project's canvas opens as a tab alongside HCL files
-- **Attach/New Tab dialog** — when opening a second project, choose to attach it to the current workspace or open it in a new instance tab
-- **Multi-root file explorer** — each attached project appears as a separate root with its git branch badge; click to switch active project
-- **Per-project debug** — project selector in the debug toolbar so each project can connect to a different Mycel runtime
+- **Mycel IDE engine** (`pkg/ide`) powers diagnostics, navigation, and refactoring
+- **Go to Definition** and **Find Usages** across connectors, flows, types, and transforms
+- **Diagnostic squiggly underlines** in the editor, tabs, and file tree with severity indicators
+- **Code actions** — quick fixes suggested inline
+- **SOLID hints** — lightbulb indicators with refactor dialog (extract transform, rename file, context-aware rename)
+- **Conditional breakpoints** — CEL expressions with orange indicators and inline input
+
+### Git Panel
+
+- **Commit graph** with branch visualization and diff viewer
+- **Blame annotations** in the gutter for all files
+- **Staged status** indicators in tabs and file tree
+
+### Project Management
+
+- **New Window** — open a second project in a separate OS process (IPC-based instance reuse)
+- **This Window** — replace the current project cleanly
+- **Multi-project workspace** — infrastructure ready, attach coming soon
+- **Explorer header** — shows `service.name` from HCL with project path and tooltip
 
 ### Visual Canvas
 
@@ -132,15 +145,18 @@ Each connector has a full configuration UI with driver-specific fields, TLS, con
 - HCL2 syntax highlighting with custom Monarch tokenizer
 - Context-aware autocompletion (blocks, attributes, connector names, CEL functions)
 - Hover documentation for keywords, functions, and variables
-- Real-time client-side validation with error markers
+- Real-time diagnostics with squiggly underlines and code actions
 - Multi-file tabbed editor with split view
-- Breakpoint support with JetBrains-style line number overlays
+- Cursor position and view state persistence per file
+- Breakpoint support with JetBrains-style gutter panel and conditional CEL expressions
+- IntelliJ-style gutter with blame annotations, breakpoints, and diagnostics
 
 ### HCL Generation
 
-- Multi-file output following Mycel project structure (`config.hcl`, `connectors/`, `flows/`, `types/`, etc.)
-- File-as-source-of-truth &mdash; existing HCL files are never overwritten
+- Multi-file output following Mycel project structure (`config.mycel`, `connectors/`, `flows/`, `types/`, etc.)
+- File-as-source-of-truth &mdash; existing `.mycel` files are never overwritten
 - Backend validation via Go HCL parser (syntax, structure, semantic checks)
+- Bidirectional sync between Monaco editor, canvas, and properties panel
 
 ## Scope
 
