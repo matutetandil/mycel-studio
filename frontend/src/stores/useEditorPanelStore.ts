@@ -15,6 +15,7 @@ export interface EditorTab {
   diffLanguage?: string
   diffReadOnly?: boolean  // false for conflict resolution
   diffFilePath?: string   // Real file path for saving resolved conflicts
+  pinned?: boolean
 }
 
 // Scope a relative file path with its project path for unique identification
@@ -60,6 +61,12 @@ interface EditorPanelState {
   setCursorPosition: (filePath: string, line: number, column: number) => void
   setEditorViewState: (filePath: string, state: unknown) => void
   closeTab: (groupId: string, tabId: string) => void
+  closeOtherTabs: (groupId: string, tabId: string) => void
+  closeAllTabs: (groupId: string) => void
+  closeTabsToTheLeft: (groupId: string, tabId: string) => void
+  closeTabsToTheRight: (groupId: string, tabId: string) => void
+  closeUnmodifiedTabs: (groupId: string, isModified: (tab: EditorTab) => boolean) => void
+  togglePinTab: (groupId: string, tabId: string) => void
   setActiveTab: (groupId: string, tabId: string) => void
   reorderTab: (groupId: string, fromIndex: number, toIndex: number) => void
   moveTabToGroup: (fromGroupId: string, tabId: string, toGroupId: string) => void
@@ -262,6 +269,91 @@ export const useEditorPanelStore = create<EditorPanelState>((set, get) => ({
         g.id === groupId ? { ...g, tabs: newTabs, activeTabId: newActiveId } : g
       ),
     })
+  },
+
+  closeOtherTabs: (groupId, tabId) => {
+    const state = get()
+    const group = state.groups.find(g => g.id === groupId)
+    if (!group) return
+    const kept = group.tabs.filter(t => t.id === tabId || t.pinned)
+    set({
+      groups: state.groups.map(g =>
+        g.id === groupId ? { ...g, tabs: kept, activeTabId: tabId } : g
+      ),
+    })
+  },
+
+  closeAllTabs: (groupId) => {
+    const state = get()
+    const group = state.groups.find(g => g.id === groupId)
+    if (!group) return
+    const kept = group.tabs.filter(t => t.pinned)
+    if (kept.length === 0 && state.groups.length > 1) {
+      const otherGroup = state.groups.find(g => g.id !== groupId)!
+      set({ groups: [otherGroup], activeGroupId: otherGroup.id, splitDirection: null })
+      return
+    }
+    set({
+      groups: state.groups.map(g =>
+        g.id === groupId ? { ...g, tabs: kept, activeTabId: kept[0]?.id ?? null } : g
+      ),
+    })
+  },
+
+  closeTabsToTheLeft: (groupId, tabId) => {
+    const state = get()
+    const group = state.groups.find(g => g.id === groupId)
+    if (!group) return
+    const idx = group.tabs.findIndex(t => t.id === tabId)
+    const kept = group.tabs.filter((t, i) => i >= idx || t.pinned)
+    const activeStillExists = kept.some(t => t.id === group.activeTabId)
+    set({
+      groups: state.groups.map(g =>
+        g.id === groupId ? { ...g, tabs: kept, activeTabId: activeStillExists ? group.activeTabId : tabId } : g
+      ),
+    })
+  },
+
+  closeTabsToTheRight: (groupId, tabId) => {
+    const state = get()
+    const group = state.groups.find(g => g.id === groupId)
+    if (!group) return
+    const idx = group.tabs.findIndex(t => t.id === tabId)
+    const kept = group.tabs.filter((t, i) => i <= idx || t.pinned)
+    const activeStillExists = kept.some(t => t.id === group.activeTabId)
+    set({
+      groups: state.groups.map(g =>
+        g.id === groupId ? { ...g, tabs: kept, activeTabId: activeStillExists ? group.activeTabId : tabId } : g
+      ),
+    })
+  },
+
+  closeUnmodifiedTabs: (groupId, isModified) => {
+    const state = get()
+    const group = state.groups.find(g => g.id === groupId)
+    if (!group) return
+    const kept = group.tabs.filter(t => t.pinned || isModified(t))
+    if (kept.length === 0 && state.groups.length > 1) {
+      const otherGroup = state.groups.find(g => g.id !== groupId)!
+      set({ groups: [otherGroup], activeGroupId: otherGroup.id, splitDirection: null })
+      return
+    }
+    const activeStillExists = kept.some(t => t.id === group.activeTabId)
+    set({
+      groups: state.groups.map(g =>
+        g.id === groupId ? { ...g, tabs: kept, activeTabId: activeStillExists ? group.activeTabId : (kept[0]?.id ?? null) } : g
+      ),
+    })
+  },
+
+  togglePinTab: (groupId, tabId) => {
+    set(state => ({
+      groups: state.groups.map(g =>
+        g.id === groupId
+          ? { ...g, tabs: g.tabs.map(t => t.id === tabId ? { ...t, pinned: !t.pinned } : t) }
+          : g
+      ),
+    }))
   },
 
   setActiveTab: (groupId, tabId) => {

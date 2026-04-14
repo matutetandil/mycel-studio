@@ -1,5 +1,5 @@
-import { useState, useRef, useMemo } from 'react'
-import { X, Columns2, Rows2, Copy, Check, Download, XCircle, LayoutGrid, GitCompare } from 'lucide-react'
+import { useState, useRef, useMemo, useCallback, useEffect } from 'react'
+import { X, Columns2, Rows2, Copy, Check, Download, XCircle, LayoutGrid, GitCompare, Pin } from 'lucide-react'
 import { useEditorPanelStore, unscopePath, type EditorTab } from '../../stores/useEditorPanelStore'
 import { useProjectStore } from '../../stores/useProjectStore'
 import { useMultiProjectStore } from '../../stores/useMultiProjectStore'
@@ -58,7 +58,7 @@ interface TabBarProps {
 }
 
 export default function TabBar({ groupId, tabs, activeTabId, isSecondary, onCopy, onDownloadZip, copied }: TabBarProps) {
-  const { setActiveTab, closeTab, reorderTab, moveTabToGroup, splitEditor, closeSplit } = useEditorPanelStore()
+  const { setActiveTab, closeTab, closeOtherTabs, closeAllTabs, closeTabsToTheLeft, closeTabsToTheRight, closeUnmodifiedTabs, togglePinTab, reorderTab, moveTabToGroup, splitEditor, closeSplit } = useEditorPanelStore()
   const projectFiles = useProjectStore(s => s.files)
   // Subscribe to the files data (not the function) so React re-renders when diagnostics change
   const diagFiles = useDiagnosticsStore(s => s.files)
@@ -132,6 +132,48 @@ export default function TabBar({ groupId, tabs, activeTabId, isSecondary, onCopy
     splitEditor(direction)
   }
 
+  // Context menu state
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; tabId: string } | null>(null)
+  const contextMenuRef = useRef<HTMLDivElement>(null)
+
+  const handleContextMenu = useCallback((e: React.MouseEvent, tabId: string) => {
+    e.preventDefault()
+    setContextMenu({ x: e.clientX, y: e.clientY, tabId })
+  }, [])
+
+  // Close context menu on click outside or Escape
+  useEffect(() => {
+    if (!contextMenu) return
+    const handleClick = (e: MouseEvent) => {
+      if (contextMenuRef.current && !contextMenuRef.current.contains(e.target as Node)) {
+        setContextMenu(null)
+      }
+    }
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setContextMenu(null)
+    }
+    document.addEventListener('mousedown', handleClick)
+    document.addEventListener('keydown', handleKey)
+    return () => {
+      document.removeEventListener('mousedown', handleClick)
+      document.removeEventListener('keydown', handleKey)
+    }
+  }, [contextMenu])
+
+  const isTabModified = useCallback((tab: EditorTab): boolean => {
+    if (tab.type !== 'file') return false
+    const { relativePath } = unscopePath(tab.filePath)
+    // Check active project files
+    const file = useProjectStore.getState().files.find(f => f.relativePath === relativePath)
+    if (file?.isDirty) return true
+    // Check attached project files
+    for (const project of useMultiProjectStore.getState().projects.values()) {
+      const f = project.files.find(pf => pf.relativePath === relativePath)
+      if (f?.isDirty) return true
+    }
+    return false
+  }, [])
+
   return (
     <div className="flex items-center bg-neutral-900 border-b border-neutral-800 min-h-[33px]">
       {/* Tabs */}
@@ -154,6 +196,7 @@ export default function TabBar({ groupId, tabs, activeTabId, isSecondary, onCopy
               onDragOver={(e) => handleDragOver(e, index)}
               onDragLeave={handleDragLeave}
               onDrop={(e) => handleDrop(e, index)}
+              onContextMenu={(e) => handleContextMenu(e, tab.id)}
               title={projectHint ? `${projectHint} / ${tabRelPath}` : tabRelPath}
               onClick={() => {
                 setActiveTab(groupId, tab.id)
@@ -200,15 +243,19 @@ export default function TabBar({ groupId, tabs, activeTabId, isSecondary, onCopy
               {badgeLetter && (
                 <span className={`text-[9px] font-bold leading-none ${badgeColor}`}>{badgeLetter}</span>
               )}
-              <button
-                onClick={(e) => {
-                  e.stopPropagation()
-                  closeTab(groupId, tab.id)
-                }}
-                className="p-0.5 rounded opacity-0 group-hover:opacity-100 hover:bg-neutral-700 shrink-0"
-              >
-                <X className="w-3 h-3" />
-              </button>
+              {tab.pinned ? (
+                <Pin className="w-3 h-3 text-neutral-500 shrink-0" />
+              ) : (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    closeTab(groupId, tab.id)
+                  }}
+                  className="p-0.5 rounded opacity-0 group-hover:opacity-100 hover:bg-neutral-700 shrink-0"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              )}
             </div>
           )
         })}
@@ -262,6 +309,73 @@ export default function TabBar({ groupId, tabs, activeTabId, isSecondary, onCopy
           </button>
         )}
       </div>
+
+      {/* Tab context menu */}
+      {contextMenu && (
+        <div
+          ref={contextMenuRef}
+          className="fixed z-[9999] bg-neutral-800 border border-neutral-600 rounded-md shadow-xl py-1 text-xs min-w-[200px]"
+          style={{ left: contextMenu.x, top: contextMenu.y }}
+        >
+          {(() => {
+            const targetTab = tabs.find(t => t.id === contextMenu.tabId)
+            const targetIdx = tabs.findIndex(t => t.id === contextMenu.tabId)
+            const isPinned = targetTab?.pinned ?? false
+            const items: { label: string; action: () => void; disabled?: boolean; separator?: boolean }[] = [
+              {
+                label: 'Close',
+                action: () => closeTab(groupId, contextMenu.tabId),
+                disabled: isPinned,
+              },
+              {
+                label: 'Close Others',
+                action: () => closeOtherTabs(groupId, contextMenu.tabId),
+                disabled: tabs.length <= 1,
+              },
+              {
+                label: 'Close All',
+                action: () => closeAllTabs(groupId),
+              },
+              {
+                label: 'Close Unmodified',
+                action: () => closeUnmodifiedTabs(groupId, isTabModified),
+                separator: true,
+              },
+              {
+                label: 'Close Tabs to the Left',
+                action: () => closeTabsToTheLeft(groupId, contextMenu.tabId),
+                disabled: targetIdx === 0,
+              },
+              {
+                label: 'Close Tabs to the Right',
+                action: () => closeTabsToTheRight(groupId, contextMenu.tabId),
+                disabled: targetIdx === tabs.length - 1,
+                separator: true,
+              },
+              {
+                label: isPinned ? 'Unpin Tab' : 'Pin Tab',
+                action: () => togglePinTab(groupId, contextMenu.tabId),
+              },
+            ]
+            return items.map((item, i) => (
+              <div key={i}>
+                {item.separator && i > 0 && <div className="border-t border-neutral-700 my-1" />}
+                <button
+                  onClick={() => { item.action(); setContextMenu(null) }}
+                  disabled={item.disabled}
+                  className={`w-full text-left px-3 py-1.5 ${
+                    item.disabled
+                      ? 'text-neutral-600 cursor-default'
+                      : 'text-neutral-300 hover:bg-neutral-700 hover:text-white'
+                  }`}
+                >
+                  {item.label}
+                </button>
+              </div>
+            ))
+          })()}
+        </div>
+      )}
     </div>
   )
 }
