@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.0.1] - Terminal, Keybindings & Rename Fixes
+
+### Fixed
+- **Terminal rendering** — Increased PTY read buffer from 4KB to 64KB and pass raw bytes to xterm.js for proper UTF-8 streaming. Interactive CLI programs (Claude, htop, etc.) no longer show garbled lines or broken escape sequences.
+- **File rename** — Renaming a file now updates `hclFile` references on all canvas nodes and notifies the IDE engine, preventing canvas-to-file sync from breaking after rename.
+- **Cmd+Backspace** — Now deletes the entire line (IntelliJ behavior) instead of deleting from cursor to line start (VS Code default).
+
+### Added
+- **IntelliJ keybindings** — Added 6 missing bindings: Cmd+Shift+/ (block comment), F2/Shift+F2 (next/prev error), Cmd+B (go to definition), Cmd+L (go to line), Cmd+Shift+Backspace (last edit location). Total: 17 IDEA-specific bindings.
+
+### Changed
+- **Terminal font weight** — Reduced to light (300) with medium bold (500) for a softer, less heavy appearance on dark backgrounds.
+
 ## [2.0.0] - Full IDE Engine Integration & Multi-Project Infrastructure
 
 ### Added

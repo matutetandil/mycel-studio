@@ -150,6 +150,7 @@ Each connector has a full configuration UI with driver-specific fields, TLS, con
 - Cursor position and view state persistence per file
 - Breakpoint support with JetBrains-style gutter panel and conditional CEL expressions
 - IntelliJ-style gutter with blame annotations, breakpoints, and diagnostics
+- Switchable keymap (IntelliJ IDEA / VS Code) with 17 IDEA-specific bindings
 
 ### HCL Generation
 
