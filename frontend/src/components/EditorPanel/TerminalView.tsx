@@ -27,6 +27,8 @@ export default function TerminalView({ sessionId }: TerminalViewProps) {
       cursorBlink: true,
       fontSize: 13,
       fontFamily: "'SF Mono', 'Fira Code', 'Cascadia Code', Menlo, Monaco, monospace",
+      fontWeight: '300',
+      fontWeightBold: '500',
       theme: {
         background: '#171717',
         foreground: '#e5e5e5',
