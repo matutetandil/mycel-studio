@@ -844,7 +844,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   },
 
   renameFile: async (oldPath: string, newPath: string) => {
-    const { files, activeFile, projectName } = get()
+    const { files, activeFile, projectName, projectPath } = get()
 
     if (!projectName) {
       set({ error: 'No project open' })
@@ -865,6 +865,22 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
           ),
           activeFile: activeFile === oldPath ? newPath : activeFile,
         })
+
+        // Update canvas nodes that reference the old file path
+        const { useStudioStore } = await import('./useStudioStore')
+        const studioStore = useStudioStore.getState()
+        for (const node of studioStore.nodes) {
+          const data = node.data as Record<string, unknown>
+          if (data.hclFile === oldPath) {
+            studioStore.updateNode(node.id, { hclFile: newPath } as Record<string, unknown>)
+          }
+        }
+
+        // Notify IDE engine about the file rename
+        if (projectPath) {
+          const { ideRenameFile } = await import('../lib/api')
+          ideRenameFile(projectPath + '/' + oldPath, projectPath + '/' + newPath)
+        }
       }
 
       return success
