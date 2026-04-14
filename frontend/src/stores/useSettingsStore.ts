@@ -24,6 +24,7 @@ export interface PersistedInstance {
 
 interface SettingsState {
   keymap: KeymapType
+  wordWrap: boolean
   confirmOnClose: boolean
   lastProjectPath: string | null
   windowSize: WindowSize | null
@@ -43,6 +44,7 @@ interface SettingsState {
   } | null
 
   setKeymap: (keymap: KeymapType) => void
+  setWordWrap: (enabled: boolean) => void
   setConfirmOnClose: (confirm: boolean) => void
   setLastProjectPath: (path: string | null) => void
   setWindowSize: (size: WindowSize) => void
@@ -65,6 +67,7 @@ export const useSettingsStore = create<SettingsState>()(
   persist(
     (set) => ({
       keymap: 'idea',
+      wordWrap: false,
       confirmOnClose: true,
       lastProjectPath: null,
       windowSize: null,
@@ -73,6 +76,7 @@ export const useSettingsStore = create<SettingsState>()(
       activeInstanceId: null,
       debugLayout: null,
       setKeymap: (keymap) => set({ keymap }),
+      setWordWrap: (wordWrap) => set({ wordWrap }),
       setConfirmOnClose: (confirmOnClose) => {
         syncConfirmOnCloseToGo(confirmOnClose)
         set({ confirmOnClose })

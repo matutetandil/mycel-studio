@@ -5,6 +5,7 @@ import { X, Circle, FileCode, RefreshCw } from 'lucide-react'
 import { useProjectStore } from '../../stores/useProjectStore'
 import { useStudioStore } from '../../stores/useStudioStore'
 import { useThemeStore } from '../../stores/useThemeStore'
+import { useSettingsStore } from '../../stores/useSettingsStore'
 import { useSync } from '../../hooks/useSync'
 import { setupMonaco, createValidationRunner } from '../../monaco'
 
@@ -49,6 +50,7 @@ function Tab({ file, isActive, onClick, onClose }: TabProps) {
 export default function Editor() {
   const { files, activeFile, setActiveFile, updateFile } = useProjectStore()
   const { theme } = useThemeStore()
+  const wordWrap = useSettingsStore(s => s.wordWrap)
   const { syncFromHCL, isSyncing } = useSync()
   const validationRunnerRef = useRef<ReturnType<typeof createValidationRunner> | null>(null)
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null)
@@ -186,7 +188,7 @@ export default function Editor() {
               scrollBeyondLastLine: false,
               automaticLayout: true,
               tabSize: 2,
-              wordWrap: 'on',
+              wordWrap: wordWrap ? 'on' : 'off',
               renderLineHighlight: 'line',
               cursorBlinking: 'smooth',
               smoothScrolling: true,

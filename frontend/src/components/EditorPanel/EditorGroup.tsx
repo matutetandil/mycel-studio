@@ -382,6 +382,7 @@ export default function EditorGroupView({ groupId, isSecondary }: EditorGroupPro
   const projectPath = useProjectStore(s => s.projectPath)
   const previewModes = useEditorPanelStore(s => s.previewModes)
   const setPreviewMode = useEditorPanelStore(s => s.setPreviewMode)
+  const wordWrap = useSettingsStore(s => s.wordWrap)
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null)
   const localContentRef = useRef<string>('')
   const [copied, setCopied] = useState(false)
@@ -1190,7 +1191,7 @@ export default function EditorGroupView({ groupId, isSecondary }: EditorGroupPro
               lineNumbers: 'on',
               scrollBeyondLastLine: false,
               automaticLayout: true,
-              wordWrap: 'on',
+              wordWrap: wordWrap ? 'on' : 'off',
               padding: { top: 8 },
               glyphMargin: false,
             }}

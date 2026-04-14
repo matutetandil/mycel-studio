@@ -1,4 +1,4 @@
-import { X, Keyboard, ShieldCheck } from 'lucide-react'
+import { X, Keyboard, ShieldCheck, Code2 } from 'lucide-react'
 import { useSettingsStore, type KeymapType } from '../stores/useSettingsStore'
 
 interface SettingsDialogProps {
@@ -12,7 +12,7 @@ const KEYMAPS: { value: KeymapType; label: string; description: string }[] = [
 ]
 
 export default function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
-  const { keymap, setKeymap, confirmOnClose, setConfirmOnClose } = useSettingsStore()
+  const { keymap, setKeymap, wordWrap, setWordWrap, confirmOnClose, setConfirmOnClose } = useSettingsStore()
 
   if (!isOpen) return null
 
@@ -71,6 +71,26 @@ export default function SettingsDialog({ isOpen, onClose }: SettingsDialogProps)
                 </label>
               ))}
             </div>
+          </section>
+
+          {/* Editor Section */}
+          <section>
+            <div className="flex items-center gap-2 mb-3">
+              <Code2 className="w-4 h-4 text-neutral-400" />
+              <h3 className="text-sm font-medium text-white">Editor</h3>
+            </div>
+            <label className="flex items-center gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={wordWrap}
+                onChange={(e) => setWordWrap(e.target.checked)}
+                className="accent-indigo-500"
+              />
+              <div>
+                <div className="text-sm text-neutral-300">Word wrap</div>
+                <div className="text-xs text-neutral-500">Wrap long lines instead of enabling horizontal scroll</div>
+              </div>
+            </label>
           </section>
 
           {/* General Section */}
