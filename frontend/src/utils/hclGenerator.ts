@@ -484,6 +484,28 @@ function generateFlowHCL(
     lines.push('')
     lines.push(`  ${blockDef.hclBlock} {`)
     for (const mapping of blockDef.hclFields) {
+      if (mapping.type === 'sub_block' && mapping.children) {
+        // Generate a nested block: storage { driver = "redis" url = "..." }
+        const childLines: string[] = []
+        for (const child of mapping.children) {
+          const childVal = blockData[child.key]
+          if (childVal === undefined || childVal === null || childVal === '') continue
+          if (child.type === 'boolean') {
+            childLines.push(`      ${child.hclKey} = ${childVal}`)
+          } else if (child.type === 'number') {
+            childLines.push(`      ${child.hclKey} = ${childVal}`)
+          } else {
+            childLines.push(`      ${child.hclKey} = "${childVal}"`)
+          }
+        }
+        if (childLines.length > 0) {
+          lines.push(`    ${mapping.hclKey} {`)
+          lines.push(...childLines)
+          lines.push('    }')
+        }
+        continue
+      }
+
       const value = blockData[mapping.key]
       if (value === undefined || value === null || value === '') continue
       if (mapping.omitDefault !== undefined && value === mapping.omitDefault) continue

@@ -35,8 +35,10 @@ export type FlowBlockGroup = 'data' | 'concurrency' | 'output'
 export interface HclFieldMapping {
   key: string         // Field key in the data object
   hclKey: string      // HCL attribute name
-  type: 'string' | 'number' | 'boolean'
+  type: 'string' | 'number' | 'boolean' | 'sub_block'
   omitDefault?: unknown  // Don't emit if value equals this
+  // For type 'sub_block': nested field mappings
+  children?: HclFieldMapping[]
 }
 
 export interface FlowBlockDefinition {

@@ -20,7 +20,17 @@ export const lock: FlowBlockDefinition = {
 
   fields: [
     {
-      key: 'storage', label: 'Lock Storage (Redis/Cache)', type: 'storage_select', required: true,
+      key: 'storage_driver', label: 'Storage Driver', type: 'select', required: true,
+      options: [
+        { value: 'redis', label: 'Redis' },
+        { value: 'memory', label: 'Memory (single instance)' },
+      ],
+    },
+    {
+      key: 'storage_url', label: 'Storage URL', type: 'string',
+      placeholder: 'redis://localhost:6379',
+      helpText: 'Redis connection URL. Can use env() for secrets.',
+      visibleWhen: { field: 'storage_driver', value: 'redis' },
     },
     {
       key: 'key', label: 'Lock Key (CEL Expression)', type: 'cel_expression', required: true,
@@ -57,7 +67,13 @@ export const lock: FlowBlockDefinition = {
   ],
 
   hclFields: [
-    { key: 'storage', hclKey: 'storage', type: 'string' },
+    {
+      key: 'storage', hclKey: 'storage', type: 'sub_block',
+      children: [
+        { key: 'storage_driver', hclKey: 'driver', type: 'string' },
+        { key: 'storage_url', hclKey: 'url', type: 'string' },
+      ],
+    },
     { key: 'key', hclKey: 'key', type: 'string' },
     { key: 'timeout', hclKey: 'timeout', type: 'string' },
     { key: 'wait', hclKey: 'wait', type: 'boolean' },
