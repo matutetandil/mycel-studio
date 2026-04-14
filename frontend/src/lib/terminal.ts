@@ -8,7 +8,7 @@ export interface TerminalBackend {
   create(cols: number, rows: number, workDir?: string): Promise<string>
   write(id: string, data: string): void
   resize(id: string, cols: number, rows: number): void
-  onData(id: string, callback: (data: string) => void): () => void
+  onData(id: string, callback: (data: Uint8Array) => void): () => void
   onExit(id: string, callback: () => void): () => void
   close(id: string): void
   getCwd(id: string): Promise<string>
@@ -39,17 +39,17 @@ class WailsTerminalBackend implements TerminalBackend {
     this.app.ResizeTerminal(id, cols, rows)
   }
 
-  onData(id: string, callback: (data: string) => void): () => void {
+  onData(id: string, callback: (data: Uint8Array) => void): () => void {
     const event = `terminal:output:${id}`
     this.runtime.EventsOn(event, (encoded: string) => {
-      // Decode base64 → bytes → UTF-8 string
+      // Decode base64 → raw bytes. Pass Uint8Array directly to xterm.js
+      // so it handles UTF-8 streaming internally (buffering split multi-byte chars).
       const binary = atob(encoded)
       const bytes = new Uint8Array(binary.length)
       for (let i = 0; i < binary.length; i++) {
         bytes[i] = binary.charCodeAt(i)
       }
-      const decoded = new TextDecoder('utf-8').decode(bytes)
-      callback(decoded)
+      callback(bytes)
     })
     return () => this.runtime.EventsOff(event)
   }
@@ -71,7 +71,7 @@ class WailsTerminalBackend implements TerminalBackend {
 
 class WebSocketTerminalBackend implements TerminalBackend {
   private sockets = new Map<string, WebSocket>()
-  private dataCallbacks = new Map<string, (data: string) => void>()
+  private dataCallbacks = new Map<string, (data: Uint8Array) => void>()
   private exitCallbacks = new Map<string, () => void>()
 
   async create(cols: number, rows: number, workDir?: string): Promise<string> {
@@ -95,7 +95,9 @@ class WebSocketTerminalBackend implements TerminalBackend {
           ws.onmessage = (e) => {
             const m = JSON.parse(e.data)
             if (m.type === 'output') {
-              this.dataCallbacks.get(id)?.(m.data)
+              const raw = m.data as string
+              const bytes = new TextEncoder().encode(raw)
+              this.dataCallbacks.get(id)?.(bytes)
             }
           }
 
@@ -120,7 +122,7 @@ class WebSocketTerminalBackend implements TerminalBackend {
     this.sockets.get(id)?.send(JSON.stringify({ type: 'resize', cols, rows }))
   }
 
-  onData(id: string, callback: (data: string) => void): () => void {
+  onData(id: string, callback: (data: Uint8Array) => void): () => void {
     this.dataCallbacks.set(id, callback)
     return () => this.dataCallbacks.delete(id)
   }

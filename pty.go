@@ -94,9 +94,11 @@ func (m *PTYManager) CreateTerminal(cols, rows int, workDir string) (string, err
 	m.sessions[id] = session
 	m.mu.Unlock()
 
-	// Read from PTY and emit to frontend
+	// Read from PTY and emit to frontend.
+	// Use a large buffer so interactive programs that redraw full screens
+	// (cursor moves + colors + text) fit in a single read/emit cycle.
 	go func() {
-		buf := make([]byte, 4096)
+		buf := make([]byte, 65536)
 		for {
 			n, err := ptmx.Read(buf)
 			if err != nil {
