@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.0.6] - Mycel v1.19.0 Sync Storage Migration
+
+### Changed
+- **Mycel runtime** — Updated to v1.19.0 with breaking changes to sync primitives.
+- **Lock & Semaphore storage** — `storage` is no longer a connector reference (`storage = "connector.redis"`). It is now an inline block with `driver` (redis/memory) and connection fields (`url`, `host`, `port`, etc.). The editor UI shows a driver dropdown and URL field instead of a connector picker.
+- **HCL generator** — Added `sub_block` support to field mappings for generating nested HCL blocks.
+
 ## [2.0.5] - Revert Broken Changes
 
 ### Reverted
