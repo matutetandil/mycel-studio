@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.0.4] - Non-HCL Diagnostics Fix
+
+### Fixed
+- **False diagnostics on JSON files** — The file polling loop was sending all modified files (including `.mycel-studio.json`) to the IDE engine, causing parse errors. Now only `.mycel` and `.hcl` files are sent to the engine, and the diagnostics store filters out any non-HCL entries.
+
 ## [2.0.3] - IDE Polish & UX Improvements
 
 ### Added
