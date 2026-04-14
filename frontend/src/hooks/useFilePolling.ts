@@ -98,10 +98,11 @@ async function refreshFiles() {
       })
     }
 
-    // Refresh IDE engine for modified files so diagnostics/completions update
+    // Refresh IDE engine for modified HCL files so diagnostics/completions update
     if (modifiedFiles.size > 0) {
       const { ideUpdateFile } = await import('../lib/api')
       for (const relPath of modifiedFiles) {
+        if (!relPath.endsWith('.mycel') && !relPath.endsWith('.hcl')) continue
         const absPath = projectPath + '/' + relPath
         const content = diskFileMap.get(relPath)
         if (content !== undefined) {

@@ -54,6 +54,8 @@ function buildEntriesAndFiles(diags: IDEDiagnostic[], prefix: string) {
   const files: Record<string, FileDiagnostic> = {}
   const entries: DiagnosticEntry[] = []
   for (const d of diags) {
+    // Skip non-HCL files that may have been indexed accidentally
+    if (!d.file.endsWith('.mycel') && !d.file.endsWith('.hcl')) continue
     const key = prefix && d.file.startsWith(prefix) ? d.file.slice(prefix.length) : d.file
     if (!files[key]) files[key] = { errors: 0, warnings: 0, severity: 'none' }
     if (d.severity === 1) files[key].errors++
