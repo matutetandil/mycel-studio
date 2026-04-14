@@ -209,9 +209,7 @@ func (u *Updater) RestartApp() error {
 	case "darwin":
 		appBundle := u.getMacOSAppBundle()
 		if appBundle != "" {
-			// Use "open" without -n to reuse the existing dock icon
-			// instead of launching a new instance with a separate icon
-			exec.Command("open", appBundle).Start()
+			exec.Command("open", "-n", appBundle).Start()
 		}
 	case "linux":
 		exe, _ := os.Executable()

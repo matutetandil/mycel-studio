@@ -71,24 +71,6 @@ export default function TerminalView({ sessionId }: TerminalViewProps) {
       backend.resize(sessionId, terminal.cols, terminal.rows)
     })
 
-    // Intercept modified key combos that xterm.js doesn't handle natively.
-    // iTerm2/Kitty send CSI u sequences for Shift+Enter, Alt+Enter, etc.
-    // which programs like Claude Code rely on for multi-line input.
-    terminal.attachCustomKeyEventHandler((e) => {
-      if (e.type !== 'keydown') return true
-      if (e.key === 'Enter' && e.shiftKey) {
-        // Shift+Enter → CSI 13;2u (like iTerm2)
-        backend.write(sessionId, '\x1b[13;2u')
-        return false
-      }
-      if (e.key === 'Enter' && e.altKey) {
-        // Alt+Enter → CSI 13;3u
-        backend.write(sessionId, '\x1b[13;3u')
-        return false
-      }
-      return true
-    })
-
     // Wire input: terminal → backend
     const inputDisposable = terminal.onData((data) => {
       backend.write(sessionId, data)
