@@ -79,7 +79,8 @@ const gitStatusIcons: Record<string, string> = {
 interface FileItemProps {
   file: ProjectFile | GeneratedFile
   isActive: boolean
-  onClick: () => void
+  isSelected?: boolean
+  onClick: (e: React.MouseEvent) => void
   isGenerated?: boolean
   diagSeverity?: DiagnosticSeverity
   onContextMenu?: (e: React.MouseEvent) => void
@@ -90,7 +91,7 @@ interface FileItemProps {
   onEditCancel?: () => void
 }
 
-function FileItem({ file, isActive, onClick, isGenerated, diagSeverity, onContextMenu, isEditing, editName, onEditChange, onEditCommit, onEditCancel }: FileItemProps) {
+function FileItem({ file, isActive, isSelected, onClick, isGenerated, diagSeverity, onContextMenu, isEditing, editName, onEditChange, onEditCommit, onEditCancel }: FileItemProps) {
   const projectFile = file as ProjectFile
   const gitStatus = projectFile.gitStatus || 'clean'
   const statusColor = gitStatusColors[gitStatus]
@@ -105,7 +106,7 @@ function FileItem({ file, isActive, onClick, isGenerated, diagSeverity, onContex
       onContextMenu={onContextMenu}
       className={`
         w-full flex items-center gap-2 px-2 py-1 text-sm rounded
-        ${isActive ? 'bg-indigo-600 text-white' : 'hover:bg-neutral-800 text-neutral-300'}
+        ${isActive ? 'bg-indigo-600 text-white' : isSelected ? 'bg-indigo-600/30 text-white' : 'hover:bg-neutral-800 text-neutral-300'}
       `}
     >
       <FileIcon className={`w-4 h-4 shrink-0 ${isActive ? 'text-white' : isGenerated ? 'text-indigo-400' : fileType.color}`} />
@@ -339,6 +340,9 @@ function SingleProjectFileTree({ hideHeader }: { hideHeader?: boolean } = {}) {
   const [dirContextMenu, setDirContextMenu] = useState<{ x: number; y: number; dirPath: string } | null>(null)
   const [editingFile, setEditingFile] = useState<{ path: string; newName: string } | null>(null)
   const [newFileDialog, setNewFileDialog] = useState<{ fileType: NewFileType | null; dirPath: string } | null>(null)
+  // Multi-selection state
+  const [selectedFiles, setSelectedFiles] = useState<Set<string>>(new Set())
+  const lastClickedFileRef = useRef<string | null>(null)
 
   // Generate project from canvas — pass mycelRoot and existing file paths so generator
   // prefixes correctly and skips files that already exist on disk
@@ -465,8 +469,12 @@ function SingleProjectFileTree({ hideHeader }: { hideHeader?: boolean } = {}) {
     e.preventDefault()
     e.stopPropagation()
     setDirContextMenu(null)
+    // If right-clicking an unselected file, clear multi-selection
+    if (selectedFiles.size > 0 && !selectedFiles.has(path)) {
+      setSelectedFiles(new Set())
+    }
     setFileContextMenu({ x: e.clientX, y: e.clientY, path, name })
-  }, [])
+  }, [selectedFiles])
 
   const handleDirContextMenu = useCallback((e: React.MouseEvent, dirPath: string) => {
     e.preventDefault()
@@ -515,6 +523,34 @@ function SingleProjectFileTree({ hideHeader }: { hideHeader?: boolean } = {}) {
     await deleteFileFromExplorer(path)
   }, [])
 
+  const handleDeleteSelected = useCallback(async () => {
+    if (selectedFiles.size === 0) return
+    const count = selectedFiles.size
+    const confirmed = confirm(`Delete ${count} file${count > 1 ? 's' : ''}?`)
+    if (!confirmed) return
+    const { deleteFileFromExplorer } = await import('../../utils/deleteUtils')
+    for (const path of selectedFiles) {
+      await deleteFileFromExplorer(path)
+    }
+    setSelectedFiles(new Set())
+  }, [selectedFiles])
+
+  const handleMoveSelected = useCallback(async () => {
+    if (selectedFiles.size === 0) return
+    const targetDir = prompt(`Move ${selectedFiles.size} file(s) to directory:`)
+    if (!targetDir?.trim()) return
+    const dir = targetDir.trim().replace(/\/$/, '')
+    for (const path of selectedFiles) {
+      const fileName = path.split('/').pop() || path
+      const newPath = `${dir}/${fileName}`
+      const success = await renameFile(path, newPath)
+      if (success) {
+        useEditorPanelStore.getState().renameTab(path, newPath, fileName)
+      }
+    }
+    setSelectedFiles(new Set())
+  }, [selectedFiles, renameFile])
+
   const handleCreateFile = useCallback(async (path: string) => {
     await createFile(path)
     openFileInEditor(path)
@@ -525,7 +561,20 @@ function SingleProjectFileTree({ hideHeader }: { hideHeader?: boolean } = {}) {
   }, [createDirectory])
 
   // Build file context menu items
-  const fileContextMenuItems: ContextMenuItem[] = fileContextMenu ? [
+  const isMultiSelect = selectedFiles.size > 1 && fileContextMenu && selectedFiles.has(fileContextMenu.path)
+  const fileContextMenuItems: ContextMenuItem[] = fileContextMenu && isMultiSelect ? [
+    {
+      label: `Delete ${selectedFiles.size} Files`,
+      icon: <Trash2 className="w-3.5 h-3.5" />,
+      onClick: () => handleDeleteSelected(),
+      danger: true,
+    },
+    {
+      label: `Move ${selectedFiles.size} Files...`,
+      icon: <FolderInput className="w-3.5 h-3.5" />,
+      onClick: () => handleMoveSelected(),
+    },
+  ] : fileContextMenu ? [
     {
       label: 'Rename',
       icon: <Pencil className="w-3.5 h-3.5" />,
@@ -717,6 +766,57 @@ function SingleProjectFileTree({ hideHeader }: { hideHeader?: boolean } = {}) {
 
   // Build nested tree from merged file list (must be before early returns — hooks order)
   const tree = useMemo(() => buildFileTree(mergedFiles), [mergedFiles])
+
+  // Flat ordered list of file paths for Shift+click range selection
+  const flatFilePaths = useMemo(() => {
+    const paths: string[] = []
+    const collect = (node: TreeNode, parentPath: string, isRoot?: boolean) => {
+      const dirPath = isRoot ? parentPath : (parentPath ? `${parentPath}/${node.name}` : node.name)
+      const sortedDirs = [...node.children.entries()].sort((a, b) => a[0].localeCompare(b[0]))
+      const sortedFiles = [...node.files].sort((a, b) => a.name.localeCompare(b.name))
+      for (const [, child] of sortedDirs) collect(child, dirPath)
+      for (const f of sortedFiles) paths.push(f.relativePath)
+    }
+    collect(tree, '', true)
+    return paths
+  }, [tree])
+
+  const handleFileClickWithSelection = useCallback((path: string, e: React.MouseEvent) => {
+    const isMeta = e.metaKey || e.ctrlKey
+    const isShift = e.shiftKey
+
+    if (isMeta) {
+      // Cmd/Ctrl+click: toggle individual file
+      setSelectedFiles(prev => {
+        const next = new Set(prev)
+        if (next.has(path)) next.delete(path)
+        else next.add(path)
+        return next
+      })
+      lastClickedFileRef.current = path
+      return
+    }
+
+    if (isShift && lastClickedFileRef.current) {
+      // Shift+click: range selection
+      const lastIdx = flatFilePaths.indexOf(lastClickedFileRef.current)
+      const curIdx = flatFilePaths.indexOf(path)
+      if (lastIdx !== -1 && curIdx !== -1) {
+        const start = Math.min(lastIdx, curIdx)
+        const end = Math.max(lastIdx, curIdx)
+        const range = flatFilePaths.slice(start, end + 1)
+        setSelectedFiles(new Set(range))
+      }
+      return
+    }
+
+    // Normal click: clear selection, open file
+    setSelectedFiles(new Set())
+    lastClickedFileRef.current = path
+    setActiveFile(path)
+    openFileInEditor(path, undefined, projectPath)
+  }, [flatFilePaths, setActiveFile, projectPath])
+
   // Unscope the active tab ID so it can match against relative file paths in the tree
   const currentActiveFile = editorActiveTabId
     ? unscopePath(editorActiveTabId).relativePath
@@ -763,7 +863,13 @@ function SingleProjectFileTree({ hideHeader }: { hideHeader?: boolean } = {}) {
     )
   }
 
-  const handleFileClick = (path: string) => {
+  const handleFileClick = (path: string, e?: React.MouseEvent) => {
+    if (e && (e.metaKey || e.ctrlKey || e.shiftKey)) {
+      handleFileClickWithSelection(path, e)
+      return
+    }
+    setSelectedFiles(new Set())
+    lastClickedFileRef.current = path
     setActiveFile(path)
     openFileInEditor(path, undefined, projectPath)
   }
@@ -772,6 +878,7 @@ function SingleProjectFileTree({ hideHeader }: { hideHeader?: boolean } = {}) {
     <FileTreeNode
       node={tree}
       activeFile={currentActiveFile}
+      selectedFiles={selectedFiles}
       onFileClick={handleFileClick}
       onContextMenu={handleFileContextMenu}
       onDirContextMenu={handleDirContextMenu}
@@ -1066,6 +1173,7 @@ function buildFileTree(files: ProjectFile[]): TreeNode {
 function FileTreeNode({
   node,
   activeFile,
+  selectedFiles,
   onFileClick,
   onContextMenu,
   onDirContextMenu,
@@ -1080,7 +1188,8 @@ function FileTreeNode({
 }: {
   node: TreeNode
   activeFile: string | null
-  onFileClick: (path: string) => void
+  selectedFiles?: Set<string>
+  onFileClick: (path: string, e?: React.MouseEvent) => void
   onContextMenu?: (e: React.MouseEvent, path: string, name: string) => void
   onDirContextMenu?: (e: React.MouseEvent, dirPath: string) => void
   editingFile?: { path: string; newName: string } | null
@@ -1105,7 +1214,8 @@ function FileTreeNode({
       key={file.relativePath}
       file={file}
       isActive={activeFile === file.relativePath}
-      onClick={() => onFileClick(file.relativePath)}
+      isSelected={selectedFiles?.has(file.relativePath)}
+      onClick={(e) => onFileClick(file.relativePath, e)}
       diagSeverity={getFileSeverity?.(file.relativePath)}
       onContextMenu={onContextMenu ? (e) => onContextMenu(e, file.relativePath, file.name) : undefined}
       isEditing={editingFile?.path === file.relativePath}
@@ -1116,7 +1226,7 @@ function FileTreeNode({
     />
   )
 
-  const childProps = { activeFile, onFileClick, onContextMenu, onDirContextMenu, editingFile, onEditChange, onEditCommit, onEditCancel, getFileSeverity, getDirSeverity }
+  const childProps = { activeFile, selectedFiles, onFileClick, onContextMenu, onDirContextMenu, editingFile, onEditChange, onEditCommit, onEditCancel, getFileSeverity, getDirSeverity }
 
   if (isRoot) {
     return (
