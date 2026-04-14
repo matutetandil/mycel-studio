@@ -2,7 +2,8 @@ import { useState, useRef, useEffect } from 'react'
 import { useProjectStore } from '../stores/useProjectStore'
 import { useEditorPanelStore, unscopePath } from '../stores/useEditorPanelStore'
 import { useNotificationStore } from '../stores/useNotificationStore'
-import { GitBranch, Bell, BellDot, CheckCircle, Download, MemoryStick } from 'lucide-react'
+import { GitBranch, Bell, BellDot, CheckCircle, Download, MemoryStick, AlertCircle, AlertTriangle } from 'lucide-react'
+import { useDiagnosticsStore } from '../stores/useDiagnosticsStore'
 import { getFileTypeInfo, KNOWN_LANGUAGES, setLanguageOverride, removeLanguageOverride, getLanguageOverride } from '../utils/fileIcons'
 import { isWailsRuntime } from '../lib/api'
 
@@ -34,6 +35,9 @@ export default function StatusBar({ downloadProgress, isDownloading, updateReady
   const activeFilePath = activeTab ? unscopePath(activeTab.filePath).relativePath : null
   const cursorPos = activeFilePath ? cursorPositions[activeFilePath] : null
   const notifCount = notifications.length
+  const diagEntries = useDiagnosticsStore(s => s.entries)
+  const statusErrors = diagEntries.filter(e => e.severity === 'error').length
+  const statusWarnings = diagEntries.filter(e => e.severity === 'warning').length
 
   useEffect(() => {
     if (showLangPicker && searchRef.current) {
@@ -124,6 +128,28 @@ export default function StatusBar({ downloadProgress, isDownloading, updateReady
             </span>
           )}
         </button>
+
+        {/* Problems summary — click to open Problems panel */}
+        {(statusErrors > 0 || statusWarnings > 0) && (
+          <button
+            onClick={() => document.dispatchEvent(new CustomEvent('mycel:switch-panel', { detail: 'problems' }))}
+            className="flex items-center gap-2 hover:text-neutral-200"
+            title="Show Problems panel"
+          >
+            {statusErrors > 0 && (
+              <span className="flex items-center gap-0.5 text-red-400">
+                <AlertCircle className="w-3 h-3" />
+                {statusErrors}
+              </span>
+            )}
+            {statusWarnings > 0 && (
+              <span className="flex items-center gap-0.5 text-amber-400">
+                <AlertTriangle className="w-3 h-3" />
+                {statusWarnings}
+              </span>
+            )}
+          </button>
+        )}
 
         {/* Download progress */}
         {isDownloading && downloadProgress && (

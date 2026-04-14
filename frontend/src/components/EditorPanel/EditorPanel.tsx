@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { ChevronDown, ChevronUp, AlertTriangle, FileCode, Terminal, Bug, Eye, ScrollText, Lightbulb, GitBranch } from 'lucide-react'
+import { ChevronDown, ChevronUp, AlertTriangle, FileCode, Terminal, Bug, Eye, ScrollText, Lightbulb, GitBranch, AlertCircle } from 'lucide-react'
 import { useEditorPanelStore } from '../../stores/useEditorPanelStore'
 import { useStudioStore } from '../../stores/useStudioStore'
 import { useProjectStore } from '../../stores/useProjectStore'
@@ -12,12 +12,14 @@ import EditorGroupView from './EditorGroup'
 import TerminalPanel from './TerminalPanel'
 import DebugPanel from '../DebugPanel/DebugPanel'
 import OutputPanel from './OutputPanel'
+import ProblemsPanel from './ProblemsPanel'
 import HintsPanel from './HintsPanel'
 import GitPanel from '../GitPanel/GitPanel'
 import { useHintsStore } from '../../stores/useHintsStore'
+import { useDiagnosticsStore } from '../../stores/useDiagnosticsStore'
 import CanvasPanel from '../Canvas/CanvasPanel'
 
-type PanelTab = 'editor' | 'terminal' | 'debug' | 'output' | 'hints' | 'git'
+type PanelTab = 'editor' | 'terminal' | 'debug' | 'output' | 'problems' | 'hints' | 'git'
 
 export default function EditorPanel() {
   const { panelHeight, isCollapsed, groups, splitDirection, splitRatio, setPanelHeight, toggleCollapse } = useEditorPanelStore()
@@ -28,6 +30,9 @@ export default function EditorPanel() {
   const debugStatus = useDebugStore(s => s.status)
   const debugStopped = useDebugStore(s => s.stoppedAt)
   const outputCount = useOutputStore(s => s.entries.length)
+  const diagEntries = useDiagnosticsStore(s => s.entries)
+  const problemsErrorCount = diagEntries.filter(e => e.severity === 'error').length
+  const problemsTotal = diagEntries.length
   const hintsCount = useHintsStore(s => s.hints.filter(h => h.status === 'active').length)
   const viewMode = useLayoutStore(s => s.viewMode)
   const [isResizing, setIsResizing] = useState(false)
@@ -212,6 +217,22 @@ export default function EditorPanel() {
           )}
         </button>
         <button
+          onClick={() => handlePanelTabClick('problems')}
+          title="Problems"
+          className={`relative w-8 h-8 flex items-center justify-center rounded transition-colors ${
+            activePanel === 'problems' && !isCollapsed
+              ? 'bg-neutral-800 text-white border-l-2 border-red-500'
+              : 'text-neutral-500 hover:text-neutral-300 hover:bg-neutral-800'
+          }`}
+        >
+          <AlertCircle className="w-4 h-4" />
+          {problemsTotal > 0 && (
+            <span className={`absolute -top-0.5 -right-0.5 w-3.5 h-3.5 ${problemsErrorCount > 0 ? 'bg-red-600' : 'bg-amber-600'} text-white text-[8px] font-bold rounded-full flex items-center justify-center`}>
+              {problemsTotal > 99 ? '99' : problemsTotal}
+            </span>
+          )}
+        </button>
+        <button
           onClick={() => handlePanelTabClick('hints')}
           title="Organization Hints"
           className={`relative w-8 h-8 flex items-center justify-center rounded transition-colors ${
@@ -323,6 +344,14 @@ export default function EditorPanel() {
             style={{ display: activePanel === 'output' ? undefined : 'none' }}
           >
             <OutputPanel />
+          </div>
+
+          {/* Problems view */}
+          <div
+            className="absolute inset-0"
+            style={{ display: activePanel === 'problems' ? undefined : 'none' }}
+          >
+            <ProblemsPanel />
           </div>
 
           {/* Hints view */}

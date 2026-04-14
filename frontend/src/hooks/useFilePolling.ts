@@ -4,6 +4,7 @@
 import { useEffect, useRef } from 'react'
 import { useProjectStore, type ProjectFile } from '../stores/useProjectStore'
 import { useMultiProjectStore } from '../stores/useMultiProjectStore'
+import { useDiagnosticsStore } from '../stores/useDiagnosticsStore'
 import { isWailsRuntime } from '../lib/api'
 
 const POLL_INTERVAL = 5000
@@ -59,7 +60,10 @@ async function refreshFiles() {
       }
     }
 
-    // Only update if something changed
+    // Always refresh diagnostics (edits in one file may resolve errors in another)
+    useDiagnosticsStore.getState().refreshAll()
+
+    // Only update file store if something changed on disk
     if (newFiles.length === 0 && deletedPaths.size === 0 && modifiedFiles.size === 0) return
 
     const updatedFiles = [

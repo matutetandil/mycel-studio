@@ -1,4 +1,5 @@
 // Stores per-file diagnostic severity for UI indicators (tabs, file tree, directories)
+// and full diagnostic entries for the Problems panel
 import { create } from 'zustand'
 import { ideDiagnoseAll, isWailsRuntime, type IDEDiagnostic } from '../lib/api'
 import { useProjectStore } from './useProjectStore'
@@ -12,9 +13,19 @@ interface FileDiagnostic {
   severity: DiagnosticSeverity
 }
 
+export interface DiagnosticEntry {
+  severity: DiagnosticSeverity
+  message: string
+  file: string        // relative path
+  line: number
+  column: number
+}
+
 interface DiagnosticsState {
   // Per-file diagnostics keyed by relative path
   files: Record<string, FileDiagnostic>
+  // Full diagnostic entries for the Problems panel
+  entries: DiagnosticEntry[]
   // Refresh all diagnostics from IDE engine
   refreshAll: () => Promise<void>
   // Update diagnostics for a single file from IDE response
@@ -33,61 +44,62 @@ function computeSeverity(errors: number, warnings: number): DiagnosticSeverity {
   return 'none'
 }
 
+function severityFromCode(code: number): DiagnosticSeverity {
+  if (code === 1) return 'error'
+  if (code === 2) return 'warning'
+  return 'info'
+}
+
+function buildEntriesAndFiles(diags: IDEDiagnostic[], prefix: string) {
+  const files: Record<string, FileDiagnostic> = {}
+  const entries: DiagnosticEntry[] = []
+  for (const d of diags) {
+    const key = prefix && d.file.startsWith(prefix) ? d.file.slice(prefix.length) : d.file
+    if (!files[key]) files[key] = { errors: 0, warnings: 0, severity: 'none' }
+    if (d.severity === 1) files[key].errors++
+    else if (d.severity === 2) files[key].warnings++
+    entries.push({
+      severity: severityFromCode(d.severity),
+      message: d.message,
+      file: key,
+      line: d.range?.start?.line ?? 0,
+      column: d.range?.start?.col ?? 0,
+    })
+  }
+  for (const key of Object.keys(files)) {
+    files[key].severity = computeSeverity(files[key].errors, files[key].warnings)
+  }
+  // Sort: errors first, then warnings, then by file
+  entries.sort((a, b) => {
+    const sev = (s: DiagnosticSeverity) => s === 'error' ? 0 : s === 'warning' ? 1 : 2
+    const diff = sev(a.severity) - sev(b.severity)
+    if (diff !== 0) return diff
+    return a.file.localeCompare(b.file) || a.line - b.line
+  })
+  return { files, entries }
+}
+
 export const useDiagnosticsStore = create<DiagnosticsState>((set, get) => ({
   files: {},
+  entries: [],
 
   refreshAll: async () => {
     if (!isWailsRuntime()) return
     try {
       const diags = await ideDiagnoseAll()
-      const files: Record<string, FileDiagnostic> = {}
       const projectPath = useProjectStore.getState().projectPath
       const prefix = projectPath ? projectPath + '/' : ''
-      for (const d of diags) {
-        // Normalize to relative path (strip project path prefix)
-        const key = prefix && d.file.startsWith(prefix) ? d.file.slice(prefix.length) : d.file
-        if (!files[key]) files[key] = { errors: 0, warnings: 0, severity: 'none' }
-        if (d.severity === 1) files[key].errors++
-        else if (d.severity === 2) files[key].warnings++
-      }
-      for (const key of Object.keys(files)) {
-        files[key].severity = computeSeverity(files[key].errors, files[key].warnings)
-      }
-      // Debug: log to temp file
-      try {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const app = (window as any).go?.main?.App
-        if (app?.DebugLog) {
-          app.DebugLog(`DiagnosticsStore.refreshAll: ${diags.length} diags, ${Object.keys(files).length} files with issues`)
-          for (const [key, val] of Object.entries(files)) {
-            app.DebugLog(`  ${key}: ${val.severity} (${val.errors}E/${val.warnings}W)`)
-          }
-        }
-      } catch { /* ignore */ }
-      set({ files })
+      const { files, entries } = buildEntriesAndFiles(diags, prefix)
+      set({ files, entries })
     } catch {
       // Best effort
     }
   },
 
   updateFromDiagnostics: (diags, projectPath) => {
-    const files = { ...get().files }
     const prefix = projectPath + '/'
-    // Clear all relative paths (rebuild from scratch)
-    for (const key of Object.keys(files)) {
-      delete files[key]
-    }
-    for (const d of diags) {
-      // Normalize to relative path
-      const key = d.file.startsWith(prefix) ? d.file.slice(prefix.length) : d.file
-      if (!files[key]) files[key] = { errors: 0, warnings: 0, severity: 'none' }
-      if (d.severity === 1) files[key].errors++
-      else if (d.severity === 2) files[key].warnings++
-    }
-    for (const key of Object.keys(files)) {
-      files[key].severity = computeSeverity(files[key].errors, files[key].warnings)
-    }
-    set({ files })
+    const { files, entries } = buildEntriesAndFiles(diags, prefix)
+    set({ files, entries })
   },
 
   updateFile: (filePath, errors, warnings) => {
@@ -133,8 +145,11 @@ export const useDiagnosticsStore = create<DiagnosticsState>((set, get) => ({
 }))
 
 registerSnapshotProvider('diagnostics', {
-  capture: () => JSON.parse(JSON.stringify({ files: useDiagnosticsStore.getState().files })),
+  capture: () => {
+    const s = useDiagnosticsStore.getState()
+    return JSON.parse(JSON.stringify({ files: s.files, entries: s.entries }))
+  },
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   restore: (data) => useDiagnosticsStore.setState(data as any),
-  clear: () => useDiagnosticsStore.setState({ files: {} }),
+  clear: () => useDiagnosticsStore.setState({ files: {}, entries: [] }),
 })
