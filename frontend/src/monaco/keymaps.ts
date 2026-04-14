@@ -129,12 +129,75 @@ export function applyKeymap(monaco: Monaco, monacoEditor: editor.IStandaloneCode
     },
   })
 
-  // Ctrl+Shift+F → Find in files / replace in file
-  // (Monaco default: Ctrl+H for replace, Ctrl+F for find — keep those)
+  // Cmd+Backspace → Delete entire line (IDEA behavior)
+  // Monaco default: deletes from cursor to beginning of line (VS Code behavior)
+  monacoEditor.addAction({
+    id: 'idea.deleteLineBackspace',
+    label: 'Delete Line',
+    keybindings: [KM.CtrlCmd | KC.Backspace],
+    run: (ed) => {
+      ed.getAction('editor.action.deleteLines')?.run()
+    },
+  })
 
-  // Ctrl+/ → Toggle line comment (same in both, but ensure it works)
-  // Already default in Monaco
+  // Cmd+Shift+/ → Toggle block comment (IDEA) instead of Shift+Alt+A (VS Code)
+  monacoEditor.addAction({
+    id: 'idea.blockComment',
+    label: 'Toggle Block Comment',
+    keybindings: [KM.CtrlCmd | KM.Shift | KC.Slash],
+    run: (ed) => {
+      ed.getAction('editor.action.blockComment')?.run()
+    },
+  })
 
-  // Ctrl+Shift+/ → Toggle block comment (same in both)
-  // Already default in Monaco
+  // F2 → Next error/warning (IDEA) instead of F8 (VS Code)
+  monacoEditor.addAction({
+    id: 'idea.nextError',
+    label: 'Next Error',
+    keybindings: [KC.F2],
+    run: (ed) => {
+      ed.getAction('editor.action.marker.nextInFiles')?.run()
+    },
+  })
+
+  // Shift+F2 → Previous error/warning (IDEA) instead of Shift+F8 (VS Code)
+  monacoEditor.addAction({
+    id: 'idea.prevError',
+    label: 'Previous Error',
+    keybindings: [KM.Shift | KC.F2],
+    run: (ed) => {
+      ed.getAction('editor.action.marker.prevInFiles')?.run()
+    },
+  })
+
+  // Cmd+B → Go to definition (IDEA) instead of F12 (VS Code)
+  monacoEditor.addAction({
+    id: 'idea.goToDefinition',
+    label: 'Go to Definition',
+    keybindings: [KM.CtrlCmd | KC.KeyB],
+    run: (ed) => {
+      ed.getAction('editor.action.revealDefinition')?.run()
+    },
+  })
+
+  // Cmd+L → Go to line (IDEA macOS) instead of Ctrl+G (VS Code)
+  monacoEditor.addAction({
+    id: 'idea.goToLine',
+    label: 'Go to Line',
+    keybindings: [KM.CtrlCmd | KC.KeyL],
+    run: (ed) => {
+      ed.getAction('editor.action.gotoLine')?.run()
+    },
+  })
+
+  // Cmd+Shift+Backspace → Last edit location (IDEA)
+  monacoEditor.addAction({
+    id: 'idea.lastEditLocation',
+    label: 'Last Edit Location',
+    keybindings: [KM.CtrlCmd | KM.Shift | KC.Backspace],
+    run: (ed) => {
+      // Navigate back to last cursor position (closest approximation)
+      ed.trigger('idea', 'cursorUndo', null)
+    },
+  })
 }
