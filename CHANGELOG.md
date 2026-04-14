@@ -2,6 +2,22 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.0.3] - IDE Polish & UX Improvements
+
+### Added
+- **Problems panel** — New bottom panel showing all errors and warnings grouped by file. Click to navigate, right-click or button to copy. Filter by severity. Error/warning counts shown in status bar (clickable).
+- **Background diagnostics** — Diagnostics now refresh every 5 seconds automatically, keeping the explorer tree and tab indicators up-to-date without opening each file.
+- **Tab context menu** — Right-click on editor tabs for IntelliJ-style actions: Close, Close Others, Close All, Close Unmodified, Close Tabs to Left/Right, and Pin/Unpin Tab.
+- **Word wrap setting** — Configurable in Settings > Editor. Disabled by default (horizontal scroll), toggleable per preference.
+- **Explorer multi-selection** — Cmd+click to toggle individual files, Shift+click for range selection. Bulk delete and move via right-click context menu.
+- **Terminal Shift+Enter** — Terminal now sends CSI u escape sequences for Shift+Enter and Alt+Enter, matching iTerm2 behavior. Multi-line input works in TUI programs like Claude Code.
+
+### Fixed
+- **Auto-update reopen** — The "Reopen" button after an update now reuses the existing dock icon instead of launching a separate instance.
+
+### Changed
+- **GitHub Actions** — Upgraded all actions to Node 24 versions (checkout v6, setup-go v6, setup-node v6, upload-artifact v7, download-artifact v8, action-gh-release v3). Go bumped to 1.24.
+
 ## [2.0.2] - HTTP Connector Validation Fix
 
 ### Fixed
