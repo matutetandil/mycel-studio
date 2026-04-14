@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.0.2] - HTTP Connector Validation Fix
+
+### Fixed
+- **HTTP connector type** — Updated Mycel runtime to v1.18.10 which adds `http` to the valid connector types in the schema validator. Projects using `type = "http"` (outbound HTTP client connector) no longer show false "invalid value" diagnostics in the IDE.
+
 ## [2.0.1] - Terminal, Keybindings & Rename Fixes
 
 ### Fixed

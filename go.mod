@@ -6,10 +6,11 @@ require (
 	github.com/creack/pty v1.1.24
 	github.com/gorilla/websocket v1.5.3
 	github.com/hashicorp/hcl/v2 v2.24.0
-	github.com/matutetandil/mycel v1.18.8
+	github.com/matutetandil/mycel v1.18.10
 	github.com/rs/cors v1.10.1
 	github.com/wailsapp/wails/v2 v2.11.0
 	github.com/zclconf/go-cty v1.17.0
+	golang.org/x/sys v0.41.0
 )
 
 require (
@@ -42,7 +43,6 @@ require (
 	golang.org/x/mod v0.32.0 // indirect
 	golang.org/x/net v0.50.0 // indirect
 	golang.org/x/sync v0.19.0 // indirect
-	golang.org/x/sys v0.41.0 // indirect
 	golang.org/x/text v0.34.0 // indirect
 	golang.org/x/tools v0.41.0 // indirect
 )
