@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.0.5] - Revert Broken Changes
+
+### Reverted
+- **Terminal Shift+Enter** — CSI u escape sequences didn't work with the current PTY setup. Reverted to default xterm.js behavior.
+- **Auto-update reopen** — Removing the `-n` flag from `open` caused the app to not launch at all after update. Reverted to previous behavior (opens new instance).
+
 ## [2.0.4] - Non-HCL Diagnostics Fix
 
 ### Fixed
@@ -15,10 +21,10 @@ All notable changes to this project will be documented in this file.
 - **Tab context menu** — Right-click on editor tabs for IntelliJ-style actions: Close, Close Others, Close All, Close Unmodified, Close Tabs to Left/Right, and Pin/Unpin Tab.
 - **Word wrap setting** — Configurable in Settings > Editor. Disabled by default (horizontal scroll), toggleable per preference.
 - **Explorer multi-selection** — Cmd+click to toggle individual files, Shift+click for range selection. Bulk delete and move via right-click context menu.
-- **Terminal Shift+Enter** — Terminal now sends CSI u escape sequences for Shift+Enter and Alt+Enter, matching iTerm2 behavior. Multi-line input works in TUI programs like Claude Code.
+- **~~Terminal Shift+Enter~~** — *(reverted in v2.0.5)*
 
 ### Fixed
-- **Auto-update reopen** — The "Reopen" button after an update now reuses the existing dock icon instead of launching a separate instance.
+- **~~Auto-update reopen~~** — *(reverted in v2.0.5)*
 
 ### Changed
 - **GitHub Actions** — Upgraded all actions to Node 24 versions (checkout v6, setup-go v6, setup-node v6, upload-artifact v7, download-artifact v8, action-gh-release v3). Go bumped to 1.24.
